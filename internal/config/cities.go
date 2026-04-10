@@ -5,10 +5,10 @@ import (
 	"fmt"
 )
 
-// AddCity appends a city to the list. Returns an error if the list already has 3 cities.
+// AddCity appends a city to the list. Returns an error if the list already has 5 cities.
 func AddCity(cities []CityConfig, city CityConfig) ([]CityConfig, error) {
-	if len(cities) >= 3 {
-		return cities, errors.New("maximum of 3 cities reached")
+	if len(cities) >= 5 {
+		return cities, errors.New("maximum of 5 cities reached")
 	}
 	return append(cities, city), nil
 }

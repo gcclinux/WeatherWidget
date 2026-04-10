@@ -11,8 +11,8 @@ import (
 
 func TestProperty4_CityListAddPreservesExistingAndAppends(t *testing.T) {
 	rapid.Check(t, func(rt *rapid.T) {
-		// Generate a list of 1-2 cities
-		count := rapid.IntRange(1, 2).Draw(rt, "cityCount")
+		// Generate a list of 1-4 cities
+		count := rapid.IntRange(1, 4).Draw(rt, "cityCount")
 		cities := make([]CityConfig, count)
 		for i := range cities {
 			cities[i] = genCityConfig(rt, "existing"+string(rune('0'+i)))
@@ -51,8 +51,8 @@ func TestProperty4_CityListAddPreservesExistingAndAppends(t *testing.T) {
 
 func TestProperty5_CityListRemoveDecreasesLengthAndExcludesTarget(t *testing.T) {
 	rapid.Check(t, func(rt *rapid.T) {
-		// Generate a list of 2-3 cities
-		count := rapid.IntRange(2, 3).Draw(rt, "cityCount")
+		// Generate a list of 2-5 cities
+		count := rapid.IntRange(2, 5).Draw(rt, "cityCount")
 		cities := make([]CityConfig, count)
 		for i := range cities {
 			cities[i] = genCityConfig(rt, "city"+string(rune('0'+i)))
@@ -87,8 +87,8 @@ func TestProperty5_CityListRemoveDecreasesLengthAndExcludesTarget(t *testing.T) 
 
 func TestProperty6_CityListReorderPreservesSet(t *testing.T) {
 	rapid.Check(t, func(rt *rapid.T) {
-		// Generate a list of 1-3 cities
-		count := rapid.IntRange(1, 3).Draw(rt, "cityCount")
+		// Generate a list of 1-5 cities
+		count := rapid.IntRange(1, 5).Draw(rt, "cityCount")
 		cities := make([]CityConfig, count)
 		for i := range cities {
 			cities[i] = genCityConfig(rt, "city"+string(rune('0'+i)))

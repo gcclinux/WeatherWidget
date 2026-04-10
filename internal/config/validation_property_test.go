@@ -69,15 +69,15 @@ func genMaybeInvalidConfig(t *rapid.T) (*Config, map[string]bool) {
 	invalidCitiesCount := rapid.Bool().Draw(t, "invalidCitiesCount")
 	var cityCount int
 	if invalidCitiesCount {
-		// Pick 0 or 4-10 cities
+		// Pick 0 or 6-10 cities
 		if rapid.Bool().Draw(t, "zeroCities") {
 			cityCount = 0
 		} else {
-			cityCount = rapid.IntRange(4, 10).Draw(t, "tooManyCities")
+			cityCount = rapid.IntRange(6, 10).Draw(t, "tooManyCities")
 		}
 		expectedErrors["cities"] = true
 	} else {
-		cityCount = rapid.IntRange(1, 3).Draw(t, "validCityCount")
+		cityCount = rapid.IntRange(1, 5).Draw(t, "validCityCount")
 	}
 
 	// --- Generate cities (each may have violations) ---

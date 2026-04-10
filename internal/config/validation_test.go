@@ -57,13 +57,13 @@ func TestValidate_CitiesLength(t *testing.T) {
 		t.Error("expected error for empty cities")
 	}
 
-	// Four cities
+	// Six cities
 	cfg.Cities = []CityConfig{
-		{Name: "A"}, {Name: "B"}, {Name: "C"}, {Name: "D"},
+		{Name: "A"}, {Name: "B"}, {Name: "C"}, {Name: "D"}, {Name: "E"}, {Name: "F"},
 	}
 	errs = Validate(cfg)
 	if !hasError(errs, "cities") {
-		t.Error("expected error for 4 cities")
+		t.Error("expected error for 6 cities")
 	}
 }
 

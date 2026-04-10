@@ -65,8 +65,8 @@ func genConfig(t *rapid.T) *Config {
 		ds = DataSourceLocalDatabase
 	}
 
-	// Generate 1-3 cities
-	cityCount := rapid.IntRange(1, 3).Draw(t, "cityCount")
+	// Generate 1-5 cities
+	cityCount := rapid.IntRange(1, 5).Draw(t, "cityCount")
 	cities := make([]CityConfig, cityCount)
 	for i := 0; i < cityCount; i++ {
 		cities[i] = genCityConfig(t, "city"+string(rune('0'+i)))

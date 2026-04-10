@@ -20,10 +20,7 @@ type settingsState struct {
 	window fyne.Window
 }
 
-// ShowSettings opens a settings dialog window. cfg is the current config to
-// populate the form. onSave is called with the edited config when the user
-// clicks Save and validation passes; it should persist and test the connection,
-// returning an error if the test fails.
+// ShowSettings opens a settings dialog window.
 func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config) error) {
 	if u.settings != nil {
 		u.settings.RequestFocus()
@@ -33,52 +30,48 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 	win := u.app.NewWindow("WeatherWidget Settings")
 	u.settings = win
 	win.SetFixedSize(false)
-	win.Resize(fyne.NewSize(520, 600))
+
+	screenW, screenH := getScreenSize()
+	winW := float32(1456)
+	if float32(screenW) < winW {
+		winW = float32(screenW) * 0.9
+	}
+	winH := float32(screenH) * 0.4
+	win.Resize(fyne.NewSize(winW, winH))
 
 	state := &settingsState{
 		cities: copyCities(cfg.Cities),
 		window: win,
 	}
 
-	// --- Data Source ---
-	dataSourceRadio := widget.NewRadioGroup(
-		[]string{"Remote API", "Local Database"},
-		nil, // set below
-	)
+	// ── Data Source ──────────────────────────────────────────────────────
+	dataSourceRadio := widget.NewRadioGroup([]string{"Remote API", "Local Database"}, nil)
 	if cfg.DataSource == config.DataSourceLocalDatabase {
 		dataSourceRadio.SetSelected("Local Database")
 	} else {
 		dataSourceRadio.SetSelected("Remote API")
 	}
 
-	// --- API Configuration ---
-	providerSelect := widget.NewSelect(
-		[]string{"OpenWeatherMap", "Weather Underground"},
-		nil,
-	)
-	switch {
-	case cfg.APIConfig != nil && cfg.APIConfig.Provider == "weatherunderground":
+	// ── API config ───────────────────────────────────────────────────────
+	providerSelect := widget.NewSelect([]string{"OpenWeatherMap", "Weather Underground"}, nil)
+	if cfg.APIConfig != nil && cfg.APIConfig.Provider == "weatherunderground" {
 		providerSelect.SetSelected("Weather Underground")
-	default:
+	} else {
 		providerSelect.SetSelected("OpenWeatherMap")
 	}
-
 	apiKeyEntry := widget.NewEntry()
 	apiKeyEntry.SetPlaceHolder("API Key")
 	if cfg.APIConfig != nil {
 		apiKeyEntry.SetText(cfg.APIConfig.APIKey)
 	}
-
-	apiForm := widget.NewForm(
-		widget.NewFormItem("Provider", providerSelect),
-		widget.NewFormItem("API Key", apiKeyEntry),
-	)
 	apiSection := container.NewVBox(
-		widget.NewLabel("API Configuration"),
-		apiForm,
+		widget.NewForm(
+			widget.NewFormItem("Provider", providerSelect),
+			widget.NewFormItem("API Key", apiKeyEntry),
+		),
 	)
 
-	// --- Database Configuration ---
+	// ── Database config ──────────────────────────────────────────────────
 	dbHostEntry := widget.NewEntry()
 	dbHostEntry.SetPlaceHolder("localhost")
 	dbPortEntry := widget.NewEntry()
@@ -92,7 +85,6 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 	dbQueryEntry := widget.NewMultiLineEntry()
 	dbQueryEntry.SetPlaceHolder("SELECT temperature, description, icon_code FROM weather WHERE city = $1")
 	dbQueryEntry.SetMinRowsVisible(2)
-
 	if cfg.DatabaseConfig != nil {
 		dbHostEntry.SetText(cfg.DatabaseConfig.Host)
 		if cfg.DatabaseConfig.Port > 0 {
@@ -103,29 +95,25 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 		dbPassEntry.SetText(cfg.DatabaseConfig.Password)
 		dbQueryEntry.SetText(cfg.DatabaseConfig.Query)
 	}
-
-	dbForm := widget.NewForm(
-		widget.NewFormItem("Host", dbHostEntry),
-		widget.NewFormItem("Port", dbPortEntry),
-		widget.NewFormItem("Database", dbNameEntry),
-		widget.NewFormItem("Username", dbUserEntry),
-		widget.NewFormItem("Password", dbPassEntry),
-		widget.NewFormItem("Query", dbQueryEntry),
-	)
 	dbSection := container.NewVBox(
-		widget.NewLabel("Database Configuration"),
-		dbForm,
+		widget.NewForm(
+			widget.NewFormItem("Host", dbHostEntry),
+			widget.NewFormItem("Port", dbPortEntry),
+			widget.NewFormItem("Database", dbNameEntry),
+			widget.NewFormItem("Username", dbUserEntry),
+			widget.NewFormItem("Password", dbPassEntry),
+			widget.NewFormItem("Query", dbQueryEntry),
+		),
 	)
 
-	// Toggle visibility based on data source selection.
 	apiSection.Show()
 	dbSection.Hide()
 	if cfg.DataSource == config.DataSourceLocalDatabase {
 		apiSection.Hide()
 		dbSection.Show()
 	}
-	dataSourceRadio.OnChanged = func(selected string) {
-		if selected == "Local Database" {
+	dataSourceRadio.OnChanged = func(s string) {
+		if s == "Local Database" {
 			apiSection.Hide()
 			dbSection.Show()
 		} else {
@@ -134,24 +122,68 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 		}
 	}
 
-	dataSourceSection := container.NewVBox(
+	// ── Position ─────────────────────────────────────────────────────────
+	positionValueMap := map[string]string{
+		"Top-Left": "top-left", "Top-Right": "top-right",
+		"Bottom-Left": "bottom-left", "Bottom-Right": "bottom-right",
+	}
+	positionLabelMap := map[string]string{
+		"top-left": "Top-Left", "top-right": "Top-Right",
+		"bottom-left": "Bottom-Left", "bottom-right": "Bottom-Right",
+	}
+	positionRadio := widget.NewRadioGroup(
+		[]string{"Top-Left", "Top-Right", "Bottom-Left", "Bottom-Right"}, nil,
+	)
+	positionRadio.Horizontal = true
+	if label, ok := positionLabelMap[cfg.CornerPosition]; ok {
+		positionRadio.SetSelected(label)
+	} else {
+		positionRadio.SetSelected("Bottom-Right")
+	}
+	customPosLabel := widget.NewLabel("")
+	if cfg.CustomX != nil && cfg.CustomY != nil {
+		customPosLabel.SetText(fmt.Sprintf("Custom: (%d, %d) — picking a corner clears it.", *cfg.CustomX, *cfg.CustomY))
+	}
+	positionRadio.OnChanged = func(_ string) { customPosLabel.SetText("") }
+
+	// ── Refresh interval ─────────────────────────────────────────────────
+	intervalSlider := widget.NewSlider(1, 60)
+	intervalSlider.Step = 1
+	intervalSlider.Value = float64(cfg.RefreshInterval)
+	intervalLabel := widget.NewLabel(fmt.Sprintf("%d min", cfg.RefreshInterval))
+	intervalSlider.OnChanged = func(v float64) {
+		intervalLabel.SetText(fmt.Sprintf("%d min", int(v)))
+	}
+
+	// ── LEFT PANEL (scrollable) ───────────────────────────────────────────
+	leftContent := container.NewVBox(
+		widget.NewLabelWithStyle("System", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
+		widget.NewSeparator(),
 		widget.NewLabel("Data Source"),
 		dataSourceRadio,
 		apiSection,
 		dbSection,
+		widget.NewSeparator(),
+		widget.NewLabel("Widget Position"),
+		positionRadio,
+		customPosLabel,
+		widget.NewSeparator(),
+		widget.NewLabel("Refresh Interval"),
+		container.NewHBox(intervalSlider, intervalLabel),
 	)
+	leftPanel := container.NewVScroll(leftContent)
 
-	// --- City List ---
-	cityListContainer := container.NewVBox()
+	// ── RIGHT PANEL ───────────────────────────────────────────────────────
+	// City list in a scroll area (top), add-form fixed below.
+
+	cityListBox := container.NewVBox()
 	var refreshCityList func()
-
 	refreshCityList = func() {
-		cityListContainer.RemoveAll()
-		for i, c := range state.cities {
+		cityListBox.RemoveAll()
+		for i := range state.cities {
 			idx := i
-			city := c
-			posLabel := widget.NewLabel(fmt.Sprintf("#%d  %s, %s", idx+1, city.Name, city.Region))
-
+			c := state.cities[i]
+			lbl := widget.NewLabel(fmt.Sprintf("#%d  %s, %s", idx+1, c.Name, c.Region))
 			upBtn := widget.NewButton("↑", func() {
 				if idx > 0 {
 					state.cities[idx], state.cities[idx-1] = state.cities[idx-1], state.cities[idx]
@@ -173,7 +205,6 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 				state.cities = result
 				refreshCityList()
 			})
-
 			if idx == 0 {
 				upBtn.Disable()
 			}
@@ -183,18 +214,20 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 			if len(state.cities) <= 1 {
 				removeBtn.Disable()
 			}
-
-			row := container.NewHBox(posLabel, layout.NewSpacer(), upBtn, downBtn, removeBtn)
-			cityListContainer.Add(row)
+			cityListBox.Add(container.NewHBox(lbl, layout.NewSpacer(), upBtn, downBtn, removeBtn))
 		}
+		cityListBox.Refresh()
 	}
 	refreshCityList()
 
-	// Add city controls
+	cityListScroll := container.NewVScroll(cityListBox)
+	cityListScroll.SetMinSize(fyne.NewSize(0, 120))
+
+	// Add-city form (fixed, never scrolls away).
 	addNameEntry := widget.NewEntry()
 	addNameEntry.SetPlaceHolder("City name")
 	addRegionEntry := widget.NewEntry()
-	addRegionEntry.SetPlaceHolder("Region (e.g. SP)")
+	addRegionEntry.SetPlaceHolder("Region / Country (e.g. SP)")
 	addLatEntry := widget.NewEntry()
 	addLatEntry.SetPlaceHolder("Latitude (optional)")
 	addLonEntry := widget.NewEntry()
@@ -243,128 +276,64 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 		refreshCityList()
 	})
 
-	addForm := widget.NewForm(
-		widget.NewFormItem("Name", addNameEntry),
-		widget.NewFormItem("Region", addRegionEntry),
-		widget.NewFormItem("Latitude", addLatEntry),
-		widget.NewFormItem("Longitude", addLonEntry),
-		widget.NewFormItem("Timezone", addTimezoneEntry),
-	)
-
-	citySection := container.NewVBox(
-		widget.NewLabel("City List (1–3 cities)"),
-		cityListContainer,
+	addForm := container.NewVBox(
 		widget.NewSeparator(),
-		addForm,
+		widget.NewLabelWithStyle("Add City", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
+		widget.NewForm(
+			widget.NewFormItem("Name", addNameEntry),
+			widget.NewFormItem("Region", addRegionEntry),
+			widget.NewFormItem("Latitude", addLatEntry),
+			widget.NewFormItem("Longitude", addLonEntry),
+			widget.NewFormItem("Timezone", addTimezoneEntry),
+		),
 		addBtn,
 	)
 
-	// --- Position ---
-	positionValueMap := map[string]string{
-		"Top-Left":     "top-left",
-		"Top-Right":    "top-right",
-		"Bottom-Left":  "bottom-left",
-		"Bottom-Right": "bottom-right",
-	}
-	positionLabelMap := map[string]string{
-		"top-left":     "Top-Left",
-		"top-right":    "Top-Right",
-		"bottom-left":  "Bottom-Left",
-		"bottom-right": "Bottom-Right",
-	}
-	positionRadio := widget.NewRadioGroup(
-		[]string{"Top-Left", "Top-Right", "Bottom-Left", "Bottom-Right"},
-		nil,
-	)
-	positionRadio.Horizontal = true
-	if label, ok := positionLabelMap[cfg.CornerPosition]; ok {
-		positionRadio.SetSelected(label)
-	} else {
-		positionRadio.SetSelected("Bottom-Right")
-	}
-
-	customPosLabel := widget.NewLabel("")
-	if cfg.CustomX != nil && cfg.CustomY != nil {
-		customPosLabel.SetText(fmt.Sprintf("Custom position active: (%d, %d). Changing corner will clear it.", *cfg.CustomX, *cfg.CustomY))
-	}
-
-	positionRadio.OnChanged = func(_ string) {
-		customPosLabel.SetText("")
-	}
-
-	positionSection := container.NewVBox(
-		widget.NewLabel("Widget Position"),
-		positionRadio,
-		customPosLabel,
+	// Right panel: city list scrolls, add form is fixed at bottom.
+	rightPanel := container.NewBorder(
+		widget.NewLabelWithStyle("City List (1–5 cities)", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
+		addForm,
+		nil, nil,
+		cityListScroll,
 	)
 
-	// --- Refresh Interval ---
-	intervalSlider := widget.NewSlider(1, 60)
-	intervalSlider.Step = 1
-	intervalSlider.Value = float64(cfg.RefreshInterval)
-	intervalLabel := widget.NewLabel(fmt.Sprintf("%d min", cfg.RefreshInterval))
-	intervalSlider.OnChanged = func(v float64) {
-		intervalLabel.SetText(fmt.Sprintf("%d min", int(v)))
-	}
-
-	refreshSection := container.NewVBox(
-		widget.NewLabel("Refresh Interval"),
-		container.NewHBox(intervalSlider, intervalLabel),
-	)
-
-	// --- Status / Error label ---
-	statusLabel := widget.NewLabel("")
-	statusLabel.Wrapping = fyne.TextWrapWord
-
-	// --- Save Button ---
+	// ── SAVE BAR (full width, pinned at bottom) ───────────────────────────
 	saveBtn := widget.NewButton("Save", func() {
 		newCfg := buildConfigFromUI(
 			dataSourceRadio, providerSelect, apiKeyEntry,
 			dbHostEntry, dbPortEntry, dbNameEntry, dbUserEntry, dbPassEntry, dbQueryEntry,
 			intervalSlider, state, positionValueMap, positionRadio,
 		)
-
 		errs := config.Validate(newCfg)
 		if len(errs) > 0 {
 			var msgs []string
 			for _, e := range errs {
 				msgs = append(msgs, e.Field+": "+e.Message)
 			}
-			statusLabel.SetText("Validation errors:\n" + strings.Join(msgs, "\n"))
+			dialog.ShowError(fmt.Errorf("%s", strings.Join(msgs, "\n")), win)
 			return
 		}
-
-		statusLabel.SetText("Saving...")
 		if err := onSave(newCfg); err != nil {
-			statusLabel.SetText("Save failed: " + err.Error())
 			dialog.ShowError(err, win)
 			return
 		}
-
-		statusLabel.SetText("Settings saved successfully!")
+		dialog.ShowInformation("Saved", "Settings saved successfully!", win)
 	})
 
-	// --- Assemble tabs ---
-	content := container.NewVBox(
-		dataSourceSection,
-		widget.NewSeparator(),
-		citySection,
-		widget.NewSeparator(),
-		positionSection,
-		widget.NewSeparator(),
-		refreshSection,
-		widget.NewSeparator(),
+	saveBar := container.NewBorder(
+		widget.NewSeparator(), nil, nil, nil,
 		saveBtn,
-		statusLabel,
 	)
 
-	scrollable := container.NewVScroll(content)
-	win.SetContent(scrollable)
+	// ── MAIN LAYOUT ───────────────────────────────────────────────────────
+	// Left panel fixed on the left, right panel fills remaining space,
+	// save bar pinned at the very bottom.
+	body := container.NewHSplit(leftPanel, rightPanel)
+	body.SetOffset(0.45)
 
-	win.SetOnClosed(func() {
-		u.settings = nil
-	})
+	win.SetContent(container.NewBorder(nil, saveBar, nil, nil, body))
 
+	win.SetOnClosed(func() { u.settings = nil })
 	win.Show()
 }
 
@@ -388,7 +357,6 @@ func buildConfigFromUI(
 		RefreshInterval: int(intervalSlider.Value),
 		CornerPosition:  cornerPosition,
 	}
-
 	if dataSourceRadio.Selected == "Local Database" {
 		cfg.DataSource = config.DataSourceLocalDatabase
 		port, _ := strconv.Atoi(strings.TrimSpace(dbPortEntry.Text))
@@ -411,7 +379,6 @@ func buildConfigFromUI(
 			APIKey:   strings.TrimSpace(apiKeyEntry.Text),
 		}
 	}
-
 	return cfg
 }
 

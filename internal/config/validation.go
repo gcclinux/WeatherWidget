@@ -22,11 +22,11 @@ var allowedProviders = map[string]bool{
 func Validate(cfg *Config) []ValidationError {
 	var errs []ValidationError
 
-	// Cities length 1–3
-	if len(cfg.Cities) < 1 || len(cfg.Cities) > 3 {
+	// Cities length 1–5
+	if len(cfg.Cities) < 1 || len(cfg.Cities) > 5 {
 		errs = append(errs, ValidationError{
 			Field:   "cities",
-			Message: fmt.Sprintf("must contain 1 to 3 cities, got %d", len(cfg.Cities)),
+			Message: fmt.Sprintf("must contain 1 to 5 cities, got %d", len(cfg.Cities)),
 		})
 	}
 

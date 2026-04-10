@@ -54,8 +54,8 @@ func (u *UIManager) ShowWidget(cities []config.CityConfig) {
 	if count == 0 {
 		count = 1
 	}
-	if count > 3 {
-		count = 3
+	if count > 5 {
+		count = 5
 	}
 
 	u.panels = make([]*panel.CityPanel, count)

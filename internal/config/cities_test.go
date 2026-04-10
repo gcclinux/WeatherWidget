@@ -28,24 +28,24 @@ func TestAddCity_AppendsToList(t *testing.T) {
 }
 
 func TestAddCity_RejectsWhenFull(t *testing.T) {
-	cities := []CityConfig{city("A", "R1"), city("B", "R2"), city("C", "R3")}
-	_, err := AddCity(cities, city("D", "R4"))
+	cities := []CityConfig{city("A", "R1"), city("B", "R2"), city("C", "R3"), city("D", "R4"), city("E", "R5")}
+	_, err := AddCity(cities, city("F", "R6"))
 	if err == nil {
 		t.Fatal("expected error when adding to full list")
 	}
-	if err.Error() != "maximum of 3 cities reached" {
+	if err.Error() != "maximum of 5 cities reached" {
 		t.Errorf("unexpected error message: %v", err)
 	}
 }
 
-func TestAddCity_AllowsUpToThree(t *testing.T) {
-	cities := []CityConfig{city("A", "R1"), city("B", "R2")}
-	result, err := AddCity(cities, city("C", "R3"))
+func TestAddCity_AllowsUpToFive(t *testing.T) {
+	cities := []CityConfig{city("A", "R1"), city("B", "R2"), city("C", "R3"), city("D", "R4")}
+	result, err := AddCity(cities, city("E", "R5"))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if len(result) != 3 {
-		t.Fatalf("expected length 3, got %d", len(result))
+	if len(result) != 5 {
+		t.Fatalf("expected length 5, got %d", len(result))
 	}
 }
 
