@@ -67,6 +67,7 @@ func (a *AppManager) Run() error {
 	// 4. Setup context menu and system tray.
 	a.ui.SetupContextMenu(
 		func() { a.openSettings() },
+		func(pos string) { a.saveCornerPosition(pos) },
 		func() { a.Shutdown() },
 	)
 	a.ui.SetupSystemTray(
@@ -139,29 +140,48 @@ func (a *AppManager) openSettings() {
 	a.ui.ShowSettings(a.cfg, a.onSettingsSave)
 }
 
+// saveCornerPosition updates the in-memory config with the new corner position
+// and persists it to disk. Called when the user picks a position from the
+// right-click context menu.
+func (a *AppManager) saveCornerPosition(pos string) {
+	a.cfg.CornerPosition = pos
+	if err := a.config.Save(a.cfg); err != nil {
+		log.Printf("failed to save corner position %q: %v", pos, err)
+	} else {
+		log.Printf("corner position saved: %s", pos)
+	}
+}
+
 // onSettingsSave is the callback invoked when the user saves settings.
-// It persists the config, switches the weather provider if the data source
-// changed, resets the scheduler interval, and rebuilds city panels if the
-// city list changed.
+// It persists the config, switches the weather provider only when credentials
+// changed (running a connection test first), resets the scheduler interval,
+// and rebuilds city panels if the city list changed.
 func (a *AppManager) onSettingsSave(newCfg *config.Config) error {
-	// Test connection with the new provider before committing.
-	provider := a.createProvider(newCfg)
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	if err := provider.TestConnection(ctx); err != nil {
-		return fmt.Errorf("connection test failed: %w", err)
+	oldCfg := a.cfg
+	providerChanged := oldCfg.DataSource != newCfg.DataSource || a.providerConfigChanged(oldCfg, newCfg)
+
+	// Only hit the network when the data source or credentials actually changed.
+	// Skipping this for position / interval / city-order changes avoids blocking
+	// the save on a network round-trip that cannot affect those fields.
+	var provider weather.WeatherProvider
+	if providerChanged {
+		provider = a.createProvider(newCfg)
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		if err := provider.TestConnection(ctx); err != nil {
+			return fmt.Errorf("connection test failed: %w", err)
+		}
 	}
 
-	// Persist config.
+	// Persist config — always, regardless of what changed.
 	if err := a.config.Save(newCfg); err != nil {
 		return fmt.Errorf("failed to save config: %w", err)
 	}
 
-	oldCfg := a.cfg
 	a.cfg = newCfg
 
-	// Switch weather provider if data source changed.
-	if oldCfg.DataSource != newCfg.DataSource || a.providerConfigChanged(oldCfg, newCfg) {
+	// Switch weather provider if data source / credentials changed.
+	if providerChanged {
 		// Close old database adapter if switching away from database.
 		if a.dbAdapter != nil {
 			a.dbAdapter.Close()
@@ -174,14 +194,16 @@ func (a *AppManager) onSettingsSave(newCfg *config.Config) error {
 	a.scheduler.SetInterval(time.Duration(newCfg.RefreshInterval) * time.Minute)
 	a.scheduler.SetCities(newCfg.Cities)
 
-	// Rebuild city panels if city count changed.
+	// Rebuild city panels if city list changed.
 	if len(oldCfg.Cities) != len(newCfg.Cities) || !sameCities(oldCfg.Cities, newCfg.Cities) {
 		a.stopPanelClocks()
 		a.ui.ShowWidget(newCfg.Cities)
 		a.ui.ApplyWin32Styles()
-		a.ui.SetCorner(newCfg.CornerPosition)
 		a.startPanelClocks(newCfg.Cities)
 	}
+
+	// Always reposition the widget window (position may have changed independently).
+	a.ui.SetCorner(newCfg.CornerPosition)
 
 	return nil
 }

@@ -148,14 +148,18 @@ func (u *UIManager) SetCorner(position string) {
 
 // SetupContextMenu builds the right-click context menu for the widget window.
 // onSettings is called when the user selects "Settings".
+// onPositionChange is called with the new position value when the user picks one.
 // onExit is called when the user selects "Exit".
-func (u *UIManager) SetupContextMenu(onSettings func(), onExit func()) {
+func (u *UIManager) SetupContextMenu(onSettings func(), onPositionChange func(string), onExit func()) {
 	// Build Position submenu items.
 	posItems := make([]*fyne.MenuItem, len(cornerPositions))
 	for i, pos := range cornerPositions {
 		p := pos.value // capture for closure
 		posItems[i] = fyne.NewMenuItem(pos.label, func() {
 			u.SetCorner(p)
+			if onPositionChange != nil {
+				onPositionChange(p)
+			}
 		})
 	}
 

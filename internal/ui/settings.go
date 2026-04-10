@@ -259,6 +259,35 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 		addBtn,
 	)
 
+	// --- Position ---
+	positionValueMap := map[string]string{
+		"Top-Left":     "top-left",
+		"Top-Right":    "top-right",
+		"Bottom-Left":  "bottom-left",
+		"Bottom-Right": "bottom-right",
+	}
+	positionLabelMap := map[string]string{
+		"top-left":     "Top-Left",
+		"top-right":    "Top-Right",
+		"bottom-left":  "Bottom-Left",
+		"bottom-right": "Bottom-Right",
+	}
+	positionRadio := widget.NewRadioGroup(
+		[]string{"Top-Left", "Top-Right", "Bottom-Left", "Bottom-Right"},
+		nil,
+	)
+	positionRadio.Horizontal = true
+	if label, ok := positionLabelMap[cfg.CornerPosition]; ok {
+		positionRadio.SetSelected(label)
+	} else {
+		positionRadio.SetSelected("Bottom-Right")
+	}
+
+	positionSection := container.NewVBox(
+		widget.NewLabel("Widget Position"),
+		positionRadio,
+	)
+
 	// --- Refresh Interval ---
 	intervalSlider := widget.NewSlider(1, 60)
 	intervalSlider.Step = 1
@@ -282,7 +311,7 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 		newCfg := buildConfigFromUI(
 			dataSourceRadio, providerSelect, apiKeyEntry,
 			dbHostEntry, dbPortEntry, dbNameEntry, dbUserEntry, dbPassEntry, dbQueryEntry,
-			intervalSlider, state, cfg.CornerPosition,
+			intervalSlider, state, positionValueMap, positionRadio,
 		)
 
 		errs := config.Validate(newCfg)
@@ -295,15 +324,14 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 			return
 		}
 
-		statusLabel.SetText("Saving and testing connection...")
+		statusLabel.SetText("Saving...")
 		if err := onSave(newCfg); err != nil {
 			statusLabel.SetText("Save failed: " + err.Error())
-			dialog.ShowError(fmt.Errorf("connection test failed: %w", err), win)
+			dialog.ShowError(err, win)
 			return
 		}
 
 		statusLabel.SetText("Settings saved successfully!")
-		dialog.ShowInformation("Success", "Settings saved and connection verified.", win)
 	})
 
 	// --- Assemble tabs ---
@@ -311,6 +339,8 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 		dataSourceSection,
 		widget.NewSeparator(),
 		citySection,
+		widget.NewSeparator(),
+		positionSection,
 		widget.NewSeparator(),
 		refreshSection,
 		widget.NewSeparator(),
@@ -336,8 +366,13 @@ func buildConfigFromUI(
 	dbHostEntry, dbPortEntry, dbNameEntry, dbUserEntry, dbPassEntry, dbQueryEntry *widget.Entry,
 	intervalSlider *widget.Slider,
 	state *settingsState,
-	cornerPosition string,
+	positionValueMap map[string]string,
+	positionRadio *widget.RadioGroup,
 ) *config.Config {
+	cornerPosition := positionValueMap[positionRadio.Selected]
+	if cornerPosition == "" {
+		cornerPosition = "bottom-right"
+	}
 	cfg := &config.Config{
 		Cities:          copyCities(state.cities),
 		RefreshInterval: int(intervalSlider.Value),
