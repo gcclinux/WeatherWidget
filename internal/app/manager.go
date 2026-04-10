@@ -83,7 +83,16 @@ func (a *AppManager) Run() error {
 	provider := a.createProvider(cfg)
 	a.weather = weather.NewWeatherService(provider)
 
-	// 7. Create and start refresh scheduler.
+	// 7. Show widget and apply Win32 styles.
+	a.ui.ShowWidget(cfg.Cities)
+	a.ui.ApplyWin32Styles()
+	a.ui.SetCorner(cfg.CornerPosition)
+	log.Printf("WeatherWidget window shown at %s", cfg.CornerPosition)
+
+	// 8. Start clocks for each panel.
+	a.startPanelClocks(cfg.Cities)
+
+	// 9. Create and start refresh scheduler.
 	interval := time.Duration(cfg.RefreshInterval) * time.Minute
 	a.scheduler = scheduler.NewRefreshScheduler(interval, a.weather)
 	a.scheduler.SetCities(cfg.Cities)
@@ -94,14 +103,6 @@ func (a *AppManager) Run() error {
 		log.Printf("weather fetch error for %s: %v", city, err)
 	})
 	a.scheduler.Start()
-
-	// 8. Show widget and apply Win32 styles.
-	a.ui.ShowWidget(cfg.Cities)
-	a.ui.ApplyWin32Styles()
-	a.ui.SetCorner(cfg.CornerPosition)
-
-	// Start clocks for each panel.
-	a.startPanelClocks(cfg.Cities)
 
 	return nil
 }
@@ -228,23 +229,33 @@ func (a *AppManager) createProvider(cfg *config.Config) weather.WeatherProvider 
 // updates the UI panels accordingly.
 func (a *AppManager) handleWeatherUpdate(results []weather.WeatherResult) {
 	panels := a.ui.Panels()
+	log.Printf("handling weather update: %d results, %d UI panels available", len(results), len(panels))
+
 	data := make([]weather.WeatherData, 0, len(results))
 	for i, r := range results {
 		if r.Data != nil {
 			data = append(data, *r.Data)
 		} else {
-			data = append(data, weather.WeatherData{})
+			// Provide an empty Data object but preserve Name if possible
+			emptyData := weather.WeatherData{}
+			if i < len(a.cfg.Cities) {
+				emptyData.CityName = a.cfg.Cities[i].Name
+				emptyData.Region = a.cfg.Cities[i].Region
+			}
+			data = append(data, emptyData)
 		}
 		if i < len(panels) {
 			if r.HasError {
 				idx := i
 				isStale := r.IsStale
+				log.Printf("notifying UI of error for panel %d (city: %s, stale: %v)", idx, a.cfg.Cities[idx].Name, isStale)
 				fyne.Do(func() {
 					panels[idx].ShowError(isStale)
 				})
 			}
 		}
 	}
+	log.Printf("dispatching %d data updates to UI panels", len(data))
 	fyne.Do(func() {
 		a.ui.UpdatePanels(data)
 	})

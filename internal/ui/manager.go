@@ -1,6 +1,8 @@
 package ui
 
 import (
+	"log"
+
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
 
@@ -76,10 +78,10 @@ func (u *UIManager) ShowWidget(cities []config.CityConfig) {
 		objects[i] = p.Container()
 	}
 
-	hbox := container.NewHBox(objects...)
-	var content fyne.CanvasObject = hbox
+	grid := container.NewGridWithColumns(count, objects...)
+	var content fyne.CanvasObject = grid
 	if u.menu != nil {
-		content = newRightClickOverlay(hbox, u.menu)
+		content = newRightClickOverlay(grid, u.menu)
 	}
 	u.widget.SetContent(content)
 
@@ -91,6 +93,7 @@ func (u *UIManager) ShowWidget(cities []config.CityConfig) {
 // UpdatePanels updates each CityPanel with the corresponding weather data.
 // Panels and data are matched by index; extra data entries are ignored.
 func (u *UIManager) UpdatePanels(data []weather.WeatherData) {
+	log.Printf("UIManager: updating %d panels with %d data entries", len(u.panels), len(data))
 	for i, p := range u.panels {
 		if i >= len(data) {
 			break

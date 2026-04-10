@@ -25,6 +25,24 @@ func FormatDateTime(t time.Time, timezone string) string {
 	return t.In(loc).Format("02/01/2006 - 15:04:05")
 }
 
+// FormatTime returns a time string in the pattern "HH:MM:SS"
+func FormatTime(t time.Time, timezone string) string {
+	loc, err := time.LoadLocation(timezone)
+	if err != nil {
+		loc = time.UTC
+	}
+	return t.In(loc).Format("15:04:05")
+}
+
+// FormatDate returns a date string in the pattern "DD/MM/YYYY"
+func FormatDate(t time.Time, timezone string) string {
+	loc, err := time.LoadLocation(timezone)
+	if err != nil {
+		loc = time.UTC
+	}
+	return t.In(loc).Format("02/01/2006")
+}
+
 // MapConditionToIcon maps a weather condition code to an embedded icon asset identifier.
 // Known codes are returned as-is. Unknown codes default to "cloudy".
 func MapConditionToIcon(code string) string {

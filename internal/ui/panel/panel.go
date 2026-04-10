@@ -1,9 +1,8 @@
 package panel
 
 import (
-	"bytes"
 	"fmt"
-	"io"
+	"log"
 	"sync"
 	"time"
 
@@ -25,6 +24,7 @@ type CityPanel struct {
 	descLabel  *widget.Label
 	cityLabel  *widget.Label
 	timeLabel  *widget.Label
+	dateLabel  *widget.Label
 	errorIcon  *canvas.Image
 
 	mu         sync.Mutex
@@ -32,19 +32,14 @@ type CityPanel struct {
 	stopCh     chan struct{}
 }
 
-// loadIconFromAssets reads an icon PNG from the embedded assets FS.
-func loadIconFromAssets(iconCode string) io.Reader {
+// loadIconFromAssets reads an icon PNG from the embedded assets FS and returns it as a Fyne resource.
+func loadIconFromAssets(iconCode string) fyne.Resource {
 	path := fmt.Sprintf("icons/%s.png", iconCode)
-	f, err := assets.Icons.Open(path)
+	data, err := assets.Icons.ReadFile(path)
 	if err != nil {
 		return nil
 	}
-	defer f.Close()
-	data, err := io.ReadAll(f)
-	if err != nil {
-		return nil
-	}
-	return bytes.NewReader(data)
+	return fyne.NewStaticResource(path, data)
 }
 
 // NewCityPanel creates a new CityPanel with placeholder content.
@@ -52,12 +47,8 @@ func NewCityPanel() *CityPanel {
 	p := &CityPanel{}
 
 	// Weather icon — start with the default cloudy icon.
-	reader := loadIconFromAssets(weather.IconCloudy)
-	if reader != nil {
-		p.iconWidget = canvas.NewImageFromReader(reader, "weather-icon")
-	} else {
-		p.iconWidget = canvas.NewImageFromResource(nil)
-	}
+	res := loadIconFromAssets(weather.IconCloudy)
+	p.iconWidget = canvas.NewImageFromResource(res)
 	p.iconWidget.FillMode = canvas.ImageFillContain
 	p.iconWidget.SetMinSize(fyne.NewSize(40, 40))
 
@@ -77,19 +68,23 @@ func NewCityPanel() *CityPanel {
 	p.cityLabel = widget.NewLabel("City, RG")
 	p.cityLabel.Alignment = fyne.TextAlignCenter
 
-	p.timeLabel = widget.NewLabel("--/--/---- - --:--:--")
+	p.timeLabel = widget.NewLabel("--:--:--")
 	p.timeLabel.Alignment = fyne.TextAlignCenter
+
+	p.dateLabel = widget.NewLabel("--/--/----")
+	p.dateLabel.Alignment = fyne.TextAlignCenter
 
 	// Icon row: weather icon + error icon overlay.
 	iconRow := container.NewHBox(layout.NewSpacer(), p.iconWidget, p.errorIcon, layout.NewSpacer())
 
-	// Vertical stack: icon, temp, description, city, time.
+	// Vertical stack: city, icon, temp, description, time, date.
 	p.container = container.NewVBox(
+		container.NewCenter(p.cityLabel),
 		iconRow,
 		container.NewCenter(p.tempLabel),
 		container.NewCenter(p.descLabel),
-		container.NewCenter(p.cityLabel),
 		container.NewCenter(p.timeLabel),
+		container.NewCenter(p.dateLabel),
 	)
 
 	return p
@@ -108,11 +103,9 @@ func (p *CityPanel) Update(data *weather.WeatherData) {
 
 	// Update icon from embedded assets.
 	iconCode := weather.MapConditionToIcon(data.IconCode)
-	reader := loadIconFromAssets(iconCode)
-	if reader != nil {
-		p.iconWidget.Resource = nil
-		img := canvas.NewImageFromReader(reader, "weather-icon")
-		p.iconWidget.Image = img.Image
+	res := loadIconFromAssets(iconCode)
+	if res != nil {
+		p.iconWidget.Resource = res
 		p.iconWidget.Refresh()
 	}
 
@@ -131,11 +124,9 @@ func (p *CityPanel) Update(data *weather.WeatherData) {
 func (p *CityPanel) ShowError(stale bool) {
 	if stale {
 		// Show stale warning — use storm icon as a warning indicator.
-		reader := loadIconFromAssets("storm")
-		if reader != nil {
-			img := canvas.NewImageFromReader(reader, "error-stale")
-			p.errorIcon.Image = img.Image
-			p.errorIcon.Resource = nil
+		res := loadIconFromAssets("storm")
+		if res != nil {
+			p.errorIcon.Resource = res
 		}
 		p.errorIcon.SetMinSize(fyne.NewSize(20, 20))
 		p.errorIcon.Show()
@@ -143,11 +134,9 @@ func (p *CityPanel) ShowError(stale bool) {
 		p.descLabel.SetText("Data may be stale")
 	} else {
 		// Show small error indicator — use fog icon as error indicator.
-		reader := loadIconFromAssets("fog")
-		if reader != nil {
-			img := canvas.NewImageFromReader(reader, "error-indicator")
-			p.errorIcon.Image = img.Image
-			p.errorIcon.Resource = nil
+		res := loadIconFromAssets("fog")
+		if res != nil {
+			p.errorIcon.Resource = res
 		}
 		p.errorIcon.SetMinSize(fyne.NewSize(16, 16))
 		p.errorIcon.Show()
@@ -158,6 +147,7 @@ func (p *CityPanel) ShowError(stale bool) {
 // StartClock starts a 1-second ticker that updates the time label
 // with the current time in the given IANA timezone.
 func (p *CityPanel) StartClock(timezone string) {
+	log.Printf("CityPanel: starting clock for timezone %s", timezone)
 	p.StopClock() // stop any existing clock first
 
 	p.mu.Lock()
@@ -167,7 +157,9 @@ func (p *CityPanel) StartClock(timezone string) {
 	p.stopCh = make(chan struct{})
 
 	// Set the time immediately before the first tick.
-	p.timeLabel.SetText(weather.FormatDateTime(time.Now(), timezone))
+	now := time.Now()
+	p.timeLabel.SetText(weather.FormatTime(now, timezone))
+	p.dateLabel.SetText(weather.FormatDate(now, timezone))
 
 	go func() {
 		for {
@@ -175,9 +167,11 @@ func (p *CityPanel) StartClock(timezone string) {
 			case <-p.stopCh:
 				return
 			case t := <-p.timeTicker.C:
-				text := weather.FormatDateTime(t, timezone)
+				timeStr := weather.FormatTime(t, timezone)
+				dateStr := weather.FormatDate(t, timezone)
 				fyne.Do(func() {
-					p.timeLabel.SetText(text)
+					p.timeLabel.SetText(timeStr)
+					p.dateLabel.SetText(dateStr)
 				})
 			}
 		}

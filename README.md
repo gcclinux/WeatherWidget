@@ -1,11 +1,65 @@
 # EasyWidge
 
-EasyWidge
+A compact weather widget for your desktop.
 
+## Compilation
 
-`$env:PATH = "C:\msys64\ucrt64\bin;" + $env:PATH; $env:CGO_ENABLED = "1"; gcc --version | Select-Object -First 1`
-
+### Windows
+```powershell
+    $env:PATH = "C:\msys64\ucrt64\bin;" + $env:PATH; $env:CGO_ENABLED = "1"; gcc --version | Select-Object -First 1
+    make build
 ```
-go build -ldflags="-H windowsgui -s -w" -o weatherwidget.exe ./cmd/weatherwidget/
-.\weatherwidget.exe
+
+```powershell
+    go build -ldflags="-H windowsgui -s -w" -o weatherwidget.exe ./cmd/weatherwidget/
+    .\weatherwidget.exe
+```
+
+### Linux
+1. **Install dependencies**:
+   ```bash
+   sudo apt-get update && sudo apt-get install -y libgl1-mesa-dev xorg-dev
+   ```
+2. **Build**:
+   ```bash
+   make build
+   ```
+
+> **Note**: The first build may take several minutes as it compiles graphical dependencies (CGO). My updated Makefile includes the `-v` flag so you can monitor progress.
+
+## Config example
+
+```json
+{
+  "dataSource": "remote_api",
+  "cities": [
+    {
+      "name": "Holambra",
+      "region": "BR",
+      "latitude": -22.6332,
+      "longitude": -47.0545,
+      "timezone": "America/Sao_Paulo"
+    },
+    {
+      "name": "Edinburgh",
+      "region": "UK",
+      "latitude": 55.95,
+      "longitude": -3.19,
+      "timezone": "Europe/London"
+    },
+    {
+      "name": "Warsaw",
+      "region": "PL",
+      "latitude": 52.23,
+      "longitude": 21.01,
+      "timezone": "Europe/Warsaw"
+    }
+  ],
+  "refreshInterval": 23,
+  "cornerPosition": "bottom-right",
+  "apiConfig": {
+    "provider": "openweathermap",
+    "apiKey": "YOUR_API_KEY"
+  }
+}
 ```

@@ -1,23 +1,29 @@
 # Weather Widget Build Configuration
-# Target: Windows 11 (amd64)
-
-BINARY_NAME=weatherwidget.exe
+BINARY_NAME=weatherwidget
 CMD_PATH=./cmd/weatherwidget/
-LDFLAGS=-H windowsgui -s -w
+GO_CMD=/usr/local/go/bin/go
 
-export GOOS=windows
-export GOARCH=amd64
+# Detect OS
+ifeq ($(OS),Windows_NT)
+    BINARY_NAME=weatherwidget.exe
+    LDFLAGS=-H windowsgui -s -w
+    GOOS_VAL=windows
+else
+    # Linux/other
+    LDFLAGS=-s -w
+    GOOS_VAL=$($(GO_CMD) env GOOS)
+endif
 
 .PHONY: build test clean vet
 
 build:
-	go build -ldflags="$(LDFLAGS)" -o $(BINARY_NAME) $(CMD_PATH)
+	GOOS=$(GOOS_VAL) $(GO_CMD) build -v -ldflags="$(LDFLAGS)" -o $(BINARY_NAME) $(CMD_PATH)
 
 test:
-	go test ./...
+	$(GO_CMD) test ./...
 
 clean:
 	rm -f $(BINARY_NAME)
 
 vet:
-	go vet ./...
+	$(GO_CMD) vet ./...

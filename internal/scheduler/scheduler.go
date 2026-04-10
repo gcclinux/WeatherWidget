@@ -66,10 +66,11 @@ func (r *RefreshScheduler) Start() {
 	r.ticker = time.NewTicker(r.interval)
 	r.mu.Unlock()
 
-	// Immediate fetch before waiting for the first tick.
-	r.fetch()
-
-	go r.loop()
+	// Launch fetch and loop in background.
+	go func() {
+		r.fetch()
+		r.loop()
+	}()
 }
 
 // Stop stops the ticker and signals the goroutine to exit.

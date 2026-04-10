@@ -22,10 +22,16 @@ var (
 const (
 	wsExToolWindow = 0x00000080
 	wsExAppWindow  = 0x00040000
+	wsCaption      = 0x00C00000
+	wsSysMenu      = 0x00080000
+	wsThickFrame   = 0x00040000
+	wsMinimizeBox  = 0x00020000
+	wsMaximizeBox  = 0x00010000
 	hwndTopMost    = ^uintptr(0) // (HWND)-1 == HWND_TOPMOST
 	swpNoSize      = 0x0001
 	swpNoMove      = 0x0002
 	swpNoActivate  = 0x0010
+	swpFrameChanged = 0x0020
 	swpShowWindow  = 0x0040
 	smCxScreen     = 0
 	smCyScreen     = 1
@@ -38,27 +44,33 @@ func findHWND(title string) uintptr {
 	return hwnd
 }
 
-// applyToolWindowStyle sets WS_EX_TOOLWINDOW (removes from taskbar) and
-// makes the window always-on-top via HWND_TOPMOST.
+// applyToolWindowStyle sets WS_EX_TOOLWINDOW (removes from taskbar),
+// removes the title bar (WS_CAPTION), and makes the window always-on-top.
 func applyToolWindowStyle(title string) {
 	hwnd := findHWND(title)
 	if hwnd == 0 {
 		return
 	}
 
-	// GWL_EXSTYLE = -20; pass as two's complement to avoid constant overflow.
-	const gwlExStyle = ^uintptr(19) // == uintptr(-20)
+	// GWL_STYLE = -16; GWL_EXSTYLE = -20
+	const (
+		gwlStyle   = ^uintptr(15) // -16
+		gwlExStyle = ^uintptr(19) // -20
+	)
 
-	// Get current extended style.
+	// 1. Remove title bar and borders from basic style.
+	style, _, _ := procGetWindowLongW.Call(hwnd, gwlStyle)
+	newStyle := style &^ (wsCaption | wsThickFrame | wsSysMenu | wsMinimizeBox | wsMaximizeBox)
+	procSetWindowLongW.Call(hwnd, gwlStyle, newStyle)
+
+	// 2. Get current extended style and set tool-window behavior.
 	exStyle, _, _ := procGetWindowLongW.Call(hwnd, gwlExStyle)
+	newExStyle := (exStyle | wsExToolWindow) &^ wsExAppWindow
+	procSetWindowLongW.Call(hwnd, gwlExStyle, newExStyle)
 
-	// Add WS_EX_TOOLWINDOW, remove WS_EX_APPWINDOW.
-	newStyle := (exStyle | wsExToolWindow) &^ wsExAppWindow
-	procSetWindowLongW.Call(hwnd, gwlExStyle, newStyle)
-
-	// Set HWND_TOPMOST with SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_SHOWWINDOW.
+	// 3. Set HWND_TOPMOST and force frame refresh with SWP_FRAMECHANGED.
 	procSetWindowPos.Call(hwnd, hwndTopMost, 0, 0, 0, 0,
-		swpNoMove|swpNoSize|swpNoActivate|swpShowWindow)
+		swpNoMove|swpNoSize|swpNoActivate|swpShowWindow|swpFrameChanged)
 }
 
 // getScreenSize returns the primary monitor resolution in pixels.

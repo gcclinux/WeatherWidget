@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
+	"math"
 	"net/http"
 	"net/url"
 	"time"
@@ -108,8 +110,10 @@ func (r *RemoteAPIAdapter) fetchOWM(ctx context.Context, city config.CityConfig)
 		return nil, fmt.Errorf("create request: %w", err)
 	}
 
+	log.Printf("fetching weather from OWM for %s (%f, %f)...", city.Name, city.Latitude, city.Longitude)
 	resp, err := r.client.Do(req)
 	if err != nil {
+		log.Printf("OWM network error for %s: %v", city.Name, err)
 		return nil, fmt.Errorf("execute request: %w", err)
 	}
 	defer resp.Body.Close()
@@ -120,6 +124,7 @@ func (r *RemoteAPIAdapter) fetchOWM(ctx context.Context, city config.CityConfig)
 	}
 
 	if resp.StatusCode != http.StatusOK {
+		log.Printf("OWM API error for %s: status %d, body: %s", city.Name, resp.StatusCode, string(body))
 		return nil, fmt.Errorf("OWM API error (status %d): %s", resp.StatusCode, string(body))
 	}
 
@@ -135,10 +140,13 @@ func (r *RemoteAPIAdapter) fetchOWM(ctx context.Context, city config.CityConfig)
 	now := time.Now().UTC()
 	localTime := now.Add(time.Duration(owm.Timezone) * time.Second)
 
+	temp := int(math.Round(owm.Main.Temp))
+	log.Printf("successfully fetched weather for %s from OWM: %d°C, %s", city.Name, temp, owm.Weather[0].Description)
+
 	return &weather.WeatherData{
 		CityName:    city.Name,
 		Region:      city.Region,
-		Temperature: int(owm.Main.Temp),
+		Temperature: temp,
 		Description: owm.Weather[0].Description,
 		IconCode:    mapOWMConditionToIcon(owm.Weather[0].ID),
 		LocalTime:   localTime,
@@ -279,10 +287,11 @@ func (r *RemoteAPIAdapter) fetchWU(ctx context.Context, city config.CityConfig) 
 		loc = time.UTC
 	}
 
+	temp := int(math.Round(obs.Metric.Temp))
 	return &weather.WeatherData{
 		CityName:    city.Name,
 		Region:      city.Region,
-		Temperature: int(obs.Metric.Temp),
+		Temperature: temp,
 		Description: obs.Condition,
 		IconCode:    mapWUConditionToIcon(obs.IconCode),
 		LocalTime:   now.In(loc),
