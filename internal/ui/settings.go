@@ -283,9 +283,19 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 		positionRadio.SetSelected("Bottom-Right")
 	}
 
+	customPosLabel := widget.NewLabel("")
+	if cfg.CustomX != nil && cfg.CustomY != nil {
+		customPosLabel.SetText(fmt.Sprintf("Custom position active: (%d, %d). Changing corner will clear it.", *cfg.CustomX, *cfg.CustomY))
+	}
+
+	positionRadio.OnChanged = func(_ string) {
+		customPosLabel.SetText("")
+	}
+
 	positionSection := container.NewVBox(
 		widget.NewLabel("Widget Position"),
 		positionRadio,
+		customPosLabel,
 	)
 
 	// --- Refresh Interval ---

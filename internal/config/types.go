@@ -14,6 +14,8 @@ type Config struct {
 	Cities          []CityConfig    `json:"cities"`
 	RefreshInterval int             `json:"refreshInterval"` // minutes, 1–60, default 10
 	CornerPosition  string          `json:"cornerPosition"`  // "top-left"|"top-right"|"bottom-left"|"bottom-right"
+	CustomX         *int            `json:"customX,omitempty"`
+	CustomY         *int            `json:"customY,omitempty"`
 	APIConfig       *APIConfig      `json:"apiConfig,omitempty"`
 	DatabaseConfig  *DatabaseConfig `json:"databaseConfig,omitempty"`
 }

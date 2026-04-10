@@ -11,17 +11,6 @@ import (
 	"weatherwidget/internal/weather"
 )
 
-// cornerPositions lists the valid screen corner positions for the widget.
-var cornerPositions = []struct {
-	label string
-	value string
-}{
-	{"Top-Left", "top-left"},
-	{"Top-Right", "top-right"},
-	{"Bottom-Left", "bottom-left"},
-	{"Bottom-Right", "bottom-right"},
-}
-
 const widgetTitle = "WeatherWidget"
 
 // UIManager manages the Fyne application windows and city panels.
@@ -30,7 +19,6 @@ type UIManager struct {
 	widget   fyne.Window
 	settings fyne.Window
 	panels   []*panel.CityPanel
-	menu     *fyne.Menu // context menu shown on right-click
 }
 
 // NewUIManager creates a new UIManager and its main widget window.
@@ -79,11 +67,7 @@ func (u *UIManager) ShowWidget(cities []config.CityConfig) {
 	}
 
 	grid := container.NewGridWithColumns(count, objects...)
-	var content fyne.CanvasObject = grid
-	if u.menu != nil {
-		content = newRightClickOverlay(grid, u.menu)
-	}
-	u.widget.SetContent(content)
+	u.widget.SetContent(grid)
 
 	w, h, _ := CalculateLayout(count)
 	u.widget.Resize(fyne.NewSize(float32(w), float32(h)))
@@ -146,30 +130,19 @@ func (u *UIManager) SetCorner(position string) {
 	moveWindow(u.widget, x, y)
 }
 
-// SetupContextMenu builds the right-click context menu for the widget window.
-// onSettings is called when the user selects "Settings".
-// onPositionChange is called with the new position value when the user picks one.
-// onExit is called when the user selects "Exit".
-func (u *UIManager) SetupContextMenu(onSettings func(), onPositionChange func(string), onExit func()) {
-	// Build Position submenu items.
-	posItems := make([]*fyne.MenuItem, len(cornerPositions))
-	for i, pos := range cornerPositions {
-		p := pos.value // capture for closure
-		posItems[i] = fyne.NewMenuItem(pos.label, func() {
-			u.SetCorner(p)
-			if onPositionChange != nil {
-				onPositionChange(p)
-			}
-		})
-	}
+// EnableDrag enables left-click drag-to-reposition on the widget window.
+// onDragEnd is called after the user finishes dragging so the caller can
+// persist the new position. Must be called after the window is shown.
+func (u *UIManager) EnableDrag(onDragEnd func()) {
+	enableWindowDrag(onDragEnd)
+}
 
-	positionItem := fyne.NewMenuItem("Position", nil)
-	positionItem.ChildMenu = fyne.NewMenu("", posItems...)
+// SetPosition moves the widget window to exact pixel coordinates.
+func (u *UIManager) SetPosition(x, y int) {
+	moveWindow(u.widget, x, y)
+}
 
-	u.menu = fyne.NewMenu("",
-		fyne.NewMenuItem("Settings", onSettings),
-		positionItem,
-		fyne.NewMenuItemSeparator(),
-		fyne.NewMenuItem("Exit", onExit),
-	)
+// GetPosition returns the current top-left screen coordinates of the widget.
+func (u *UIManager) GetPosition() (int, int) {
+	return getWindowPosition()
 }

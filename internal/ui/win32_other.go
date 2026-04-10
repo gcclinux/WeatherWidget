@@ -17,3 +17,8 @@ func getScreenSize() (int, int) {
 // moveWindow is a no-op on non-Windows platforms.
 // Fyne does not expose a cross-platform window move API.
 func moveWindow(_ fyne.Window, _, _ int) {}
+
+// getWindowPosition returns (0, 0) on unsupported platforms.
+func getWindowPosition() (int, int) {
+	return 0, 0
+}

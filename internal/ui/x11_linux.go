@@ -56,6 +56,9 @@ func getScreenSize() (int, int) {
 // moveWindow repositions the widget window on Linux using xdotool.
 // It finds the window by title and moves it to (x, y).
 func moveWindow(_ fyne.Window, x, y int) {
+	// Mark this as a programmatic move so the drag poller ignores it.
+	notifyLinuxMoveByUs()
+
 	// Give Fyne a moment to finish rendering before moving, then move in background.
 	go func() {
 		time.Sleep(100 * time.Millisecond)
@@ -77,4 +80,30 @@ func moveWindow(_ fyne.Window, x, y int) {
 		}
 		log.Printf("Linux: moved window %q (id=%s) to (%d, %d)", widgetTitle, wid, x, y)
 	}()
+}
+
+// getWindowPosition returns the current top-left position of the widget window
+// using xdotool on Linux. Returns (0, 0) if the position cannot be determined.
+func getWindowPosition() (int, int) {
+	idOut, err := exec.Command("xdotool", "search", "--name", widgetTitle).Output()
+	if err != nil || len(strings.TrimSpace(string(idOut))) == 0 {
+		return 0, 0
+	}
+	lines := strings.Fields(strings.TrimSpace(string(idOut)))
+	wid := lines[len(lines)-1]
+
+	posOut, err := exec.Command("xdotool", "getwindowgeometry", "--shell", wid).Output()
+	if err != nil {
+		return 0, 0
+	}
+	var x, y int
+	for _, line := range strings.Split(string(posOut), "\n") {
+		if strings.HasPrefix(line, "X=") {
+			x, _ = strconv.Atoi(strings.TrimPrefix(line, "X="))
+		}
+		if strings.HasPrefix(line, "Y=") {
+			y, _ = strconv.Atoi(strings.TrimPrefix(line, "Y="))
+		}
+	}
+	return x, y
 }

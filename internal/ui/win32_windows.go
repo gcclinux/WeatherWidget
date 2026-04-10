@@ -17,24 +17,25 @@ var (
 	procSetWindowLongW   = user32.NewProc("SetWindowLongW")
 	procSetWindowPos     = user32.NewProc("SetWindowPos")
 	procGetSystemMetrics = user32.NewProc("GetSystemMetrics")
+	procGetWindowRect    = user32.NewProc("GetWindowRect")
 )
 
 const (
-	wsExToolWindow = 0x00000080
-	wsExAppWindow  = 0x00040000
-	wsCaption      = 0x00C00000
-	wsSysMenu      = 0x00080000
-	wsThickFrame   = 0x00040000
-	wsMinimizeBox  = 0x00020000
-	wsMaximizeBox  = 0x00010000
-	hwndTopMost    = ^uintptr(0) // (HWND)-1 == HWND_TOPMOST
-	swpNoSize      = 0x0001
-	swpNoMove      = 0x0002
-	swpNoActivate  = 0x0010
+	wsExToolWindow  = 0x00000080
+	wsExAppWindow   = 0x00040000
+	wsCaption       = 0x00C00000
+	wsSysMenu       = 0x00080000
+	wsThickFrame    = 0x00040000
+	wsMinimizeBox   = 0x00020000
+	wsMaximizeBox   = 0x00010000
+	hwndTopMost     = ^uintptr(0) // (HWND)-1 == HWND_TOPMOST
+	swpNoSize       = 0x0001
+	swpNoMove       = 0x0002
+	swpNoActivate   = 0x0010
 	swpFrameChanged = 0x0020
-	swpShowWindow  = 0x0040
-	smCxScreen     = 0
-	smCyScreen     = 1
+	swpShowWindow   = 0x0040
+	smCxScreen      = 0
+	smCyScreen      = 1
 )
 
 // findHWND locates the window handle by its title.
@@ -94,4 +95,20 @@ func moveWindow(_ fyne.Window, x, y int) {
 	procSetWindowPos.Call(hwnd, hwndTopMost,
 		uintptr(x), uintptr(y), 0, 0,
 		swpNoSize|swpNoActivate)
+}
+
+// rect matches the Win32 RECT structure.
+type rect struct {
+	Left, Top, Right, Bottom int32
+}
+
+// getWindowPosition returns the current top-left position of the widget window.
+func getWindowPosition() (int, int) {
+	hwnd := findHWND(widgetTitle)
+	if hwnd == 0 {
+		return 0, 0
+	}
+	var r rect
+	procGetWindowRect.Call(hwnd, uintptr(unsafe.Pointer(&r)))
+	return int(r.Left), int(r.Top)
 }

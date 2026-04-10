@@ -7,7 +7,6 @@ A compact weather widget for your desktop.
 ### Windows
 ```powershell
     $env:PATH = "C:\msys64\ucrt64\bin;" + $env:PATH; $env:CGO_ENABLED = "1"; gcc --version | Select-Object -First 1
-    make build
 ```
 
 ```powershell
@@ -55,11 +54,25 @@ A compact weather widget for your desktop.
       "timezone": "Europe/Warsaw"
     }
   ],
-  "refreshInterval": 23,
-  "cornerPosition": "bottom-right",
+  "refreshInterval": 30,
+  "cornerPosition": "top-right",
   "apiConfig": {
     "provider": "openweathermap",
     "apiKey": "YOUR_API_KEY"
   }
 }
+```
+
+### Windows COnfig location
+
+```powershell
+Get-Content "$env:APPDATA\WeatherWidget\WeatherWidget\config.json"
+or
+type "$env:APPDATA\WeatherWidget\WeatherWidget\config.json"
+```
+
+```bash
+cat $HOME/.config/WeatherWidget/WeatherWidget/config.json
+or
+more $HOME/.config/WeatherWidget/WeatherWidget/config.json
 ```

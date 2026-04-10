@@ -64,12 +64,7 @@ func (a *AppManager) Run() error {
 	// 3. Create UI manager.
 	a.ui = ui.NewUIManager(a.app)
 
-	// 4. Setup context menu and system tray.
-	a.ui.SetupContextMenu(
-		func() { a.openSettings() },
-		func(pos string) { a.saveCornerPosition(pos) },
-		func() { a.Shutdown() },
-	)
+	// 4. Setup system tray.
 	a.ui.SetupSystemTray(
 		func() { a.openSettings() },
 		func() { a.Shutdown() },
@@ -87,8 +82,20 @@ func (a *AppManager) Run() error {
 	// 7. Show widget and apply Win32 styles.
 	a.ui.ShowWidget(cfg.Cities)
 	a.ui.ApplyWin32Styles()
-	a.ui.SetCorner(cfg.CornerPosition)
+	a.applyPosition(cfg)
 	log.Printf("WeatherWidget window shown at %s", cfg.CornerPosition)
+
+	// 8. Enable drag-to-reposition — persists custom coordinates on drag end.
+	a.ui.EnableDrag(func() {
+		x, y := a.ui.GetPosition()
+		a.cfg.CustomX = &x
+		a.cfg.CustomY = &y
+		if err := a.config.Save(a.cfg); err != nil {
+			log.Printf("failed to save custom position (%d, %d): %v", x, y, err)
+		} else {
+			log.Printf("custom position saved: (%d, %d)", x, y)
+		}
+	})
 
 	// 8. Start clocks for each panel.
 	a.startPanelClocks(cfg.Cities)
@@ -140,15 +147,14 @@ func (a *AppManager) openSettings() {
 	a.ui.ShowSettings(a.cfg, a.onSettingsSave)
 }
 
-// saveCornerPosition updates the in-memory config with the new corner position
-// and persists it to disk. Called when the user picks a position from the
-// right-click context menu.
-func (a *AppManager) saveCornerPosition(pos string) {
-	a.cfg.CornerPosition = pos
-	if err := a.config.Save(a.cfg); err != nil {
-		log.Printf("failed to save corner position %q: %v", pos, err)
+// applyPosition moves the widget to custom coordinates if set, otherwise
+// falls back to the configured corner position.
+func (a *AppManager) applyPosition(cfg *config.Config) {
+	if cfg.CustomX != nil && cfg.CustomY != nil {
+		a.ui.SetPosition(*cfg.CustomX, *cfg.CustomY)
+		log.Printf("positioned widget at custom coordinates (%d, %d)", *cfg.CustomX, *cfg.CustomY)
 	} else {
-		log.Printf("corner position saved: %s", pos)
+		a.ui.SetCorner(cfg.CornerPosition)
 	}
 }
 
@@ -203,7 +209,7 @@ func (a *AppManager) onSettingsSave(newCfg *config.Config) error {
 	}
 
 	// Always reposition the widget window (position may have changed independently).
-	a.ui.SetCorner(newCfg.CornerPosition)
+	a.applyPosition(newCfg)
 
 	return nil
 }
