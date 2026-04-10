@@ -1,0 +1,5 @@
+# 2026/04/10 15:42:46.096658 [TestProperty8_MapConditionToIcon_ArbitraryCodes] [rapid] draw arbitraryCode: ""
+# 2026/04/10 15:42:46.096658 [TestProperty8_MapConditionToIcon_ArbitraryCodes] MapConditionToIcon("") = "cloudy", but embedded asset "icons/cloudy.png" not found: open icons/cloudy.png: file does not exist
+# 
+v0.4.8#15212016356328581341
+0x0
