@@ -149,8 +149,9 @@ func (u *UIManager) GetPosition() (int, int) {
 
 // SetOpacity applies background-only transparency to the widget window.
 // opacityPercent should be 25, 50, 75, or 100.
-// At < 100% the background color becomes transparent via Win32 color-key;
-// all text, icons and other content remain fully opaque.
+// On Windows the background color becomes transparent via Win32 color-key;
+// on Linux the whole window opacity is adjusted via _NET_WM_WINDOW_OPACITY
+// with mapped values to keep content readable.
 func (u *UIManager) SetOpacity(opacityPercent int) {
 	setWindowOpacity(opacityPercent)
 	u.widget.Canvas().Refresh(u.widget.Content())

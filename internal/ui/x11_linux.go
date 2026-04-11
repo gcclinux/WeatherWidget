@@ -108,6 +108,60 @@ func getWindowPosition() (int, int) {
 	return x, y
 }
 
-// setWindowOpacity is a no-op on Linux (xprop/_NET_WM_WINDOW_OPACITY requires
-// a compositing manager; omitted for simplicity).
-func setWindowOpacity(_ int) {}
+// setWindowOpacity applies whole-window transparency on Linux/X11 by setting
+// the _NET_WM_WINDOW_OPACITY property via xprop. This requires a compositing
+// manager (Picom, Mutter, KWin, etc.) to take effect.
+//
+// Unlike Windows (which supports background-only color-key transparency),
+// X11 _NET_WM_WINDOW_OPACITY affects the entire window including content.
+// To keep text and icons readable, the user-facing opacity values are mapped
+// to less aggressive X11 values:
+//
+//	User 100% → X11 100% (fully opaque)
+//	User  75% → X11  85%
+//	User  50% → X11  70%
+//	User  25% → X11  55%
+func setWindowOpacity(opacityPercent int) {
+	// Map user-facing opacity to X11 whole-window opacity so content stays
+	// readable. The window background dims while text/icons remain legible.
+	x11Percent := opacityPercent
+	switch {
+	case opacityPercent >= 100:
+		x11Percent = 100
+	case opacityPercent >= 75:
+		x11Percent = 85
+	case opacityPercent >= 50:
+		x11Percent = 70
+	case opacityPercent >= 25:
+		x11Percent = 55
+	default:
+		x11Percent = 55
+	}
+
+	go func() {
+		// Give the window a moment to be mapped if called at startup.
+		time.Sleep(600 * time.Millisecond)
+
+		if x11Percent >= 100 {
+			// Remove the property entirely — fully opaque.
+			cmd := exec.Command("xprop", "-name", widgetTitle, "-remove", "_NET_WM_WINDOW_OPACITY")
+			if err := cmd.Run(); err != nil {
+				log.Printf("Linux: setWindowOpacity: failed to remove _NET_WM_WINDOW_OPACITY: %v", err)
+			}
+			return
+		}
+
+		// _NET_WM_WINDOW_OPACITY is a 32-bit cardinal where 0xFFFFFFFF = fully opaque.
+		opacity := uint64(x11Percent) * 0xFFFFFFFF / 100
+		val := strconv.FormatUint(opacity, 10)
+
+		cmd := exec.Command("xprop", "-name", widgetTitle,
+			"-f", "_NET_WM_WINDOW_OPACITY", "32c",
+			"-set", "_NET_WM_WINDOW_OPACITY", val)
+		if err := cmd.Run(); err != nil {
+			log.Printf("Linux: setWindowOpacity: xprop failed (is x11-utils installed? is a compositor running?): %v", err)
+			return
+		}
+		log.Printf("Linux: set window opacity to %d%% (user: %d%%, _NET_WM_WINDOW_OPACITY=%s)", x11Percent, opacityPercent, val)
+	}()
+}
