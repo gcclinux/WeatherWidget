@@ -56,6 +56,8 @@ A compact weather widget for your desktop.
   ],
   "refreshInterval": 30,
   "cornerPosition": "top-right",
+  "customX": -819,
+  "customY": 99,
   "apiConfig": {
     "provider": "openweathermap",
     "apiKey": "YOUR_API_KEY"

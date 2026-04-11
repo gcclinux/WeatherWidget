@@ -156,6 +156,11 @@ func (a *AppManager) applyPosition(cfg *config.Config) {
 	} else {
 		a.ui.SetCorner(cfg.CornerPosition)
 	}
+	opacity := cfg.Opacity
+	if opacity == 0 {
+		opacity = 100
+	}
+	a.ui.SetOpacity(opacity)
 }
 
 // onSettingsSave is the callback invoked when the user saves settings.

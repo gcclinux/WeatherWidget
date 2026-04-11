@@ -12,8 +12,7 @@ var allowedCornerPositions = map[string]bool{
 
 // allowedProviders defines the valid remote API providers.
 var allowedProviders = map[string]bool{
-	"openweathermap":     true,
-	"weatherunderground": true,
+	"openweathermap": true,
 }
 
 // Validate checks the given Config and returns a slice of ValidationError
@@ -80,7 +79,7 @@ func validateAPIConfig(api *APIConfig) []ValidationError {
 	if !allowedProviders[api.Provider] {
 		errs = append(errs, ValidationError{
 			Field:   "apiConfig.provider",
-			Message: fmt.Sprintf("must be openweathermap or weatherunderground, got %q", api.Provider),
+			Message: fmt.Sprintf("must be openweathermap, got %q", api.Provider),
 		})
 	}
 	return errs

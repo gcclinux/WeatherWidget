@@ -39,7 +39,6 @@ var cornerPositions = []string{
 // providers is the set of allowed API providers.
 var providers = []string{
 	"openweathermap",
-	"weatherunderground",
 }
 
 // genCityConfig generates a random valid CityConfig.

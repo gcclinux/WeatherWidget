@@ -157,9 +157,8 @@ func TestFetchWeather_WU_Success(t *testing.T) {
 			{
 				StationID:    "KLAX",
 				Neighborhood: "Los Angeles",
-				Metric:       wuMetric{Temp: 22.5},
-				Condition:    "Partly Cloudy",
-				IconCode:     30,
+				Humidity:     45,
+				Metric:       wuMetric{Temp: 22.5, WindSpeed: 10, PrecipRate: 0},
 			},
 		},
 	}
@@ -183,14 +182,14 @@ func TestFetchWeather_WU_Success(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	if data.Temperature != 22 {
-		t.Errorf("Temperature = %d, want 22", data.Temperature)
+	if data.Temperature != 23 {
+		t.Errorf("Temperature = %d, want 23", data.Temperature)
 	}
-	if data.Description != "Partly Cloudy" {
-		t.Errorf("Description = %q, want %q", data.Description, "Partly Cloudy")
+	if data.Description != "Clear" {
+		t.Errorf("Description = %q, want %q", data.Description, "Clear")
 	}
-	if data.IconCode != weather.IconPartlyCloudy {
-		t.Errorf("IconCode = %q, want %q", data.IconCode, weather.IconPartlyCloudy)
+	if data.IconCode != weather.IconClear {
+		t.Errorf("IconCode = %q, want %q", data.IconCode, weather.IconClear)
 	}
 }
 
@@ -264,6 +263,20 @@ func TestTestConnection_WU_Success(t *testing.T) {
 
 	if err := adapter.TestConnection(context.Background()); err != nil {
 		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestTestConnection_WU_Success204(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer srv.Close()
+
+	adapter := NewRemoteAPIAdapter("weatherunderground", "valid-key")
+	adapter.BaseURL = srv.URL
+
+	if err := adapter.TestConnection(context.Background()); err != nil {
+		t.Fatalf("unexpected error for 204 response: %v", err)
 	}
 }
 

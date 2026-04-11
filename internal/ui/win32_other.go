@@ -22,3 +22,6 @@ func moveWindow(_ fyne.Window, _, _ int) {}
 func getWindowPosition() (int, int) {
 	return 0, 0
 }
+
+// setWindowOpacity is a no-op on non-Windows platforms.
+func setWindowOpacity(_ int) {}

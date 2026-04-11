@@ -53,12 +53,8 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 	}
 
 	// ── API config ───────────────────────────────────────────────────────
-	providerSelect := widget.NewSelect([]string{"OpenWeatherMap", "Weather Underground"}, nil)
-	if cfg.APIConfig != nil && cfg.APIConfig.Provider == "weatherunderground" {
-		providerSelect.SetSelected("Weather Underground")
-	} else {
-		providerSelect.SetSelected("OpenWeatherMap")
-	}
+	providerSelect := widget.NewSelect([]string{"OpenWeatherMap"}, nil)
+	providerSelect.SetSelected("OpenWeatherMap")
 	apiKeyEntry := widget.NewEntry()
 	apiKeyEntry.SetPlaceHolder("API Key")
 	if cfg.APIConfig != nil {
@@ -146,6 +142,21 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 	}
 	positionRadio.OnChanged = func(_ string) { customPosLabel.SetText("") }
 
+	// ── Transparency ─────────────────────────────────────────────────────
+	opacityRadio := widget.NewRadioGroup([]string{"25%", "50%", "75%", "100%"}, nil)
+	opacityRadio.Horizontal = true
+	opacityMap := map[string]int{"25%": 25, "50%": 50, "75%": 75, "100%": 100}
+	opacityLabelMap := map[int]string{25: "25%", 50: "50%", 75: "75%", 100: "100%"}
+	currentOpacity := cfg.Opacity
+	if currentOpacity == 0 {
+		currentOpacity = 100
+	}
+	if label, ok := opacityLabelMap[currentOpacity]; ok {
+		opacityRadio.SetSelected(label)
+	} else {
+		opacityRadio.SetSelected("100%")
+	}
+
 	// ── Refresh interval ─────────────────────────────────────────────────
 	intervalSlider := widget.NewSlider(1, 60)
 	intervalSlider.Step = 1
@@ -167,6 +178,9 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 		widget.NewLabel("Widget Position"),
 		positionRadio,
 		customPosLabel,
+		widget.NewSeparator(),
+		widget.NewLabel("Background Transparency"),
+		opacityRadio,
 		widget.NewSeparator(),
 		widget.NewLabel("Refresh Interval"),
 		container.NewHBox(intervalSlider, intervalLabel),
@@ -302,7 +316,7 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 		newCfg := buildConfigFromUI(
 			dataSourceRadio, providerSelect, apiKeyEntry,
 			dbHostEntry, dbPortEntry, dbNameEntry, dbUserEntry, dbPassEntry, dbQueryEntry,
-			intervalSlider, state, positionValueMap, positionRadio,
+			intervalSlider, state, positionValueMap, positionRadio, opacityRadio, opacityMap, cfg,
 		)
 		errs := config.Validate(newCfg)
 		if len(errs) > 0 {
@@ -347,15 +361,25 @@ func buildConfigFromUI(
 	state *settingsState,
 	positionValueMap map[string]string,
 	positionRadio *widget.RadioGroup,
+	opacityRadio *widget.RadioGroup,
+	opacityMap map[string]int,
+	current *config.Config,
 ) *config.Config {
 	cornerPosition := positionValueMap[positionRadio.Selected]
 	if cornerPosition == "" {
 		cornerPosition = "bottom-right"
 	}
+	opacity := opacityMap[opacityRadio.Selected]
+	if opacity == 0 {
+		opacity = 100
+	}
 	cfg := &config.Config{
 		Cities:          copyCities(state.cities),
 		RefreshInterval: int(intervalSlider.Value),
 		CornerPosition:  cornerPosition,
+		CustomX:         current.CustomX,
+		CustomY:         current.CustomY,
+		Opacity:         opacity,
 	}
 	if dataSourceRadio.Selected == "Local Database" {
 		cfg.DataSource = config.DataSourceLocalDatabase
@@ -370,12 +394,8 @@ func buildConfigFromUI(
 		}
 	} else {
 		cfg.DataSource = config.DataSourceRemoteAPI
-		provider := "openweathermap"
-		if providerSelect.Selected == "Weather Underground" {
-			provider = "weatherunderground"
-		}
 		cfg.APIConfig = &config.APIConfig{
-			Provider: provider,
+			Provider: "openweathermap",
 			APIKey:   strings.TrimSpace(apiKeyEntry.Text),
 		}
 	}

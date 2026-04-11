@@ -216,7 +216,7 @@ func mapOWMConditionToIcon(id int) string {
 
 // --- Weather Underground implementation ---
 
-// wuResponse represents the relevant fields from the Weather Underground API.
+// wuResponse represents the relevant fields from the Weather Underground PWS API.
 type wuResponse struct {
 	Observations []wuObservation `json:"observations"`
 }
@@ -224,13 +224,15 @@ type wuResponse struct {
 type wuObservation struct {
 	StationID    string   `json:"stationID"`
 	Neighborhood string   `json:"neighborhood"`
+	Humidity     float64  `json:"humidity"`
 	Metric       wuMetric `json:"metric"`
-	Condition    string   `json:"condition"`
-	IconCode     int      `json:"iconCode"`
 }
 
 type wuMetric struct {
-	Temp float64 `json:"temp"`
+	Temp       float64 `json:"temp"`
+	WindSpeed  float64 `json:"windSpeed"`
+	WindGust   float64 `json:"windGust"`
+	PrecipRate float64 `json:"precipRate"`
 }
 
 func (r *RemoteAPIAdapter) fetchWU(ctx context.Context, city config.CityConfig) (*weather.WeatherData, error) {
@@ -244,9 +246,6 @@ func (r *RemoteAPIAdapter) fetchWU(ctx context.Context, city config.CityConfig) 
 	q.Set("format", "json")
 	q.Set("units", "m")
 	q.Set("apiKey", r.apiKey)
-	if city.Latitude != 0 || city.Longitude != 0 {
-		q.Set("geocode", fmt.Sprintf("%f,%f", city.Latitude, city.Longitude))
-	}
 	u.RawQuery = q.Encode()
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
@@ -265,9 +264,14 @@ func (r *RemoteAPIAdapter) fetchWU(ctx context.Context, city config.CityConfig) 
 		return nil, fmt.Errorf("read response: %w", err)
 	}
 
+	if resp.StatusCode == http.StatusNoContent {
+		return nil, fmt.Errorf("WU station %q not found or has no recent data (status 204) — ensure city Name is a valid PWS station ID (e.g. KLAX, IWARSAW123)", city.Name)
+	}
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("WU API error (status %d): %s", resp.StatusCode, string(body))
 	}
+
+	log.Printf("WU raw response for %s: %s", city.Name, string(body))
 
 	var wu wuResponse
 	if err := json.Unmarshal(body, &wu); err != nil {
@@ -288,12 +292,13 @@ func (r *RemoteAPIAdapter) fetchWU(ctx context.Context, city config.CityConfig) 
 	}
 
 	temp := int(math.Round(obs.Metric.Temp))
+	icon, description := deriveWUCondition(obs)
 	return &weather.WeatherData{
 		CityName:    city.Name,
 		Region:      city.Region,
 		Temperature: temp,
-		Description: obs.Condition,
-		IconCode:    mapWUConditionToIcon(obs.IconCode),
+		Description: description,
+		IconCode:    icon,
 		LocalTime:   now.In(loc),
 		FetchedAt:   now,
 	}, nil
@@ -326,12 +331,36 @@ func (r *RemoteAPIAdapter) testWU(ctx context.Context) error {
 	if resp.StatusCode == http.StatusUnauthorized {
 		return fmt.Errorf("invalid API key")
 	}
-	if resp.StatusCode != http.StatusOK {
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent {
 		body, _ := io.ReadAll(resp.Body)
 		return fmt.Errorf("API test failed (status %d): %s", resp.StatusCode, string(body))
 	}
 
 	return nil
+}
+
+// deriveWUCondition infers a human-readable description and icon from PWS sensor
+// readings, since the PWS current-conditions endpoint does not return a condition
+// string or icon code.
+func deriveWUCondition(obs wuObservation) (icon, description string) {
+	switch {
+	case obs.Metric.PrecipRate > 5:
+		return weather.IconStorm, "Heavy Rain"
+	case obs.Metric.PrecipRate > 0:
+		return weather.IconRain, "Rain"
+	case obs.Metric.WindSpeed > 50:
+		return weather.IconCloudy, "Very Windy"
+	case obs.Metric.WindSpeed > 30:
+		return weather.IconCloudy, "Windy"
+	case obs.Humidity > 90:
+		return weather.IconFog, "Foggy"
+	case obs.Humidity > 70:
+		return weather.IconCloudy, "Cloudy"
+	case obs.Humidity > 50:
+		return weather.IconPartlyCloudy, "Partly Cloudy"
+	default:
+		return weather.IconClear, "Clear"
+	}
 }
 
 // mapWUConditionToIcon maps Weather Underground icon codes to internal icon codes.

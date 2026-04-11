@@ -11,18 +11,20 @@ import (
 )
 
 var (
-	user32               = windows.NewLazySystemDLL("user32.dll")
-	procFindWindowW      = user32.NewProc("FindWindowW")
-	procGetWindowLongW   = user32.NewProc("GetWindowLongW")
-	procSetWindowLongW   = user32.NewProc("SetWindowLongW")
-	procSetWindowPos     = user32.NewProc("SetWindowPos")
-	procGetSystemMetrics = user32.NewProc("GetSystemMetrics")
-	procGetWindowRect    = user32.NewProc("GetWindowRect")
+	user32                         = windows.NewLazySystemDLL("user32.dll")
+	procFindWindowW                = user32.NewProc("FindWindowW")
+	procGetWindowLongW             = user32.NewProc("GetWindowLongW")
+	procSetWindowLongW             = user32.NewProc("SetWindowLongW")
+	procSetWindowPos               = user32.NewProc("SetWindowPos")
+	procGetSystemMetrics           = user32.NewProc("GetSystemMetrics")
+	procGetWindowRect              = user32.NewProc("GetWindowRect")
+	procSetLayeredWindowAttributes = user32.NewProc("SetLayeredWindowAttributes")
 )
 
 const (
 	wsExToolWindow  = 0x00000080
 	wsExAppWindow   = 0x00040000
+	wsExLayered     = 0x00080000
 	wsCaption       = 0x00C00000
 	wsSysMenu       = 0x00080000
 	wsThickFrame    = 0x00040000
@@ -36,6 +38,8 @@ const (
 	swpShowWindow   = 0x0040
 	smCxScreen      = 0
 	smCyScreen      = 1
+	lwaColorKey     = 0x00000001
+	lwaAlpha        = 0x00000002
 )
 
 // findHWND locates the window handle by its title.
@@ -111,4 +115,34 @@ func getWindowPosition() (int, int) {
 	var r rect
 	procGetWindowRect.Call(hwnd, uintptr(unsafe.Pointer(&r)))
 	return int(r.Left), int(r.Top)
+}
+
+// setWindowOpacity applies background-only transparency using LWA_COLORKEY.
+// When opacityPercent < 100 the window background color (#010101) is made
+// invisible by Windows; all other pixels (text, icons) remain fully opaque.
+// At 100% the layered style is removed and the window is fully opaque.
+func setWindowOpacity(opacityPercent int) {
+	hwnd := findHWND(widgetTitle)
+	if hwnd == 0 {
+		return
+	}
+
+	const gwlExStyle = ^uintptr(19) // GWL_EXSTYLE = -20
+
+	exStyle, _, _ := procGetWindowLongW.Call(hwnd, gwlExStyle)
+
+	if opacityPercent >= 100 {
+		// Remove layered style — fully opaque, normal rendering.
+		procSetWindowLongW.Call(hwnd, gwlExStyle, exStyle&^wsExLayered)
+		SetTransparencyActive(false)
+		return
+	}
+
+	// Enable layered window and set the color key transparent.
+	procSetWindowLongW.Call(hwnd, gwlExStyle, exStyle|wsExLayered)
+	SetTransparencyActive(true)
+
+	// Color key: R=1, G=1, B=1 as a COLORREF (0x00BBGGRR).
+	colorKey := uintptr(0x00010101)
+	procSetLayeredWindowAttributes.Call(hwnd, colorKey, 0, lwaColorKey)
 }

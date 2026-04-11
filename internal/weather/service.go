@@ -2,6 +2,7 @@ package weather
 
 import (
 	"context"
+	"log"
 	"sync"
 
 	"weatherwidget/internal/config"
@@ -47,6 +48,7 @@ func (ws *WeatherService) FetchAll(ctx context.Context, cities []config.CityConf
 		data, err := ws.provider.FetchWeather(ctx, city)
 		if err != nil {
 			ws.failures[city.Name]++
+			log.Printf("WeatherService: fetch failed for %s: %v", city.Name, err)
 			cached := ws.cache[city.Name]
 			results[i] = WeatherResult{
 				Data:     cached,

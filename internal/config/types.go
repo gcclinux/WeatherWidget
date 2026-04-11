@@ -16,6 +16,7 @@ type Config struct {
 	CornerPosition  string          `json:"cornerPosition"`  // "top-left"|"top-right"|"bottom-left"|"bottom-right"
 	CustomX         *int            `json:"customX,omitempty"`
 	CustomY         *int            `json:"customY,omitempty"`
+	Opacity         int             `json:"opacity"` // 25, 50, 75, or 100 (percent)
 	APIConfig       *APIConfig      `json:"apiConfig,omitempty"`
 	DatabaseConfig  *DatabaseConfig `json:"databaseConfig,omitempty"`
 }
@@ -70,5 +71,6 @@ func DefaultConfig() *Config {
 		},
 		RefreshInterval: 10,
 		CornerPosition:  "bottom-right",
+		Opacity:         100,
 	}
 }

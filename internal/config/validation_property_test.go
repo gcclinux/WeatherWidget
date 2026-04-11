@@ -233,7 +233,7 @@ func genMaybeInvalidAPIConfig(t *rapid.T, errs map[string]bool) (*APIConfig, map
 	var provider string
 	if invalidProvider {
 		provider = rapid.StringMatching(`[a-z]{3,15}`).Draw(t, "badProvider")
-		if provider == "openweathermap" || provider == "weatherunderground" {
+		if provider == "openweathermap" {
 			provider = "invalidprovider"
 		}
 		errs["apiConfig.provider"] = true

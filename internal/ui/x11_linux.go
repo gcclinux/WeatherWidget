@@ -107,3 +107,7 @@ func getWindowPosition() (int, int) {
 	}
 	return x, y
 }
+
+// setWindowOpacity is a no-op on Linux (xprop/_NET_WM_WINDOW_OPACITY requires
+// a compositing manager; omitted for simplicity).
+func setWindowOpacity(_ int) {}

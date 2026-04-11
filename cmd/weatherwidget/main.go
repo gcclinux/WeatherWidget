@@ -8,12 +8,15 @@ import (
 	"runtime"
 
 	"fyne.io/fyne/v2/app"
+	"fyne.io/fyne/v2/theme"
 
 	appmanager "weatherwidget/internal/app"
+	"weatherwidget/internal/ui"
 )
 
 func main() {
 	fyneApp := app.NewWithID("com.weatherwidget")
+	fyneApp.Settings().SetTheme(ui.NewWidgetTheme(theme.DefaultTheme()))
 
 	appDataDir := appDataDirectory()
 
