@@ -2,10 +2,10 @@ package ui
 
 import (
 	"log"
+	"weatherwidget/assets"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/driver/desktop"
-	"fyne.io/fyne/v2/theme"
 )
 
 // SetupSystemTray configures the system tray icon and menu.
@@ -23,8 +23,13 @@ func (u *UIManager) SetupSystemTray(appDataDir string, onSettings func(), onExit
 		return
 	}
 
-	// Using a Fyne default vector icon to test if the tray is capable of rendering at all.
-	res := theme.SettingsIcon()
+	// Load the tray icon from embedded assets.
+	iconData, err := assets.Icons.ReadFile("icons/clear_tray.png")
+	if err != nil {
+		log.Printf("warning: failed to load tray icon: %v, continuing without custom icon", err)
+		return
+	}
+	res := fyne.NewStaticResource("clear_tray.png", iconData)
 	u.app.SetIcon(res)
 	desk.SetSystemTrayIcon(res)
 

@@ -42,7 +42,7 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 	if float32(screenW) < winW {
 		winW = float32(screenW) * 0.9
 	}
-	winH := float32(screenH) * 0.55
+	winH := float32(screenH) * 0.40
 	win.Resize(fyne.NewSize(winW, winH))
 
 	state := &settingsState{
@@ -303,7 +303,7 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 			dialog.ShowError(fmt.Errorf("city name is required to search"), win)
 			return
 		}
-		
+
 		apiKey := strings.TrimSpace(apiKeyEntry.Text)
 		if apiKey == "" {
 			dialog.ShowError(fmt.Errorf("API Key is required in the settings above to search via OWM"), win)
@@ -326,12 +326,12 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 				return
 			}
 			defer resp.Body.Close()
-			
+
 			if resp.StatusCode != http.StatusOK {
 				fyne.Do(func() { dialog.ShowError(fmt.Errorf("search API error: %d", resp.StatusCode), win) })
 				return
 			}
-			
+
 			body, err := io.ReadAll(resp.Body)
 			if err != nil {
 				fyne.Do(func() { dialog.ShowError(fmt.Errorf("read error: %v", err), win) })
@@ -349,12 +349,12 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 				fyne.Do(func() { dialog.ShowError(fmt.Errorf("failed to parse search response: %v", err), win) })
 				return
 			}
-			
+
 			if len(results) == 0 {
 				fyne.Do(func() { dialog.ShowError(fmt.Errorf("no city found matching '%s'", searchName), win) })
 				return
 			}
-			
+
 			res := results[0]
 			region := res.Country
 			if res.State != "" {
