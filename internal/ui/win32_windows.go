@@ -30,7 +30,8 @@ const (
 	wsThickFrame    = 0x00040000
 	wsMinimizeBox   = 0x00020000
 	wsMaximizeBox   = 0x00010000
-	hwndTopMost     = ^uintptr(0) // (HWND)-1 == HWND_TOPMOST
+	hwndTopMost     = ^uintptr(0) // (HWND)-1 == HWND_TOPMOST (unused, kept for reference)
+	hwndBottom      = uintptr(1)  // (HWND)1  == HWND_BOTTOM — behind all other windows
 	swpNoSize       = 0x0001
 	swpNoMove       = 0x0002
 	swpNoActivate   = 0x0010
@@ -73,8 +74,8 @@ func applyToolWindowStyle(title string) {
 	newExStyle := (exStyle | wsExToolWindow) &^ wsExAppWindow
 	procSetWindowLongW.Call(hwnd, gwlExStyle, newExStyle)
 
-	// 3. Set HWND_TOPMOST and force frame refresh with SWP_FRAMECHANGED.
-	procSetWindowPos.Call(hwnd, hwndTopMost, 0, 0, 0, 0,
+	// 3. Set HWND_BOTTOM (behind all other windows) and force frame refresh.
+	procSetWindowPos.Call(hwnd, hwndBottom, 0, 0, 0, 0,
 		swpNoMove|swpNoSize|swpNoActivate|swpShowWindow|swpFrameChanged)
 }
 
@@ -96,7 +97,7 @@ func moveWindow(_ fyne.Window, x, y int) {
 		return
 	}
 	// SetWindowPos with SWP_NOSIZE to move without resizing.
-	procSetWindowPos.Call(hwnd, hwndTopMost,
+	procSetWindowPos.Call(hwnd, hwndBottom,
 		uintptr(x), uintptr(y), 0, 0,
 		swpNoSize|swpNoActivate)
 }
