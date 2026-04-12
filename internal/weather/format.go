@@ -2,6 +2,7 @@ package weather
 
 import (
 	"fmt"
+	"strings"
 	"time"
 )
 
@@ -43,7 +44,12 @@ func FormatDate(t time.Time, timezone string) string {
 	return t.In(loc).Format("02/01/2006")
 }
 
-// MapConditionToIcon maps a weather condition code to an embedded icon asset identifier.
+// FormatDescription title-cases a weather description string.
+// e.g. "clear sky" → "Clear Sky", "broken clouds" → "Broken Clouds"
+func FormatDescription(desc string) string {
+	return strings.Title(desc)
+}
+
 // Known codes are returned as-is. Unknown codes default to "cloudy".
 func MapConditionToIcon(code string) string {
 	for _, valid := range AllIconCodes {

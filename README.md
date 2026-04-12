@@ -2,6 +2,20 @@
 
 A compact weather widget for your desktop.
 
+## Screenshots
+
+**System Tray Menu**  
+
+![Win32 Task Manager Menu](images/win32-taskmanager-menu.png)
+
+**Opacity / background transparency** - (1-5 Cities)
+
+![Win32 Transparent Background](images/win32-transparent-background.png)
+
+**Weather Widget Settings**  
+
+![Weather Widget Settings](images/weather-widget-sesstings.png)
+
 ## Compilation
 
 ### Windows
@@ -65,7 +79,7 @@ A compact weather widget for your desktop.
 }
 ```
 
-### Windows COnfig location
+### Windows Config location
 
 ```powershell
 Get-Content "$env:APPDATA\WeatherWidget\WeatherWidget\config.json"

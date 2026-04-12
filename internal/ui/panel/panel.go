@@ -111,7 +111,7 @@ func (p *CityPanel) Update(data *weather.WeatherData) {
 
 	// Update labels.
 	p.tempLabel.SetText(weather.FormatTemperature(data.Temperature))
-	p.descLabel.SetText(data.Description)
+	p.descLabel.SetText(weather.FormatDescription(data.Description))
 	p.cityLabel.SetText(weather.FormatCityRegion(data.CityName, data.Region))
 
 	// Hide error indicator on successful update.
