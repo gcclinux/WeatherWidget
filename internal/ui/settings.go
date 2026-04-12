@@ -1,7 +1,11 @@
 package ui
 
 import (
+	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 
@@ -10,6 +14,8 @@ import (
 	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/widget"
+
+	"github.com/bradfitz/latlong"
 
 	"weatherwidget/internal/config"
 )
@@ -36,7 +42,7 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 	if float32(screenW) < winW {
 		winW = float32(screenW) * 0.9
 	}
-	winH := float32(screenH) * 0.4
+	winH := float32(screenH) * 0.55
 	win.Resize(fyne.NewSize(winW, winH))
 
 	state := &settingsState{
@@ -290,11 +296,91 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 		refreshCityList()
 	})
 
+	var searchBtn *widget.Button
+	searchBtn = widget.NewButton("Search API", func() {
+		name := strings.TrimSpace(addNameEntry.Text)
+		if name == "" {
+			dialog.ShowError(fmt.Errorf("city name is required to search"), win)
+			return
+		}
+		
+		apiKey := strings.TrimSpace(apiKeyEntry.Text)
+		if apiKey == "" {
+			dialog.ShowError(fmt.Errorf("API Key is required in the settings above to search via OWM"), win)
+			return
+		}
+
+		searchBtn.SetText("Searching...")
+		searchBtn.Disable()
+
+		go func(searchName, searchKey string) {
+			defer fyne.Do(func() {
+				searchBtn.SetText("Search API")
+				searchBtn.Enable()
+			})
+
+			uStr := fmt.Sprintf("http://api.openweathermap.org/geo/1.0/direct?q=%s&limit=1&appid=%s", url.QueryEscape(searchName), url.QueryEscape(searchKey))
+			resp, err := http.Get(uStr)
+			if err != nil {
+				fyne.Do(func() { dialog.ShowError(fmt.Errorf("search failed: %v", err), win) })
+				return
+			}
+			defer resp.Body.Close()
+			
+			if resp.StatusCode != http.StatusOK {
+				fyne.Do(func() { dialog.ShowError(fmt.Errorf("search API error: %d", resp.StatusCode), win) })
+				return
+			}
+			
+			body, err := io.ReadAll(resp.Body)
+			if err != nil {
+				fyne.Do(func() { dialog.ShowError(fmt.Errorf("read error: %v", err), win) })
+				return
+			}
+
+			var results []struct {
+				Name    string  `json:"name"`
+				Lat     float64 `json:"lat"`
+				Lon     float64 `json:"lon"`
+				Country string  `json:"country"`
+				State   string  `json:"state"`
+			}
+			if err := json.Unmarshal(body, &results); err != nil {
+				fyne.Do(func() { dialog.ShowError(fmt.Errorf("failed to parse search response: %v", err), win) })
+				return
+			}
+			
+			if len(results) == 0 {
+				fyne.Do(func() { dialog.ShowError(fmt.Errorf("no city found matching '%s'", searchName), win) })
+				return
+			}
+			
+			res := results[0]
+			region := res.Country
+			if res.State != "" {
+				region = res.State + ", " + region
+			}
+			tz := latlong.LookupZoneName(res.Lat, res.Lon)
+
+			fyne.Do(func() {
+				addNameEntry.SetText(res.Name)
+				addRegionEntry.SetText(region)
+				addLatEntry.SetText(fmt.Sprintf("%f", res.Lat))
+				addLonEntry.SetText(fmt.Sprintf("%f", res.Lon))
+				if tz != "" {
+					addTimezoneEntry.SetText(tz)
+				}
+			})
+		}(name, apiKey)
+	})
+
+	nameItemContent := container.NewBorder(nil, nil, nil, searchBtn, addNameEntry)
+
 	addForm := container.NewVBox(
 		widget.NewSeparator(),
 		widget.NewLabelWithStyle("Add City", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
 		widget.NewForm(
-			widget.NewFormItem("Name", addNameEntry),
+			widget.NewFormItem("Name", nameItemContent),
 			widget.NewFormItem("Region", addRegionEntry),
 			widget.NewFormItem("Latitude", addLatEntry),
 			widget.NewFormItem("Longitude", addLonEntry),

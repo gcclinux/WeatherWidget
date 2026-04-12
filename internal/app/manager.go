@@ -66,6 +66,7 @@ func (a *AppManager) Run() error {
 
 	// 4. Setup system tray.
 	a.ui.SetupSystemTray(
+		a.appDataDir,
 		func() { a.openSettings() },
 		func() { a.Shutdown() },
 	)
@@ -215,6 +216,9 @@ func (a *AppManager) onSettingsSave(newCfg *config.Config) error {
 
 	// Always reposition the widget window (position may have changed independently).
 	a.applyPosition(newCfg)
+
+	// Immediately fetch new generic data to refresh the UI and eliminate blank tiles!
+	a.scheduler.FetchNow()
 
 	return nil
 }

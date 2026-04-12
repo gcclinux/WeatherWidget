@@ -103,6 +103,11 @@ func (r *RefreshScheduler) SetInterval(d time.Duration) {
 	}
 }
 
+// FetchNow forces an immediate fetch out-of-band.
+func (r *RefreshScheduler) FetchNow() {
+	go r.fetch()
+}
+
 // loop runs in a goroutine, fetching on each tick until stopCh is closed.
 func (r *RefreshScheduler) loop() {
 	for {
