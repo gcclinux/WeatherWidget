@@ -150,8 +150,12 @@ func TestSave_AtomicWrite_NoPartialFile(t *testing.T) {
 	updated := &Config{
 		DataSource:      DataSourceRemoteAPI,
 		Cities:          []CityConfig{{Name: "NewCity", Region: "NC", Timezone: "UTC"}},
-		RefreshInterval: 5,
+		RefreshInterval: 120,
 		CornerPosition:  "top-right",
+		APIConfig: &APIConfig{
+			Provider: "easyweatherwidget",
+			APIKey:   "test-key-123",
+		},
 	}
 	if err := svc.Save(updated); err != nil {
 		t.Fatalf("Save() error = %v", err)
@@ -162,7 +166,11 @@ func TestSave_AtomicWrite_NoPartialFile(t *testing.T) {
 		t.Fatalf("Load() error = %v", err)
 	}
 	if !reflect.DeepEqual(loaded, updated) {
-		t.Errorf("After second save, loaded config doesn't match updated config")
+		t.Errorf("After second save, loaded config doesn't match updated config.\nGot:  %+v\nWant: %+v", loaded, updated)
+	}
+	// Verify the provider survived the round-trip.
+	if loaded.APIConfig == nil || loaded.APIConfig.Provider != "easyweatherwidget" {
+		t.Errorf("Provider not persisted: got %v, want easyweatherwidget", loaded.APIConfig)
 	}
 }
 

@@ -39,7 +39,7 @@ var cornerPositions = []string{
 // providers is the set of allowed API providers.
 var providers = []string{
 	"openweathermap",
-	"easywetherwidget",
+	"easyweatherwidget",
 }
 
 // genCityConfig generates a random valid CityConfig.
@@ -95,7 +95,7 @@ func genConfig(t *rapid.T) *Config {
 		switch provider {
 		case "openweathermap":
 			refreshInterval = 120
-		case "easywetherwidget":
+		case "easyweatherwidget":
 			refreshInterval = rapid.IntRange(30, 120).Draw(t, "refreshInterval")
 		}
 	} else {

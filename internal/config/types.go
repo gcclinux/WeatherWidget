@@ -32,7 +32,7 @@ type CityConfig struct {
 
 // APIConfig holds the configuration for a remote weather API.
 type APIConfig struct {
-	Provider string `json:"provider"` // "openweathermap" | "weatherunderground"
+	Provider string `json:"provider"` // "openweathermap" | "easyweatherwidget"
 	APIKey   string `json:"apiKey"`
 }
 
@@ -58,7 +58,8 @@ func (v ValidationError) Error() string {
 }
 
 // DefaultConfig returns a Config with sensible defaults:
-// one city (Holambra, SP), 10-minute refresh, bottom-right corner, remote_api data source.
+// one city (Holambra, SP), 120-minute refresh, bottom-right corner, remote_api data source,
+// and OpenWeatherMap as the default provider.
 func DefaultConfig() *Config {
 	return &Config{
 		DataSource: DataSourceRemoteAPI,
@@ -69,8 +70,11 @@ func DefaultConfig() *Config {
 				Timezone: "America/Sao_Paulo",
 			},
 		},
-		RefreshInterval: 10,
+		RefreshInterval: 120,
 		CornerPosition:  "bottom-right",
 		Opacity:         100,
+		APIConfig: &APIConfig{
+			Provider: "openweathermap",
+		},
 	}
 }

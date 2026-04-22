@@ -347,7 +347,7 @@ func TestMapWUConditionToIcon(t *testing.T) {
 	}
 }
 
-// --- EasyWetherWidget tests ---
+// --- EasyWeatherWidget tests ---
 
 // Helper to create a mock EWW server returning a canned response.
 func newEWWServer(t *testing.T, statusCode int, resp ewwResponse) *httptest.Server {
@@ -370,7 +370,7 @@ func TestFetchWeather_EWW_Success(t *testing.T) {
 	srv := newEWWServer(t, http.StatusOK, resp)
 	defer srv.Close()
 
-	adapter := NewRemoteAPIAdapter("easywetherwidget", "test-key")
+	adapter := NewRemoteAPIAdapter("easyweatherwidget", "test-key")
 	adapter.BaseURL = srv.URL
 
 	city := config.CityConfig{
@@ -413,7 +413,7 @@ func TestFetchWeather_EWW_URLConstruction(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	adapter := NewRemoteAPIAdapter("easywetherwidget", "my-api-key")
+	adapter := NewRemoteAPIAdapter("easyweatherwidget", "my-api-key")
 	adapter.BaseURL = srv.URL
 
 	city := config.CityConfig{
@@ -440,7 +440,7 @@ func TestFetchWeather_EWW_APIError(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	adapter := NewRemoteAPIAdapter("easywetherwidget", "bad-key")
+	adapter := NewRemoteAPIAdapter("easyweatherwidget", "bad-key")
 	adapter.BaseURL = srv.URL
 
 	city := config.CityConfig{Name: "London", Region: "GB", Timezone: "Europe/London"}
@@ -457,7 +457,7 @@ func TestFetchWeather_EWW_MalformedJSON(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	adapter := NewRemoteAPIAdapter("easywetherwidget", "test-key")
+	adapter := NewRemoteAPIAdapter("easyweatherwidget", "test-key")
 	adapter.BaseURL = srv.URL
 
 	city := config.CityConfig{Name: "London", Region: "GB", Timezone: "Europe/London"}
@@ -474,7 +474,7 @@ func TestTestConnection_EWW_Success(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	adapter := NewRemoteAPIAdapter("easywetherwidget", "valid-key")
+	adapter := NewRemoteAPIAdapter("easyweatherwidget", "valid-key")
 	adapter.BaseURL = srv.URL
 
 	if err := adapter.TestConnection(context.Background()); err != nil {
@@ -488,7 +488,7 @@ func TestTestConnection_EWW_InvalidKey(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	adapter := NewRemoteAPIAdapter("easywetherwidget", "bad-key")
+	adapter := NewRemoteAPIAdapter("easyweatherwidget", "bad-key")
 	adapter.BaseURL = srv.URL
 
 	err := adapter.TestConnection(context.Background())

@@ -3,6 +3,7 @@ package weather
 import (
 	"fmt"
 	"testing"
+	"time"
 
 	"weatherwidget/assets"
 
@@ -18,7 +19,11 @@ func TestProperty8_MapConditionToIcon_ValidCodes(t *testing.T) {
 		idx := rapid.IntRange(0, len(AllIconCodes)-1).Draw(t, "iconIndex")
 		code := AllIconCodes[idx]
 
-		result := MapConditionToIcon(code)
+		// Generate a random hour to test both day and night paths.
+		hour := rapid.IntRange(0, 23).Draw(t, "hour")
+		localTime := time.Date(2024, 6, 15, hour, 0, 0, 0, time.UTC)
+
+		result := MapConditionToIcon(code, localTime)
 
 		// Assert the result is non-empty
 		if result == "" {
@@ -52,7 +57,11 @@ func TestProperty8_MapConditionToIcon_ArbitraryCodes(t *testing.T) {
 		// Generate a random arbitrary string (not necessarily a valid code)
 		code := rapid.String().Draw(t, "arbitraryCode")
 
-		result := MapConditionToIcon(code)
+		// Generate a random hour to test both day and night paths.
+		hour := rapid.IntRange(0, 23).Draw(t, "hour")
+		localTime := time.Date(2024, 6, 15, hour, 0, 0, 0, time.UTC)
+
+		result := MapConditionToIcon(code, localTime)
 
 		// Assert the result is non-empty
 		if result == "" {

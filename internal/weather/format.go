@@ -51,11 +51,28 @@ func FormatDescription(desc string) string {
 }
 
 // Known codes are returned as-is. Unknown codes default to "cloudy".
-func MapConditionToIcon(code string) string {
+// When the code is "clear" and localTime falls between 6 PM and 6 AM,
+// the icon is swapped to "moon" to reflect nighttime.
+func MapConditionToIcon(code string, localTime time.Time) string {
 	for _, valid := range AllIconCodes {
 		if code == valid {
+			if isNight(localTime) {
+				switch code {
+				case IconClear:
+					return IconMoon
+				case IconCloudy:
+					return IconCloudyMoon
+				}
+			}
 			return code
 		}
 	}
 	return IconCloudy
+}
+
+// isNight returns true when the hour component of t is outside the
+// 6 AM – 6 PM daytime window (i.e. before 6 or at/after 18).
+func isNight(t time.Time) bool {
+	h := t.Hour()
+	return h < 6 || h >= 18
 }

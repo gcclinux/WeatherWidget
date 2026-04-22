@@ -44,6 +44,12 @@ func (s *ConfigService) Load() (*Config, error) {
 		return DefaultConfig(), nil
 	}
 
+	// Ensure remote_api configs always have an APIConfig with a valid provider
+	// so the saved provider choice is never silently dropped.
+	if cfg.DataSource == DataSourceRemoteAPI && cfg.APIConfig == nil {
+		cfg.APIConfig = &APIConfig{Provider: "openweathermap"}
+	}
+
 	return &cfg, nil
 }
 

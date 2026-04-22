@@ -225,13 +225,13 @@ func TestValidate_CityZeroCoordinatesSkipped(t *testing.T) {
 	}
 }
 
-func TestValidate_AcceptsEasyWetherWidget(t *testing.T) {
+func TestValidate_AcceptsEasyWeatherWidget(t *testing.T) {
 	cfg := &Config{
 		DataSource:      DataSourceRemoteAPI,
 		Cities:          []CityConfig{{Name: "Berlin", Region: "BE", Timezone: "Europe/Berlin"}},
 		RefreshInterval: 30,
 		CornerPosition:  "bottom-right",
-		APIConfig:       &APIConfig{Provider: "easywetherwidget", APIKey: "eww-key-123"},
+		APIConfig:       &APIConfig{Provider: "easyweatherwidget", APIKey: "eww-key-123"},
 	}
 	errs := Validate(cfg)
 	if len(errs) != 0 {
@@ -259,7 +259,7 @@ func TestValidate_RejectsEWWIntervalBelow30(t *testing.T) {
 		Cities:          []CityConfig{{Name: "Berlin", Region: "BE", Timezone: "Europe/Berlin"}},
 		RefreshInterval: 29,
 		CornerPosition:  "bottom-right",
-		APIConfig:       &APIConfig{Provider: "easywetherwidget", APIKey: "eww-key-123"},
+		APIConfig:       &APIConfig{Provider: "easyweatherwidget", APIKey: "eww-key-123"},
 	}
 	errs := Validate(cfg)
 	if !hasError(errs, "refreshInterval") {
@@ -322,7 +322,7 @@ func TestValidate_RejectsIntervalAbove120(t *testing.T) {
 	}
 
 	// Test with EWW provider
-	cfg.APIConfig.Provider = "easywetherwidget"
+	cfg.APIConfig.Provider = "easyweatherwidget"
 	errs = Validate(cfg)
 	if !hasError(errs, "refreshInterval") {
 		t.Error("expected refreshInterval error for EWW with interval 121")

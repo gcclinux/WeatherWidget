@@ -11,8 +11,10 @@ import (
 // Each maps to an embedded icon asset in assets/icons/.
 const (
 	IconClear        = "clear"
+	IconMoon         = "moon"
 	IconPartlyCloudy = "partly_cloudy"
 	IconCloudy       = "cloudy"
+	IconCloudyMoon   = "cloudy_moon"
 	IconRain         = "rain"
 	IconSnow         = "snow"
 	IconStorm        = "storm"
@@ -22,8 +24,10 @@ const (
 // AllIconCodes contains all valid icon code values.
 var AllIconCodes = []string{
 	IconClear,
+	IconMoon,
 	IconPartlyCloudy,
 	IconCloudy,
+	IconCloudyMoon,
 	IconRain,
 	IconSnow,
 	IconStorm,

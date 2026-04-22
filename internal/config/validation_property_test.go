@@ -146,7 +146,7 @@ func genMaybeInvalidConfig(t *rapid.T) (*Config, map[string]bool) {
 				} else {
 					refreshInterval = rapid.IntRange(121, 300).Draw(t, "highRefresh")
 				}
-			case "easywetherwidget":
+			case "easyweatherwidget":
 				// Valid is 30–120; invalid is <30 or >120
 				if rapid.Bool().Draw(t, "refreshTooLow") {
 					refreshInterval = rapid.IntRange(-100, 29).Draw(t, "lowRefresh")
@@ -164,7 +164,7 @@ func genMaybeInvalidConfig(t *rapid.T) (*Config, map[string]bool) {
 			switch provider {
 			case "openweathermap":
 				refreshInterval = 120
-			case "easywetherwidget":
+			case "easyweatherwidget":
 				refreshInterval = rapid.IntRange(30, 120).Draw(t, "validRefresh")
 			default:
 				// Invalid provider: no min from switch, only >120 check.
@@ -285,7 +285,7 @@ func genMaybeInvalidAPIConfig(t *rapid.T, errs map[string]bool) (*APIConfig, map
 	if invalidProvider {
 		provider = rapid.StringMatching(`[a-z]{3,15}`).Draw(t, "badProvider")
 		// Ensure the generated string is not accidentally a valid provider
-		if provider == "openweathermap" || provider == "easywetherwidget" {
+		if provider == "openweathermap" || provider == "easyweatherwidget" {
 			provider = "invalidprovider"
 		}
 		errs["apiConfig.provider"] = true
@@ -397,11 +397,11 @@ func TestProperty5_OWM_IntervalBelow120_ReturnsError(t *testing.T) {
 }
 
 // TestProperty5_EWW_IntervalBelow30_ReturnsError verifies that for any config
-// with DataSource=remote_api, Provider="easywetherwidget", and RefreshInterval < 30,
+// with DataSource=remote_api, Provider="easyweatherwidget", and RefreshInterval < 30,
 // Validate returns a refreshInterval error.
 func TestProperty5_EWW_IntervalBelow30_ReturnsError(t *testing.T) {
 	rapid.Check(t, func(rt *rapid.T) {
-		cfg := genValidRemoteAPIConfig(rt, "easywetherwidget")
+		cfg := genValidRemoteAPIConfig(rt, "easyweatherwidget")
 		// Override interval to be below 30 (range: 1–29)
 		cfg.RefreshInterval = rapid.IntRange(1, 29).Draw(rt, "ewwLowInterval")
 
@@ -415,11 +415,11 @@ func TestProperty5_EWW_IntervalBelow30_ReturnsError(t *testing.T) {
 }
 
 // TestProperty5_EWW_Interval30to120_NoRefreshError verifies that for any config
-// with DataSource=remote_api, Provider="easywetherwidget", and RefreshInterval
+// with DataSource=remote_api, Provider="easyweatherwidget", and RefreshInterval
 // between 30 and 120 (inclusive), Validate does NOT return a refreshInterval error.
 func TestProperty5_EWW_Interval30to120_NoRefreshError(t *testing.T) {
 	rapid.Check(t, func(rt *rapid.T) {
-		cfg := genValidRemoteAPIConfig(rt, "easywetherwidget")
+		cfg := genValidRemoteAPIConfig(rt, "easyweatherwidget")
 		// Override interval to be in the valid range 30–120
 		cfg.RefreshInterval = rapid.IntRange(30, 120).Draw(rt, "ewwValidInterval")
 
@@ -454,7 +454,7 @@ func genValidRemoteAPIConfig(rt *rapid.T, provider string) *Config {
 	switch provider {
 	case "openweathermap":
 		refreshInterval = 120
-	case "easywetherwidget":
+	case "easyweatherwidget":
 		refreshInterval = 30
 	}
 

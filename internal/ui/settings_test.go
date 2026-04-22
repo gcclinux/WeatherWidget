@@ -8,7 +8,7 @@ func TestProviderDisplayToValue(t *testing.T) {
 		value   string
 	}{
 		{"OpenWeatherMap (Free)", "openweathermap"},
-		{"EasyWetherWidget (Pro)", "easywetherwidget"},
+		{"EasyWeatherWidget (Pro)", "easyweatherwidget"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.display, func(t *testing.T) {
@@ -29,7 +29,7 @@ func TestProviderValueToDisplay(t *testing.T) {
 		display string
 	}{
 		{"openweathermap", "OpenWeatherMap (Free)"},
-		{"easywetherwidget", "EasyWetherWidget (Pro)"},
+		{"easyweatherwidget", "EasyWeatherWidget (Pro)"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.value, func(t *testing.T) {

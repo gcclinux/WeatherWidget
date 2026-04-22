@@ -20,7 +20,7 @@ import (
 const (
 	defaultOWMBaseURL = "https://api.openweathermap.org"
 	defaultWUBaseURL  = "https://api.weather.com"
-	defaultEWWBaseURL = "https://wagemaker.uk:8043"
+	defaultEWWBaseURL = "https://easyweatherwidget.org:8043"
 )
 
 // RemoteAPIAdapter implements weather.WeatherProvider for remote weather APIs.
@@ -39,7 +39,7 @@ func NewRemoteAPIAdapter(provider, apiKey string) *RemoteAPIAdapter {
 	switch provider {
 	case "weatherunderground":
 		baseURL = defaultWUBaseURL
-	case "easywetherwidget":
+	case "easyweatherwidget":
 		baseURL = defaultEWWBaseURL
 	}
 	return &RemoteAPIAdapter{
@@ -59,7 +59,7 @@ func (r *RemoteAPIAdapter) FetchWeather(ctx context.Context, city config.CityCon
 		return r.fetchOWM(ctx, city)
 	case "weatherunderground":
 		return r.fetchWU(ctx, city)
-	case "easywetherwidget":
+	case "easyweatherwidget":
 		return r.fetchEWW(ctx, city)
 	default:
 		return nil, fmt.Errorf("unsupported provider: %s", r.provider)
@@ -73,7 +73,7 @@ func (r *RemoteAPIAdapter) TestConnection(ctx context.Context) error {
 		return r.testOWM(ctx)
 	case "weatherunderground":
 		return r.testWU(ctx)
-	case "easywetherwidget":
+	case "easyweatherwidget":
 		return r.testEWW(ctx)
 	default:
 		return fmt.Errorf("unsupported provider: %s", r.provider)
@@ -409,9 +409,9 @@ func mapWUConditionToIcon(code int) string {
 	}
 }
 
-// --- EasyWetherWidget implementation ---
+// --- EasyWeatherWidget implementation ---
 
-// ewwResponse represents the relevant fields from the EasyWetherWidget API.
+// ewwResponse represents the relevant fields from the EasyWeatherWidget API.
 type ewwResponse struct {
 	Temp         float64 `json:"Temp"`
 	Neighborhood string  `json:"Neighborhood"`
@@ -500,7 +500,7 @@ func (r *RemoteAPIAdapter) testEWW(ctx context.Context) error {
 	return nil
 }
 
-// mapEWWFreeTextToIcon maps EasyWetherWidget FreeText descriptions to internal icon codes.
+// mapEWWFreeTextToIcon maps EasyWeatherWidget FreeText descriptions to internal icon codes.
 // It performs case-insensitive keyword matching with the following priority order:
 // storm/thunder → snow → rain/drizzle → fog/mist/haze → cloud → clear → default partly_cloudy.
 func mapEWWFreeTextToIcon(freeText string) string {

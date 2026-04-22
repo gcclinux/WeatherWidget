@@ -78,20 +78,76 @@ func TestFormatDateTimeInvalidTimezone(t *testing.T) {
 }
 
 func TestMapConditionToIcon(t *testing.T) {
-	// All known codes should map to themselves
+	// Use a daytime timestamp so clear maps to itself.
+	daytime := time.Date(2024, 6, 15, 12, 0, 0, 0, time.UTC)
+
+	// All known codes should map to themselves during the day.
 	for _, code := range AllIconCodes {
-		got := MapConditionToIcon(code)
+		got := MapConditionToIcon(code, daytime)
+		// "moon" is only produced by the nighttime swap; during the day
+		// it still maps to itself because it's a valid code.
 		if got != code {
-			t.Errorf("MapConditionToIcon(%q) = %q, want %q", code, got, code)
+			t.Errorf("MapConditionToIcon(%q, daytime) = %q, want %q", code, got, code)
 		}
 	}
 
 	// Unknown codes should default to "cloudy"
 	unknowns := []string{"unknown", "tornado", "", "hail", "windy"}
 	for _, code := range unknowns {
-		got := MapConditionToIcon(code)
+		got := MapConditionToIcon(code, daytime)
 		if got != IconCloudy {
-			t.Errorf("MapConditionToIcon(%q) = %q, want %q", code, got, IconCloudy)
+			t.Errorf("MapConditionToIcon(%q, daytime) = %q, want %q", code, got, IconCloudy)
+		}
+	}
+}
+
+func TestMapConditionToIcon_NighttimeSwaps(t *testing.T) {
+	night := time.Date(2024, 6, 15, 21, 0, 0, 0, time.UTC)
+	earlyMorning := time.Date(2024, 6, 15, 3, 0, 0, 0, time.UTC)
+	dawn := time.Date(2024, 6, 15, 6, 0, 0, 0, time.UTC)
+	dusk := time.Date(2024, 6, 15, 18, 0, 0, 0, time.UTC)
+
+	// ── Clear → Moon at night ────────────────────────────────────────────
+	got := MapConditionToIcon(IconClear, night)
+	if got != IconMoon {
+		t.Errorf("MapConditionToIcon(%q, 21:00) = %q, want %q", IconClear, got, IconMoon)
+	}
+	got = MapConditionToIcon(IconClear, earlyMorning)
+	if got != IconMoon {
+		t.Errorf("MapConditionToIcon(%q, 03:00) = %q, want %q", IconClear, got, IconMoon)
+	}
+	got = MapConditionToIcon(IconClear, dawn)
+	if got != IconClear {
+		t.Errorf("MapConditionToIcon(%q, 06:00) = %q, want %q", IconClear, got, IconClear)
+	}
+	got = MapConditionToIcon(IconClear, dusk)
+	if got != IconMoon {
+		t.Errorf("MapConditionToIcon(%q, 18:00) = %q, want %q", IconClear, got, IconMoon)
+	}
+
+	// ── Cloudy → CloudyMoon at night ─────────────────────────────────────
+	got = MapConditionToIcon(IconCloudy, night)
+	if got != IconCloudyMoon {
+		t.Errorf("MapConditionToIcon(%q, 21:00) = %q, want %q", IconCloudy, got, IconCloudyMoon)
+	}
+	got = MapConditionToIcon(IconCloudy, earlyMorning)
+	if got != IconCloudyMoon {
+		t.Errorf("MapConditionToIcon(%q, 03:00) = %q, want %q", IconCloudy, got, IconCloudyMoon)
+	}
+	got = MapConditionToIcon(IconCloudy, dawn)
+	if got != IconCloudy {
+		t.Errorf("MapConditionToIcon(%q, 06:00) = %q, want %q", IconCloudy, got, IconCloudy)
+	}
+	got = MapConditionToIcon(IconCloudy, dusk)
+	if got != IconCloudyMoon {
+		t.Errorf("MapConditionToIcon(%q, 18:00) = %q, want %q", IconCloudy, got, IconCloudyMoon)
+	}
+
+	// ── Other codes unaffected by nighttime ──────────────────────────────
+	for _, code := range []string{IconRain, IconSnow, IconStorm, IconFog, IconPartlyCloudy} {
+		got = MapConditionToIcon(code, night)
+		if got != code {
+			t.Errorf("MapConditionToIcon(%q, 21:00) = %q, want %q", code, got, code)
 		}
 	}
 }

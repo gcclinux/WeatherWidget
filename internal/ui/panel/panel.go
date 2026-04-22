@@ -102,7 +102,7 @@ func (p *CityPanel) Update(data *weather.WeatherData) {
 	}
 
 	// Update icon from embedded assets.
-	iconCode := weather.MapConditionToIcon(data.IconCode)
+	iconCode := weather.MapConditionToIcon(data.IconCode, data.LocalTime)
 	res := loadIconFromAssets(iconCode)
 	if res != nil {
 		p.iconWidget.Resource = res

@@ -1,7 +1,0 @@
-# 2026/04/10 15:42:46.095156 [TestProperty8_MapConditionToIcon_ValidCodes] [rapid] draw iconIndex: 2
-# 2026/04/10 15:42:46.095156 [TestProperty8_MapConditionToIcon_ValidCodes] MapConditionToIcon("cloudy") = "cloudy", but embedded asset "icons/cloudy.png" not found: open icons/cloudy.png: file does not exist
-# 
-v0.4.8#5325152637085690922
-0x0
-0x38e38e38e38e4
-0x2

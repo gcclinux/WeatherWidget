@@ -12,8 +12,8 @@ var allowedCornerPositions = map[string]bool{
 
 // allowedProviders defines the valid remote API providers.
 var allowedProviders = map[string]bool{
-	"openweathermap":   true,
-	"easywetherwidget": true,
+	"openweathermap":    true,
+	"easyweatherwidget": true,
 }
 
 // Validate checks the given Config and returns a slice of ValidationError
@@ -40,11 +40,11 @@ func Validate(cfg *Config) []ValidationError {
 					Message: "must be at least 120 for openweathermap",
 				})
 			}
-		case "easywetherwidget":
+		case "easyweatherwidget":
 			if cfg.RefreshInterval < 30 {
 				errs = append(errs, ValidationError{
 					Field:   "refreshInterval",
-					Message: "must be at least 30 for easywetherwidget",
+					Message: "must be at least 30 for easyweatherwidget",
 				})
 			}
 		}
@@ -105,7 +105,7 @@ func validateAPIConfig(api *APIConfig) []ValidationError {
 	if !allowedProviders[api.Provider] {
 		errs = append(errs, ValidationError{
 			Field:   "apiConfig.provider",
-			Message: fmt.Sprintf("must be openweathermap or easywetherwidget, got %q", api.Provider),
+			Message: fmt.Sprintf("must be openweathermap or easyweatherwidget, got %q", api.Provider),
 		})
 	}
 	return errs

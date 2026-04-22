@@ -37,7 +37,7 @@ func TestProperty1_EWWResponseParsingConsistency(t *testing.T) {
 		}))
 		defer srv.Close()
 
-		adapter := NewRemoteAPIAdapter("easywetherwidget", "test-key")
+		adapter := NewRemoteAPIAdapter("easyweatherwidget", "test-key")
 		adapter.BaseURL = srv.URL
 
 		city := config.CityConfig{

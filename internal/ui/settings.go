@@ -22,14 +22,14 @@ import (
 
 // providerDisplayToValue maps UI display strings to internal config values.
 var providerDisplayToValue = map[string]string{
-	"OpenWeatherMap (Free)":  "openweathermap",
-	"EasyWetherWidget (Pro)": "easywetherwidget",
+	"OpenWeatherMap (Free)":   "openweathermap",
+	"EasyWeatherWidget (Pro)": "easyweatherwidget",
 }
 
 // providerValueToDisplay maps internal config values to UI display strings.
 var providerValueToDisplay = map[string]string{
-	"openweathermap":   "OpenWeatherMap (Free)",
-	"easywetherwidget": "EasyWetherWidget (Pro)",
+	"openweathermap":    "OpenWeatherMap (Free)",
+	"easyweatherwidget": "EasyWeatherWidget (Pro)",
 }
 
 // settingsState holds mutable UI state for the settings dialog.
@@ -71,7 +71,7 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 	}
 
 	// ── API config ───────────────────────────────────────────────────────
-	providerSelect := widget.NewSelect([]string{"OpenWeatherMap (Free)", "EasyWetherWidget (Pro)"}, nil)
+	providerSelect := widget.NewSelect([]string{"OpenWeatherMap (Free)", "EasyWeatherWidget (Pro)"}, nil)
 	if cfg.APIConfig != nil && cfg.APIConfig.Provider != "" {
 		if display, ok := providerValueToDisplay[cfg.APIConfig.Provider]; ok {
 			providerSelect.SetSelected(display)
@@ -199,7 +199,7 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 			intervalSlider.Min = 120
 			intervalSlider.Max = 120
 			intervalSlider.SetValue(120)
-		case "easywetherwidget":
+		case "easyweatherwidget":
 			intervalSlider.Min = 30
 			intervalSlider.Max = 120
 			if intervalSlider.Value < 30 {
@@ -216,7 +216,14 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 		applyProviderSliderConstraints("openweathermap")
 	}
 
-	// Update slider constraints when provider changes.
+	// Track the initial provider so we can detect changes.
+	initialProvider := "openweathermap"
+	if cfg.APIConfig != nil && cfg.APIConfig.Provider != "" {
+		initialProvider = cfg.APIConfig.Provider
+	}
+
+	// Provider change handler is set below, after refreshCityList is defined,
+	// because switching providers clears the city list.
 	providerSelect.OnChanged = func(selected string) {
 		applyProviderSliderConstraints(providerDisplayToValue[selected])
 	}
@@ -289,6 +296,20 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 	}
 	refreshCityList()
 
+	// Now that refreshCityList is defined, upgrade the provider change handler
+	// to also clear cities when the provider switches.
+	providerSelect.OnChanged = func(selected string) {
+		newProvider := providerDisplayToValue[selected]
+		applyProviderSliderConstraints(newProvider)
+
+		// Clear the city list when switching providers — each provider uses
+		// its own search API, so existing cities may not be valid.
+		if newProvider != initialProvider {
+			state.cities = nil
+			refreshCityList()
+		}
+	}
+
 	cityListScroll := container.NewVScroll(cityListBox)
 	cityListScroll.SetMinSize(fyne.NewSize(0, 120))
 
@@ -296,13 +317,13 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 	addNameEntry := widget.NewEntry()
 	addNameEntry.SetPlaceHolder("City name")
 	addRegionEntry := widget.NewEntry()
-	addRegionEntry.SetPlaceHolder("Region / Country (e.g. SP)")
+	addRegionEntry.SetPlaceHolder("Region / Country (e.g. BR)")
 	addLatEntry := widget.NewEntry()
 	addLatEntry.SetPlaceHolder("Latitude (optional)")
 	addLonEntry := widget.NewEntry()
 	addLonEntry.SetPlaceHolder("Longitude (optional)")
 	addTimezoneEntry := widget.NewEntry()
-	addTimezoneEntry.SetPlaceHolder("Timezone (e.g. America/Sao_Paulo)")
+	addTimezoneEntry.SetPlaceHolder("Timezone (America/Sao_Paulo)")
 
 	addBtn := widget.NewButton("Add City", func() {
 		name := strings.TrimSpace(addNameEntry.Text)
@@ -355,72 +376,144 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 
 		apiKey := strings.TrimSpace(apiKeyEntry.Text)
 		if apiKey == "" {
-			dialog.ShowError(fmt.Errorf("API Key is required in the settings above to search via OWM"), win)
+			dialog.ShowError(fmt.Errorf("API Key is required in the settings above to search"), win)
 			return
 		}
+
+		currentProvider := providerDisplayToValue[providerSelect.Selected]
 
 		searchBtn.SetText("Searching...")
 		searchBtn.Disable()
 
-		go func(searchName, searchKey string) {
-			defer fyne.Do(func() {
+		switch currentProvider {
+		case "easyweatherwidget":
+			region := strings.TrimSpace(addRegionEntry.Text)
+			if region == "" {
+				dialog.ShowError(fmt.Errorf("Region / Country is required to search via EasyWeatherWidget"), win)
 				searchBtn.SetText("Search API")
 				searchBtn.Enable()
-			})
-
-			uStr := fmt.Sprintf("http://api.openweathermap.org/geo/1.0/direct?q=%s&limit=1&appid=%s", url.QueryEscape(searchName), url.QueryEscape(searchKey))
-			resp, err := http.Get(uStr)
-			if err != nil {
-				fyne.Do(func() { dialog.ShowError(fmt.Errorf("search failed: %v", err), win) })
-				return
-			}
-			defer resp.Body.Close()
-
-			if resp.StatusCode != http.StatusOK {
-				fyne.Do(func() { dialog.ShowError(fmt.Errorf("search API error: %d", resp.StatusCode), win) })
 				return
 			}
 
-			body, err := io.ReadAll(resp.Body)
-			if err != nil {
-				fyne.Do(func() { dialog.ShowError(fmt.Errorf("read error: %v", err), win) })
-				return
-			}
+			go func(searchName, searchRegion, searchKey string) {
+				defer fyne.Do(func() {
+					searchBtn.SetText("Search API")
+					searchBtn.Enable()
+				})
 
-			var results []struct {
-				Name    string  `json:"name"`
-				Lat     float64 `json:"lat"`
-				Lon     float64 `json:"lon"`
-				Country string  `json:"country"`
-				State   string  `json:"state"`
-			}
-			if err := json.Unmarshal(body, &results); err != nil {
-				fyne.Do(func() { dialog.ShowError(fmt.Errorf("failed to parse search response: %v", err), win) })
-				return
-			}
-
-			if len(results) == 0 {
-				fyne.Do(func() { dialog.ShowError(fmt.Errorf("no city found matching '%s'", searchName), win) })
-				return
-			}
-
-			res := results[0]
-			region := res.Country
-			if res.State != "" {
-				region = res.State + ", " + region
-			}
-			tz := latlong.LookupZoneName(res.Lat, res.Lon)
-
-			fyne.Do(func() {
-				addNameEntry.SetText(res.Name)
-				addRegionEntry.SetText(region)
-				addLatEntry.SetText(fmt.Sprintf("%f", res.Lat))
-				addLonEntry.SetText(fmt.Sprintf("%f", res.Lon))
-				if tz != "" {
-					addTimezoneEntry.SetText(tz)
+				// EWW uses the weather endpoint for city lookup:
+				// https://easyweatherwidget.org:8043/api/v1/weather/key=API_KEY/City,Region
+				query := searchName + "," + searchRegion
+				uStr := fmt.Sprintf("https://easyweatherwidget.org:8043/api/v1/weather/key=%s/%s",
+					url.PathEscape(searchKey), url.PathEscape(query))
+				resp, err := http.Get(uStr)
+				if err != nil {
+					fyne.Do(func() { dialog.ShowError(fmt.Errorf("search failed: %v", err), win) })
+					return
 				}
-			})
-		}(name, apiKey)
+				defer resp.Body.Close()
+
+				if resp.StatusCode != http.StatusOK {
+					fyne.Do(func() { dialog.ShowError(fmt.Errorf("search API error: %d", resp.StatusCode), win) })
+					return
+				}
+
+				body, err := io.ReadAll(resp.Body)
+				if err != nil {
+					fyne.Do(func() { dialog.ShowError(fmt.Errorf("read error: %v", err), win) })
+					return
+				}
+
+				var result struct {
+					Neighborhood string  `json:"Neighborhood"`
+					Country      string  `json:"Country"`
+					Lat          float64 `json:"Lat"`
+					Lon          float64 `json:"Lon"`
+				}
+				if err := json.Unmarshal(body, &result); err != nil {
+					fyne.Do(func() { dialog.ShowError(fmt.Errorf("failed to parse search response: %v", err), win) })
+					return
+				}
+
+				if result.Neighborhood == "" {
+					fyne.Do(func() { dialog.ShowError(fmt.Errorf("no city found matching '%s'", searchName), win) })
+					return
+				}
+
+				tz := latlong.LookupZoneName(result.Lat, result.Lon)
+
+				fyne.Do(func() {
+					addNameEntry.SetText(result.Neighborhood)
+					addRegionEntry.SetText(result.Country)
+					addLatEntry.SetText(fmt.Sprintf("%f", result.Lat))
+					addLonEntry.SetText(fmt.Sprintf("%f", result.Lon))
+					if tz != "" {
+						addTimezoneEntry.SetText(tz)
+					}
+				})
+			}(name, strings.TrimSpace(addRegionEntry.Text), apiKey)
+
+		default: // openweathermap
+			go func(searchName, searchKey string) {
+				defer fyne.Do(func() {
+					searchBtn.SetText("Search API")
+					searchBtn.Enable()
+				})
+
+				uStr := fmt.Sprintf("http://api.openweathermap.org/geo/1.0/direct?q=%s&limit=1&appid=%s", url.QueryEscape(searchName), url.QueryEscape(searchKey))
+				resp, err := http.Get(uStr)
+				if err != nil {
+					fyne.Do(func() { dialog.ShowError(fmt.Errorf("search failed: %v", err), win) })
+					return
+				}
+				defer resp.Body.Close()
+
+				if resp.StatusCode != http.StatusOK {
+					fyne.Do(func() { dialog.ShowError(fmt.Errorf("search API error: %d", resp.StatusCode), win) })
+					return
+				}
+
+				body, err := io.ReadAll(resp.Body)
+				if err != nil {
+					fyne.Do(func() { dialog.ShowError(fmt.Errorf("read error: %v", err), win) })
+					return
+				}
+
+				var results []struct {
+					Name    string  `json:"name"`
+					Lat     float64 `json:"lat"`
+					Lon     float64 `json:"lon"`
+					Country string  `json:"country"`
+					State   string  `json:"state"`
+				}
+				if err := json.Unmarshal(body, &results); err != nil {
+					fyne.Do(func() { dialog.ShowError(fmt.Errorf("failed to parse search response: %v", err), win) })
+					return
+				}
+
+				if len(results) == 0 {
+					fyne.Do(func() { dialog.ShowError(fmt.Errorf("no city found matching '%s'", searchName), win) })
+					return
+				}
+
+				res := results[0]
+				region := res.Country
+				if res.State != "" {
+					region = res.State + ", " + region
+				}
+				tz := latlong.LookupZoneName(res.Lat, res.Lon)
+
+				fyne.Do(func() {
+					addNameEntry.SetText(res.Name)
+					addRegionEntry.SetText(region)
+					addLatEntry.SetText(fmt.Sprintf("%f", res.Lat))
+					addLonEntry.SetText(fmt.Sprintf("%f", res.Lon))
+					if tz != "" {
+						addTimezoneEntry.SetText(tz)
+					}
+				})
+			}(name, apiKey)
+		}
 	})
 
 	nameItemContent := container.NewBorder(nil, nil, nil, searchBtn, addNameEntry)
