@@ -91,21 +91,6 @@ func genMaybeInvalidConfig(t *rapid.T) (*Config, map[string]bool) {
 		}
 	}
 
-	// --- Refresh interval: sometimes invalid ---
-	invalidRefresh := rapid.Bool().Draw(t, "invalidRefresh")
-	var refreshInterval int
-	if invalidRefresh {
-		// Pick from outside 1-60
-		if rapid.Bool().Draw(t, "refreshTooLow") {
-			refreshInterval = rapid.IntRange(-100, 0).Draw(t, "lowRefresh")
-		} else {
-			refreshInterval = rapid.IntRange(61, 200).Draw(t, "highRefresh")
-		}
-		expectedErrors["refreshInterval"] = true
-	} else {
-		refreshInterval = rapid.IntRange(1, 60).Draw(t, "validRefresh")
-	}
-
 	// --- Corner position: sometimes invalid ---
 	invalidCorner := rapid.Bool().Draw(t, "invalidCorner")
 	var cornerPos string
@@ -122,6 +107,8 @@ func genMaybeInvalidConfig(t *rapid.T) (*Config, map[string]bool) {
 	}
 
 	// --- Data source and source-specific config ---
+	// Generate the data source and its config BEFORE the refresh interval,
+	// because for remote_api the valid interval range depends on the provider.
 	dsIdx := rapid.IntRange(0, 1).Draw(t, "dsIdx")
 	var ds DataSourceType
 	var apiCfg *APIConfig
@@ -133,6 +120,70 @@ func genMaybeInvalidConfig(t *rapid.T) (*Config, map[string]bool) {
 	} else {
 		ds = DataSourceLocalDatabase
 		dbCfg, expectedErrors = genMaybeInvalidDBConfig(t, expectedErrors)
+	}
+
+	// --- Refresh interval: sometimes invalid ---
+	// The valid range depends on the data source and provider:
+	//   remote_api + non-nil APIConfig + OWM:     exactly 120
+	//   remote_api + non-nil APIConfig + EWW:     30–120
+	//   remote_api + non-nil APIConfig + invalid: only >120 is checked (no min from switch)
+	//   remote_api + nil APIConfig:               falls to else branch → 1–60
+	//   local_database:                           1–60
+	invalidRefresh := rapid.Bool().Draw(t, "invalidRefresh")
+	var refreshInterval int
+
+	isRemoteWithAPI := ds == DataSourceRemoteAPI && apiCfg != nil
+	if isRemoteWithAPI {
+		provider := apiCfg.Provider
+		if invalidRefresh {
+			// Generate an interval that violates the provider-specific rules
+			switch provider {
+			case "openweathermap":
+				// Valid is exactly 120; invalid is anything != 120 within a reasonable range
+				// Could be too low (0–119) or too high (121+)
+				if rapid.Bool().Draw(t, "refreshTooLow") {
+					refreshInterval = rapid.IntRange(-100, 119).Draw(t, "lowRefresh")
+				} else {
+					refreshInterval = rapid.IntRange(121, 300).Draw(t, "highRefresh")
+				}
+			case "easywetherwidget":
+				// Valid is 30–120; invalid is <30 or >120
+				if rapid.Bool().Draw(t, "refreshTooLow") {
+					refreshInterval = rapid.IntRange(-100, 29).Draw(t, "lowRefresh")
+				} else {
+					refreshInterval = rapid.IntRange(121, 300).Draw(t, "highRefresh")
+				}
+			default:
+				// Invalid provider: the switch in Validate won't match any case,
+				// so only the >120 check applies. Generate >120 to trigger that.
+				refreshInterval = rapid.IntRange(121, 300).Draw(t, "highRefresh")
+			}
+			expectedErrors["refreshInterval"] = true
+		} else {
+			// Generate a valid interval for the provider
+			switch provider {
+			case "openweathermap":
+				refreshInterval = 120
+			case "easywetherwidget":
+				refreshInterval = rapid.IntRange(30, 120).Draw(t, "validRefresh")
+			default:
+				// Invalid provider: no min from switch, only >120 check.
+				// Valid means <= 120 and >= some reasonable value.
+				refreshInterval = rapid.IntRange(1, 120).Draw(t, "validRefresh")
+			}
+		}
+	} else {
+		// local_database or remote_api with nil APIConfig → 1–60 range
+		if invalidRefresh {
+			if rapid.Bool().Draw(t, "refreshTooLow") {
+				refreshInterval = rapid.IntRange(-100, 0).Draw(t, "lowRefresh")
+			} else {
+				refreshInterval = rapid.IntRange(61, 200).Draw(t, "highRefresh")
+			}
+			expectedErrors["refreshInterval"] = true
+		} else {
+			refreshInterval = rapid.IntRange(1, 60).Draw(t, "validRefresh")
+		}
 	}
 
 	cfg := &Config{
@@ -233,7 +284,8 @@ func genMaybeInvalidAPIConfig(t *rapid.T, errs map[string]bool) (*APIConfig, map
 	var provider string
 	if invalidProvider {
 		provider = rapid.StringMatching(`[a-z]{3,15}`).Draw(t, "badProvider")
-		if provider == "openweathermap" {
+		// Ensure the generated string is not accidentally a valid provider
+		if provider == "openweathermap" || provider == "easywetherwidget" {
 			provider = "invalidprovider"
 		}
 		errs["apiConfig.provider"] = true
@@ -321,4 +373,110 @@ func sortedKeys(m map[string]bool) []string {
 	}
 	sort.Strings(keys)
 	return keys
+}
+
+// **Feature: easy-wether-widget-provider, Property 5: Provider-Dependent Interval Validation**
+// **Validates: Requirements 6.6, 6.7**
+
+// TestProperty5_OWM_IntervalBelow120_ReturnsError verifies that for any config
+// with DataSource=remote_api, Provider="openweathermap", and RefreshInterval < 120,
+// Validate returns a refreshInterval error.
+func TestProperty5_OWM_IntervalBelow120_ReturnsError(t *testing.T) {
+	rapid.Check(t, func(rt *rapid.T) {
+		cfg := genValidRemoteAPIConfig(rt, "openweathermap")
+		// Override interval to be below 120 (range: 1–119)
+		cfg.RefreshInterval = rapid.IntRange(1, 119).Draw(rt, "owmLowInterval")
+
+		errs := Validate(cfg)
+
+		if !hasFieldError(errs, "refreshInterval") {
+			rt.Fatalf("expected refreshInterval error for OWM with interval %d, got errors: %v",
+				cfg.RefreshInterval, errs)
+		}
+	})
+}
+
+// TestProperty5_EWW_IntervalBelow30_ReturnsError verifies that for any config
+// with DataSource=remote_api, Provider="easywetherwidget", and RefreshInterval < 30,
+// Validate returns a refreshInterval error.
+func TestProperty5_EWW_IntervalBelow30_ReturnsError(t *testing.T) {
+	rapid.Check(t, func(rt *rapid.T) {
+		cfg := genValidRemoteAPIConfig(rt, "easywetherwidget")
+		// Override interval to be below 30 (range: 1–29)
+		cfg.RefreshInterval = rapid.IntRange(1, 29).Draw(rt, "ewwLowInterval")
+
+		errs := Validate(cfg)
+
+		if !hasFieldError(errs, "refreshInterval") {
+			rt.Fatalf("expected refreshInterval error for EWW with interval %d, got errors: %v",
+				cfg.RefreshInterval, errs)
+		}
+	})
+}
+
+// TestProperty5_EWW_Interval30to120_NoRefreshError verifies that for any config
+// with DataSource=remote_api, Provider="easywetherwidget", and RefreshInterval
+// between 30 and 120 (inclusive), Validate does NOT return a refreshInterval error.
+func TestProperty5_EWW_Interval30to120_NoRefreshError(t *testing.T) {
+	rapid.Check(t, func(rt *rapid.T) {
+		cfg := genValidRemoteAPIConfig(rt, "easywetherwidget")
+		// Override interval to be in the valid range 30–120
+		cfg.RefreshInterval = rapid.IntRange(30, 120).Draw(rt, "ewwValidInterval")
+
+		errs := Validate(cfg)
+
+		if hasFieldError(errs, "refreshInterval") {
+			rt.Fatalf("unexpected refreshInterval error for EWW with interval %d, got errors: %v",
+				cfg.RefreshInterval, errs)
+		}
+	})
+}
+
+// genValidRemoteAPIConfig generates a Config that is fully valid except the
+// RefreshInterval, which the caller is expected to override. The config uses
+// DataSource=remote_api with the given provider.
+func genValidRemoteAPIConfig(rt *rapid.T, provider string) *Config {
+	// Generate 1–5 valid cities
+	cityCount := rapid.IntRange(1, 5).Draw(rt, "cityCount")
+	cities := make([]CityConfig, cityCount)
+	for i := 0; i < cityCount; i++ {
+		cities[i] = genCityConfig(rt, fmt.Sprintf("city%d", i))
+	}
+
+	// Valid corner position
+	cpIdx := rapid.IntRange(0, len(cornerPositions)-1).Draw(rt, "cornerPosIdx")
+
+	// Valid API key
+	apiKey := rapid.StringMatching(`[a-zA-Z0-9]{8,32}`).Draw(rt, "apiKey")
+
+	// Set a provider-appropriate default interval (will be overridden by caller)
+	var refreshInterval int
+	switch provider {
+	case "openweathermap":
+		refreshInterval = 120
+	case "easywetherwidget":
+		refreshInterval = 30
+	}
+
+	return &Config{
+		DataSource:      DataSourceRemoteAPI,
+		Cities:          cities,
+		RefreshInterval: refreshInterval,
+		CornerPosition:  cornerPositions[cpIdx],
+		Opacity:         100,
+		APIConfig: &APIConfig{
+			Provider: provider,
+			APIKey:   apiKey,
+		},
+	}
+}
+
+// hasFieldError checks whether any ValidationError in the slice has the given field name.
+func hasFieldError(errs []ValidationError, field string) bool {
+	for _, e := range errs {
+		if e.Field == field {
+			return true
+		}
+	}
+	return false
 }

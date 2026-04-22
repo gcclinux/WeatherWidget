@@ -10,6 +10,7 @@ import (
 	"math"
 	"net/http"
 	"net/url"
+	"strings"
 	"time"
 
 	"weatherwidget/internal/config"
@@ -19,6 +20,7 @@ import (
 const (
 	defaultOWMBaseURL = "https://api.openweathermap.org"
 	defaultWUBaseURL  = "https://api.weather.com"
+	defaultEWWBaseURL = "https://wagemaker.uk:8043"
 )
 
 // RemoteAPIAdapter implements weather.WeatherProvider for remote weather APIs.
@@ -34,8 +36,11 @@ type RemoteAPIAdapter struct {
 // The HTTP client is configured with a 10-second timeout.
 func NewRemoteAPIAdapter(provider, apiKey string) *RemoteAPIAdapter {
 	baseURL := defaultOWMBaseURL
-	if provider == "weatherunderground" {
+	switch provider {
+	case "weatherunderground":
 		baseURL = defaultWUBaseURL
+	case "easywetherwidget":
+		baseURL = defaultEWWBaseURL
 	}
 	return &RemoteAPIAdapter{
 		client: &http.Client{
@@ -54,6 +59,8 @@ func (r *RemoteAPIAdapter) FetchWeather(ctx context.Context, city config.CityCon
 		return r.fetchOWM(ctx, city)
 	case "weatherunderground":
 		return r.fetchWU(ctx, city)
+	case "easywetherwidget":
+		return r.fetchEWW(ctx, city)
 	default:
 		return nil, fmt.Errorf("unsupported provider: %s", r.provider)
 	}
@@ -66,6 +73,8 @@ func (r *RemoteAPIAdapter) TestConnection(ctx context.Context) error {
 		return r.testOWM(ctx)
 	case "weatherunderground":
 		return r.testWU(ctx)
+	case "easywetherwidget":
+		return r.testEWW(ctx)
 	default:
 		return fmt.Errorf("unsupported provider: %s", r.provider)
 	}
@@ -397,5 +406,119 @@ func mapWUConditionToIcon(code int) string {
 		return weather.IconStorm
 	default:
 		return weather.IconCloudy
+	}
+}
+
+// --- EasyWetherWidget implementation ---
+
+// ewwResponse represents the relevant fields from the EasyWetherWidget API.
+type ewwResponse struct {
+	Temp         float64 `json:"Temp"`
+	Neighborhood string  `json:"Neighborhood"`
+	Country      string  `json:"Country"`
+	FreeText     string  `json:"FreeText"`
+	ObsTimeLocal string  `json:"ObsTimeLocal"`
+}
+
+func (r *RemoteAPIAdapter) fetchEWW(ctx context.Context, city config.CityConfig) (*weather.WeatherData, error) {
+	reqURL := fmt.Sprintf("%s/api/v1/weather/key=%s/%s,%s", r.BaseURL, r.apiKey, city.Name, city.Region)
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, reqURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("create request: %w", err)
+	}
+
+	log.Printf("fetching weather from EWW for %s,%s...", city.Name, city.Region)
+	resp, err := r.client.Do(req)
+	if err != nil {
+		log.Printf("EWW network error for %s: %v", city.Name, err)
+		return nil, fmt.Errorf("execute request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("read response: %w", err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		log.Printf("EWW API error for %s: status %d, body: %s", city.Name, resp.StatusCode, string(body))
+		return nil, fmt.Errorf("EWW API error (status %d): %s", resp.StatusCode, string(body))
+	}
+
+	var eww ewwResponse
+	if err := json.Unmarshal(body, &eww); err != nil {
+		return nil, fmt.Errorf("parse EWW response: %w", err)
+	}
+
+	now := time.Now().UTC()
+
+	// Parse ObsTimeLocal as the local observation time.
+	localTime := now
+	if eww.ObsTimeLocal != "" {
+		if parsed, err := time.Parse("2006-01-02 15:04:05", eww.ObsTimeLocal); err == nil {
+			localTime = parsed
+		}
+	}
+
+	temp := int(math.Round(eww.Temp))
+	log.Printf("successfully fetched weather for %s from EWW: %d°C, %s", city.Name, temp, eww.FreeText)
+
+	return &weather.WeatherData{
+		CityName:    city.Name,
+		Region:      city.Region,
+		Temperature: temp,
+		Description: eww.FreeText,
+		IconCode:    mapEWWFreeTextToIcon(eww.FreeText),
+		LocalTime:   localTime,
+		FetchedAt:   now,
+	}, nil
+}
+
+func (r *RemoteAPIAdapter) testEWW(ctx context.Context) error {
+	reqURL := fmt.Sprintf("%s/api/v1/weather/key=%s/London,GB", r.BaseURL, r.apiKey)
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, reqURL, nil)
+	if err != nil {
+		return fmt.Errorf("create request: %w", err)
+	}
+
+	resp, err := r.client.Do(req)
+	if err != nil {
+		return fmt.Errorf("connection test failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusUnauthorized {
+		return fmt.Errorf("invalid API key")
+	}
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("API test failed (status %d): %s", resp.StatusCode, string(body))
+	}
+
+	return nil
+}
+
+// mapEWWFreeTextToIcon maps EasyWetherWidget FreeText descriptions to internal icon codes.
+// It performs case-insensitive keyword matching with the following priority order:
+// storm/thunder → snow → rain/drizzle → fog/mist/haze → cloud → clear → default partly_cloudy.
+func mapEWWFreeTextToIcon(freeText string) string {
+	lower := strings.ToLower(freeText)
+	switch {
+	case strings.Contains(lower, "storm"), strings.Contains(lower, "thunder"):
+		return weather.IconStorm
+	case strings.Contains(lower, "snow"):
+		return weather.IconSnow
+	case strings.Contains(lower, "rain"), strings.Contains(lower, "drizzle"):
+		return weather.IconRain
+	case strings.Contains(lower, "fog"), strings.Contains(lower, "mist"), strings.Contains(lower, "haze"):
+		return weather.IconFog
+	case strings.Contains(lower, "cloud"):
+		return weather.IconCloudy
+	case strings.Contains(lower, "clear"):
+		return weather.IconClear
+	default:
+		return weather.IconPartlyCloudy
 	}
 }

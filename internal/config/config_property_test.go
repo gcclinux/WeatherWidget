@@ -39,6 +39,7 @@ var cornerPositions = []string{
 // providers is the set of allowed API providers.
 var providers = []string{
 	"openweathermap",
+	"easywetherwidget",
 }
 
 // genCityConfig generates a random valid CityConfig.
@@ -71,29 +72,47 @@ func genConfig(t *rapid.T) *Config {
 		cities[i] = genCityConfig(t, "city"+string(rune('0'+i)))
 	}
 
-	// Refresh interval 1-60
-	refreshInterval := rapid.IntRange(1, 60).Draw(t, "refreshInterval")
-
 	// Corner position
 	cpIdx := rapid.IntRange(0, len(cornerPositions)-1).Draw(t, "cornerPosIdx")
 	cornerPos := cornerPositions[cpIdx]
+
+	// Generate source-specific config and provider-appropriate refresh interval
+	var refreshInterval int
+	var apiCfg *APIConfig
+	var dbCfg *DatabaseConfig
+
+	if ds == DataSourceRemoteAPI {
+		provIdx := rapid.IntRange(0, len(providers)-1).Draw(t, "providerIdx")
+		provider := providers[provIdx]
+		apiKey := rapid.StringMatching(`[a-zA-Z0-9]{8,32}`).Draw(t, "apiKey")
+		apiCfg = &APIConfig{
+			Provider: provider,
+			APIKey:   apiKey,
+		}
+		// Provider-dependent refresh intervals:
+		// OWM: exactly 120 (min=120, max=120)
+		// EWW: 30–120
+		switch provider {
+		case "openweathermap":
+			refreshInterval = 120
+		case "easywetherwidget":
+			refreshInterval = rapid.IntRange(30, 120).Draw(t, "refreshInterval")
+		}
+	} else {
+		// Non-remote_api: 1–60
+		refreshInterval = rapid.IntRange(1, 60).Draw(t, "refreshInterval")
+	}
 
 	cfg := &Config{
 		DataSource:      ds,
 		Cities:          cities,
 		RefreshInterval: refreshInterval,
 		CornerPosition:  cornerPos,
+		APIConfig:       apiCfg,
+		DatabaseConfig:  dbCfg,
 	}
 
-	// Generate source-specific config
-	if ds == DataSourceRemoteAPI {
-		provIdx := rapid.IntRange(0, len(providers)-1).Draw(t, "providerIdx")
-		apiKey := rapid.StringMatching(`[a-zA-Z0-9]{8,32}`).Draw(t, "apiKey")
-		cfg.APIConfig = &APIConfig{
-			Provider: providers[provIdx],
-			APIKey:   apiKey,
-		}
-	} else {
+	if ds == DataSourceLocalDatabase {
 		host := rapid.StringMatching(`[a-z][a-z0-9.]{0,29}`).Draw(t, "dbHost")
 		port := rapid.IntRange(1, 65535).Draw(t, "dbPort")
 		dbName := rapid.StringMatching(`[a-z][a-z0-9_]{0,19}`).Draw(t, "dbName")

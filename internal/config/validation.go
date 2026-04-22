@@ -12,7 +12,8 @@ var allowedCornerPositions = map[string]bool{
 
 // allowedProviders defines the valid remote API providers.
 var allowedProviders = map[string]bool{
-	"openweathermap": true,
+	"openweathermap":   true,
+	"easywetherwidget": true,
 }
 
 // Validate checks the given Config and returns a slice of ValidationError
@@ -29,12 +30,37 @@ func Validate(cfg *Config) []ValidationError {
 		})
 	}
 
-	// Refresh interval 1–60
-	if cfg.RefreshInterval < 1 || cfg.RefreshInterval > 60 {
-		errs = append(errs, ValidationError{
-			Field:   "refreshInterval",
-			Message: fmt.Sprintf("must be between 1 and 60, got %d", cfg.RefreshInterval),
-		})
+	// Refresh interval — provider-dependent for remote_api, 1–60 otherwise
+	if cfg.DataSource == DataSourceRemoteAPI && cfg.APIConfig != nil {
+		switch cfg.APIConfig.Provider {
+		case "openweathermap":
+			if cfg.RefreshInterval < 120 {
+				errs = append(errs, ValidationError{
+					Field:   "refreshInterval",
+					Message: "must be at least 120 for openweathermap",
+				})
+			}
+		case "easywetherwidget":
+			if cfg.RefreshInterval < 30 {
+				errs = append(errs, ValidationError{
+					Field:   "refreshInterval",
+					Message: "must be at least 30 for easywetherwidget",
+				})
+			}
+		}
+		if cfg.RefreshInterval > 120 {
+			errs = append(errs, ValidationError{
+				Field:   "refreshInterval",
+				Message: "must be at most 120",
+			})
+		}
+	} else {
+		if cfg.RefreshInterval < 1 || cfg.RefreshInterval > 60 {
+			errs = append(errs, ValidationError{
+				Field:   "refreshInterval",
+				Message: fmt.Sprintf("must be between 1 and 60, got %d", cfg.RefreshInterval),
+			})
+		}
 	}
 
 	// Corner position
@@ -79,7 +105,7 @@ func validateAPIConfig(api *APIConfig) []ValidationError {
 	if !allowedProviders[api.Provider] {
 		errs = append(errs, ValidationError{
 			Field:   "apiConfig.provider",
-			Message: fmt.Sprintf("must be openweathermap, got %q", api.Provider),
+			Message: fmt.Sprintf("must be openweathermap or easywetherwidget, got %q", api.Provider),
 		})
 	}
 	return errs

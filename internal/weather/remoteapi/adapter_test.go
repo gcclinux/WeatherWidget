@@ -346,3 +346,194 @@ func TestMapWUConditionToIcon(t *testing.T) {
 		}
 	}
 }
+
+// --- EasyWetherWidget tests ---
+
+// Helper to create a mock EWW server returning a canned response.
+func newEWWServer(t *testing.T, statusCode int, resp ewwResponse) *httptest.Server {
+	t.Helper()
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(statusCode)
+		json.NewEncoder(w).Encode(resp)
+	}))
+}
+
+func TestFetchWeather_EWW_Success(t *testing.T) {
+	resp := ewwResponse{
+		Temp:         23.7,
+		Neighborhood: "Centro",
+		Country:      "BR",
+		FreeText:     "clear sky",
+		ObsTimeLocal: "2025-01-15 14:30:00",
+	}
+
+	srv := newEWWServer(t, http.StatusOK, resp)
+	defer srv.Close()
+
+	adapter := NewRemoteAPIAdapter("easywetherwidget", "test-key")
+	adapter.BaseURL = srv.URL
+
+	city := config.CityConfig{
+		Name:     "Holambra",
+		Region:   "SP",
+		Timezone: "America/Sao_Paulo",
+	}
+
+	data, err := adapter.FetchWeather(context.Background(), city)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if data.CityName != "Holambra" {
+		t.Errorf("CityName = %q, want %q", data.CityName, "Holambra")
+	}
+	if data.Region != "SP" {
+		t.Errorf("Region = %q, want %q", data.Region, "SP")
+	}
+	if data.Temperature != 24 {
+		t.Errorf("Temperature = %d, want 24 (rounded from 23.7)", data.Temperature)
+	}
+	if data.Description != "clear sky" {
+		t.Errorf("Description = %q, want %q", data.Description, "clear sky")
+	}
+	if data.IconCode != weather.IconClear {
+		t.Errorf("IconCode = %q, want %q", data.IconCode, weather.IconClear)
+	}
+}
+
+func TestFetchWeather_EWW_URLConstruction(t *testing.T) {
+	var receivedPath string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		receivedPath = r.URL.Path
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(ewwResponse{
+			Temp:     20.0,
+			FreeText: "clear",
+		})
+	}))
+	defer srv.Close()
+
+	adapter := NewRemoteAPIAdapter("easywetherwidget", "my-api-key")
+	adapter.BaseURL = srv.URL
+
+	city := config.CityConfig{
+		Name:     "London",
+		Region:   "GB",
+		Timezone: "Europe/London",
+	}
+
+	_, err := adapter.FetchWeather(context.Background(), city)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	expectedPath := "/api/v1/weather/key=my-api-key/London,GB"
+	if receivedPath != expectedPath {
+		t.Errorf("request path = %q, want %q", receivedPath, expectedPath)
+	}
+}
+
+func TestFetchWeather_EWW_APIError(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusUnauthorized)
+		w.Write([]byte(`{"error":"unauthorized"}`))
+	}))
+	defer srv.Close()
+
+	adapter := NewRemoteAPIAdapter("easywetherwidget", "bad-key")
+	adapter.BaseURL = srv.URL
+
+	city := config.CityConfig{Name: "London", Region: "GB", Timezone: "Europe/London"}
+	_, err := adapter.FetchWeather(context.Background(), city)
+	if err == nil {
+		t.Fatal("expected error for 401 response")
+	}
+}
+
+func TestFetchWeather_EWW_MalformedJSON(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{not valid json`))
+	}))
+	defer srv.Close()
+
+	adapter := NewRemoteAPIAdapter("easywetherwidget", "test-key")
+	adapter.BaseURL = srv.URL
+
+	city := config.CityConfig{Name: "London", Region: "GB", Timezone: "Europe/London"}
+	_, err := adapter.FetchWeather(context.Background(), city)
+	if err == nil {
+		t.Fatal("expected error for malformed JSON")
+	}
+}
+
+func TestTestConnection_EWW_Success(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(ewwResponse{Temp: 15.0, FreeText: "clear"})
+	}))
+	defer srv.Close()
+
+	adapter := NewRemoteAPIAdapter("easywetherwidget", "valid-key")
+	adapter.BaseURL = srv.URL
+
+	if err := adapter.TestConnection(context.Background()); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestTestConnection_EWW_InvalidKey(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusUnauthorized)
+	}))
+	defer srv.Close()
+
+	adapter := NewRemoteAPIAdapter("easywetherwidget", "bad-key")
+	adapter.BaseURL = srv.URL
+
+	err := adapter.TestConnection(context.Background())
+	if err == nil {
+		t.Fatal("expected error for invalid key")
+	}
+	if err.Error() != "invalid API key" {
+		t.Errorf("error = %q, want %q", err.Error(), "invalid API key")
+	}
+}
+
+func TestMapEWWFreeTextToIcon(t *testing.T) {
+	tests := []struct {
+		freeText string
+		want     string
+	}{
+		// storm/thunder keywords
+		{"Thunderstorm", weather.IconStorm},
+		{"heavy storm", weather.IconStorm},
+		{"thunder and rain", weather.IconStorm},
+		// snow keyword
+		{"Light Snow", weather.IconSnow},
+		{"snow showers", weather.IconSnow},
+		// rain/drizzle keywords
+		{"Light Rain", weather.IconRain},
+		{"heavy drizzle", weather.IconRain},
+		// fog/mist/haze keywords
+		{"Dense Fog", weather.IconFog},
+		{"morning mist", weather.IconFog},
+		{"haze", weather.IconFog},
+		// cloud keyword
+		{"Partly Cloudy", weather.IconCloudy},
+		{"overcast clouds", weather.IconCloudy},
+		// clear keyword
+		{"Clear Sky", weather.IconClear},
+		{"mostly clear", weather.IconClear},
+		// default case
+		{"Sunny", weather.IconPartlyCloudy},
+		{"", weather.IconPartlyCloudy},
+	}
+
+	for _, tt := range tests {
+		got := mapEWWFreeTextToIcon(tt.freeText)
+		if got != tt.want {
+			t.Errorf("mapEWWFreeTextToIcon(%q) = %q, want %q", tt.freeText, got, tt.want)
+		}
+	}
+}

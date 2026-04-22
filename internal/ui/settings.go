@@ -20,6 +20,18 @@ import (
 	"weatherwidget/internal/config"
 )
 
+// providerDisplayToValue maps UI display strings to internal config values.
+var providerDisplayToValue = map[string]string{
+	"OpenWeatherMap (Free)":  "openweathermap",
+	"EasyWetherWidget (Pro)": "easywetherwidget",
+}
+
+// providerValueToDisplay maps internal config values to UI display strings.
+var providerValueToDisplay = map[string]string{
+	"openweathermap":   "OpenWeatherMap (Free)",
+	"easywetherwidget": "EasyWetherWidget (Pro)",
+}
+
 // settingsState holds mutable UI state for the settings dialog.
 type settingsState struct {
 	cities []config.CityConfig
@@ -59,8 +71,16 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 	}
 
 	// ── API config ───────────────────────────────────────────────────────
-	providerSelect := widget.NewSelect([]string{"OpenWeatherMap"}, nil)
-	providerSelect.SetSelected("OpenWeatherMap")
+	providerSelect := widget.NewSelect([]string{"OpenWeatherMap (Free)", "EasyWetherWidget (Pro)"}, nil)
+	if cfg.APIConfig != nil && cfg.APIConfig.Provider != "" {
+		if display, ok := providerValueToDisplay[cfg.APIConfig.Provider]; ok {
+			providerSelect.SetSelected(display)
+		} else {
+			providerSelect.SetSelected("OpenWeatherMap (Free)")
+		}
+	} else {
+		providerSelect.SetSelected("OpenWeatherMap (Free)")
+	}
 	apiKeyEntry := widget.NewEntry()
 	apiKeyEntry.SetPlaceHolder("API Key")
 	if cfg.APIConfig != nil {
@@ -164,12 +184,41 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 	}
 
 	// ── Refresh interval ─────────────────────────────────────────────────
-	intervalSlider := widget.NewSlider(1, 60)
+	intervalSlider := widget.NewSlider(30, 120)
 	intervalSlider.Step = 1
 	intervalSlider.Value = float64(cfg.RefreshInterval)
 	intervalLabel := widget.NewLabel(fmt.Sprintf("%d min", cfg.RefreshInterval))
 	intervalSlider.OnChanged = func(v float64) {
 		intervalLabel.SetText(fmt.Sprintf("%d min", int(v)))
+	}
+
+	// Apply initial slider constraints based on current provider.
+	applyProviderSliderConstraints := func(providerValue string) {
+		switch providerValue {
+		case "openweathermap":
+			intervalSlider.Min = 120
+			intervalSlider.Max = 120
+			intervalSlider.SetValue(120)
+		case "easywetherwidget":
+			intervalSlider.Min = 30
+			intervalSlider.Max = 120
+			if intervalSlider.Value < 30 {
+				intervalSlider.SetValue(30)
+			}
+		}
+		intervalLabel.SetText(fmt.Sprintf("%d min", int(intervalSlider.Value)))
+	}
+
+	// Set initial constraints from current config.
+	if cfg.APIConfig != nil && cfg.APIConfig.Provider != "" {
+		applyProviderSliderConstraints(cfg.APIConfig.Provider)
+	} else {
+		applyProviderSliderConstraints("openweathermap")
+	}
+
+	// Update slider constraints when provider changes.
+	providerSelect.OnChanged = func(selected string) {
+		applyProviderSliderConstraints(providerDisplayToValue[selected])
 	}
 
 	// ── LEFT PANEL (scrollable) ───────────────────────────────────────────
@@ -480,8 +529,12 @@ func buildConfigFromUI(
 		}
 	} else {
 		cfg.DataSource = config.DataSourceRemoteAPI
+		provider := providerDisplayToValue[providerSelect.Selected]
+		if provider == "" {
+			provider = "openweathermap"
+		}
 		cfg.APIConfig = &config.APIConfig{
-			Provider: "openweathermap",
+			Provider: provider,
 			APIKey:   strings.TrimSpace(apiKeyEntry.Text),
 		}
 	}

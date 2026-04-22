@@ -18,7 +18,7 @@ func validRemoteConfig() *Config {
 	return &Config{
 		DataSource:      DataSourceRemoteAPI,
 		Cities:          []CityConfig{{Name: "Berlin", Region: "BE", Timezone: "Europe/Berlin"}},
-		RefreshInterval: 10,
+		RefreshInterval: 120,
 		CornerPosition:  "bottom-right",
 		APIConfig:       &APIConfig{Provider: "openweathermap", APIKey: "key123"},
 	}
@@ -68,7 +68,8 @@ func TestValidate_CitiesLength(t *testing.T) {
 }
 
 func TestValidate_RefreshInterval(t *testing.T) {
-	cfg := validRemoteConfig()
+	// Non-remote_api data source uses the 1–60 range
+	cfg := validDatabaseConfig()
 
 	cfg.RefreshInterval = 0
 	errs := Validate(cfg)
@@ -221,5 +222,109 @@ func TestValidate_CityZeroCoordinatesSkipped(t *testing.T) {
 	errs := Validate(cfg)
 	if hasError(errs, "cities[0].latitude") || hasError(errs, "cities[0].longitude") {
 		t.Error("should not validate coordinates when both are zero")
+	}
+}
+
+func TestValidate_AcceptsEasyWetherWidget(t *testing.T) {
+	cfg := &Config{
+		DataSource:      DataSourceRemoteAPI,
+		Cities:          []CityConfig{{Name: "Berlin", Region: "BE", Timezone: "Europe/Berlin"}},
+		RefreshInterval: 30,
+		CornerPosition:  "bottom-right",
+		APIConfig:       &APIConfig{Provider: "easywetherwidget", APIKey: "eww-key-123"},
+	}
+	errs := Validate(cfg)
+	if len(errs) != 0 {
+		t.Errorf("expected no errors for valid EWW config with interval 30, got %v", errs)
+	}
+
+	// Also valid at the upper bound
+	cfg.RefreshInterval = 120
+	errs = Validate(cfg)
+	if len(errs) != 0 {
+		t.Errorf("expected no errors for valid EWW config with interval 120, got %v", errs)
+	}
+
+	// Mid-range value
+	cfg.RefreshInterval = 75
+	errs = Validate(cfg)
+	if len(errs) != 0 {
+		t.Errorf("expected no errors for valid EWW config with interval 75, got %v", errs)
+	}
+}
+
+func TestValidate_RejectsEWWIntervalBelow30(t *testing.T) {
+	cfg := &Config{
+		DataSource:      DataSourceRemoteAPI,
+		Cities:          []CityConfig{{Name: "Berlin", Region: "BE", Timezone: "Europe/Berlin"}},
+		RefreshInterval: 29,
+		CornerPosition:  "bottom-right",
+		APIConfig:       &APIConfig{Provider: "easywetherwidget", APIKey: "eww-key-123"},
+	}
+	errs := Validate(cfg)
+	if !hasError(errs, "refreshInterval") {
+		t.Error("expected refreshInterval error for EWW with interval 29")
+	}
+
+	cfg.RefreshInterval = 1
+	errs = Validate(cfg)
+	if !hasError(errs, "refreshInterval") {
+		t.Error("expected refreshInterval error for EWW with interval 1")
+	}
+}
+
+func TestValidate_RejectsOWMIntervalBelow120(t *testing.T) {
+	cfg := &Config{
+		DataSource:      DataSourceRemoteAPI,
+		Cities:          []CityConfig{{Name: "Berlin", Region: "BE", Timezone: "Europe/Berlin"}},
+		RefreshInterval: 119,
+		CornerPosition:  "bottom-right",
+		APIConfig:       &APIConfig{Provider: "openweathermap", APIKey: "owm-key-123"},
+	}
+	errs := Validate(cfg)
+	if !hasError(errs, "refreshInterval") {
+		t.Error("expected refreshInterval error for OWM with interval 119")
+	}
+
+	cfg.RefreshInterval = 30
+	errs = Validate(cfg)
+	if !hasError(errs, "refreshInterval") {
+		t.Error("expected refreshInterval error for OWM with interval 30")
+	}
+}
+
+func TestValidate_AcceptsOWMInterval120(t *testing.T) {
+	cfg := &Config{
+		DataSource:      DataSourceRemoteAPI,
+		Cities:          []CityConfig{{Name: "Berlin", Region: "BE", Timezone: "Europe/Berlin"}},
+		RefreshInterval: 120,
+		CornerPosition:  "bottom-right",
+		APIConfig:       &APIConfig{Provider: "openweathermap", APIKey: "owm-key-123"},
+	}
+	errs := Validate(cfg)
+	if len(errs) != 0 {
+		t.Errorf("expected no errors for OWM config with interval 120, got %v", errs)
+	}
+}
+
+func TestValidate_RejectsIntervalAbove120(t *testing.T) {
+	// Test with OWM provider
+	cfg := &Config{
+		DataSource:      DataSourceRemoteAPI,
+		Cities:          []CityConfig{{Name: "Berlin", Region: "BE", Timezone: "Europe/Berlin"}},
+		RefreshInterval: 121,
+		CornerPosition:  "bottom-right",
+		APIConfig:       &APIConfig{Provider: "openweathermap", APIKey: "owm-key-123"},
+	}
+	errs := Validate(cfg)
+	if !hasError(errs, "refreshInterval") {
+		t.Error("expected refreshInterval error for OWM with interval 121")
+	}
+
+	// Test with EWW provider
+	cfg.APIConfig.Provider = "easywetherwidget"
+	errs = Validate(cfg)
+	if !hasError(errs, "refreshInterval") {
+		t.Error("expected refreshInterval error for EWW with interval 121")
 	}
 }
