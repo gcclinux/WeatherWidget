@@ -3,6 +3,7 @@ package ui
 import (
 	"encoding/json"
 	"fmt"
+	"image/color"
 	"io"
 	"net/http"
 	"net/url"
@@ -10,9 +11,11 @@ import (
 	"strings"
 
 	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/layout"
+	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 
 	"github.com/bradfitz/latlong"
@@ -50,11 +53,11 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 	win.SetFixedSize(false)
 
 	screenW, screenH := getScreenSize()
-	winW := float32(1456)
+	winW := float32(900)
 	if float32(screenW) < winW {
 		winW = float32(screenW) * 0.9
 	}
-	winH := float32(screenH) * 0.40
+	winH := float32(screenH) * 0.46
 	win.Resize(fyne.NewSize(winW, winH))
 
 	state := &settingsState{
@@ -92,7 +95,7 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 		apiKeyEntry.SetText(cfg.APIConfig.APIKey)
 	}
 
-	noteLabel := widget.NewLabel("Note: Free = 120 minutes limited refresh rate. Pro = 30 minutes refresh rate unlimited.")
+	noteLabel := widget.NewLabel("Note: \nFree = 120 minutes refresh rate (limited). \nPro = 30 minutes refresh rate (unlimited).")
 	noteLabel.Wrapping = fyne.TextWrapWord
 
 	apiSection := container.NewVBox(
@@ -186,24 +189,6 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 	providerSelect.OnChanged = func(selected string) {
 		applyProviderSliderConstraints(providerDisplayToValue[selected])
 	}
-
-	// ── LEFT PANEL (scrollable) ───────────────────────────────────────────
-	leftContent := container.NewVBox(
-		widget.NewLabelWithStyle("System", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
-		widget.NewSeparator(),
-		apiSection,
-		widget.NewSeparator(),
-		widget.NewLabel("Widget Position"),
-		positionRadio,
-		customPosLabel,
-		widget.NewSeparator(),
-		widget.NewLabel("Background Transparency"),
-		opacityRadio,
-		widget.NewSeparator(),
-		widget.NewLabel("Refresh Interval"),
-		container.NewHBox(intervalSlider, intervalLabel),
-	)
-	leftPanel := container.NewVScroll(leftContent)
 
 	// ── RIGHT PANEL ───────────────────────────────────────────────────────
 	// City list in a scroll area (top), add-form fixed below.
@@ -488,9 +473,11 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 
 	nameItemContent := container.NewBorder(nil, nil, nil, searchBtn, addNameEntry)
 
+	addBtnSizer := canvas.NewRectangle(color.Transparent)
+	addBtnSizer.SetMinSize(fyne.NewSize(160, 0))
+	addBtnContainer := container.NewMax(addBtnSizer, addBtn)
+
 	addForm := container.NewVBox(
-		widget.NewSeparator(),
-		widget.NewLabelWithStyle("Add City", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
 		widget.NewForm(
 			widget.NewFormItem("Name", nameItemContent),
 			widget.NewFormItem("Region", addRegionEntry),
@@ -498,16 +485,43 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 			widget.NewFormItem("Longitude", addLonEntry),
 			widget.NewFormItem("Timezone", addTimezoneEntry),
 		),
-		addBtn,
+		container.NewHBox(layout.NewSpacer(), addBtnContainer),
 	)
 
-	// Right panel: city list scrolls, add form is fixed at bottom.
-	rightPanel := container.NewBorder(
-		widget.NewLabelWithStyle("City List (1–5 cities)", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
-		addForm,
-		nil, nil,
-		cityListScroll,
+	// ── Tabs Assembly ─────────────────────────────────────────────────────
+	appearanceContent := container.NewPadded(container.NewVScroll(container.NewVBox(
+		widget.NewCard("Widget Position", "Where should the widget appear?",
+			container.NewVBox(positionRadio, customPosLabel),
+		),
+		widget.NewCard("Background Transparency", "Adjust how see-through the widget is.",
+			opacityRadio,
+		),
+		widget.NewCard("Refresh Interval", "How often to fetch new data.",
+			container.NewHBox(intervalSlider, intervalLabel),
+		),
+	)))
+	appearanceTab := container.NewTabItemWithIcon("Appearance", theme.ColorPaletteIcon(), appearanceContent)
+
+	providerContent := container.NewPadded(container.NewVScroll(container.NewVBox(
+		widget.NewCard("Data Provider & API Key", "Configure the weather data source.",
+			apiSection,
+		),
+	)))
+	providerTab := container.NewTabItemWithIcon("Data Provider", theme.SettingsIcon(), providerContent)
+
+	locationsContent := container.NewPadded(
+		container.NewBorder(
+			nil,
+			widget.NewCard("Add New City", "", addForm),
+			nil,
+			nil,
+			widget.NewCard("Saved Cities", "Manage your tracked locations (1–5 cities).", cityListScroll),
+		),
 	)
+	locationsTab := container.NewTabItemWithIcon("Locations", theme.ListIcon(), locationsContent)
+
+	tabs := container.NewAppTabs(appearanceTab, providerTab, locationsTab)
+	tabs.SetTabLocation(container.TabLocationLeading)
 
 	// ── SAVE BAR (full width, pinned at bottom) ───────────────────────────
 	saveBtn := widget.NewButton("Save", func() {
@@ -531,18 +545,16 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 		dialog.ShowInformation("Saved", "Settings saved successfully!", win)
 	})
 
+	saveBtnSizer := canvas.NewRectangle(color.Transparent)
+	saveBtnSizer.SetMinSize(fyne.NewSize(160, 0))
+	saveBtnContainer := container.NewMax(saveBtnSizer, saveBtn)
+
 	saveBar := container.NewBorder(
 		widget.NewSeparator(), nil, nil, nil,
-		saveBtn,
+		container.NewPadded(container.NewPadded(container.NewHBox(layout.NewSpacer(), saveBtnContainer))),
 	)
 
-	// ── MAIN LAYOUT ───────────────────────────────────────────────────────
-	// Left panel fixed on the left, right panel fills remaining space,
-	// save bar pinned at the very bottom.
-	body := container.NewHSplit(leftPanel, rightPanel)
-	body.SetOffset(0.45)
-
-	win.SetContent(container.NewBorder(nil, saveBar, nil, nil, body))
+	win.SetContent(container.NewBorder(nil, saveBar, nil, nil, tabs))
 
 	win.SetOnClosed(func() { u.settings = nil })
 	win.Show()
