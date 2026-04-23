@@ -12,9 +12,17 @@ A compact weather widget for your desktop.
 
 ![Win32 Transparent Background](images/win32-transparent-background.png)
 
-**Weather Widget Settings**  
+**Weather Widget Location Settings**  
 
 ![Weather Widget Settings](images/weather-widget-sesstings.png)
+
+**Weather Widget Appearance Settings**  
+
+![Weather Widget Settings](images/weather-widget-sesstings-apperance.png)
+
+## Download
+
+You can download the latest pre-compiled binaries for Windows and Linux from the [GitHub Releases](https://github.com/gcclinux/WeatherWidget/releases) page.
 
 ## Compilation
 

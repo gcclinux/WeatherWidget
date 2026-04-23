@@ -10,6 +10,7 @@ import (
 	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/layout"
+	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 
 	"weatherwidget/assets"
@@ -20,10 +21,10 @@ import (
 type CityPanel struct {
 	container  *fyne.Container
 	iconWidget *canvas.Image
-	tempLabel  *widget.Label
+	tempText   *canvas.Text
 	descLabel  *widget.Label
-	cityLabel  *widget.Label
-	timeLabel  *widget.Label
+	cityText   *canvas.Text
+	timeText   *canvas.Text
 	dateLabel  *widget.Label
 	errorIcon  *canvas.Image
 
@@ -50,7 +51,7 @@ func NewCityPanel() *CityPanel {
 	res := loadIconFromAssets(weather.IconCloudy)
 	p.iconWidget = canvas.NewImageFromResource(res)
 	p.iconWidget.FillMode = canvas.ImageFillContain
-	p.iconWidget.SetMinSize(fyne.NewSize(40, 40))
+	p.iconWidget.SetMinSize(fyne.NewSize(64, 64))
 
 	// Error indicator icon — hidden by default.
 	p.errorIcon = canvas.NewImageFromResource(nil)
@@ -58,18 +59,25 @@ func NewCityPanel() *CityPanel {
 	p.errorIcon.SetMinSize(fyne.NewSize(16, 16))
 	p.errorIcon.Hide()
 
-	// Labels with placeholder text.
-	p.tempLabel = widget.NewLabel("--°C")
-	p.tempLabel.Alignment = fyne.TextAlignCenter
+	// Labels with appealing typography.
+	p.cityText = canvas.NewText("City, RG", theme.ForegroundColor())
+	p.cityText.TextSize = 18
+	p.cityText.TextStyle = fyne.TextStyle{Bold: true}
+	p.cityText.Alignment = fyne.TextAlignCenter
+
+	p.tempText = canvas.NewText("--°C", theme.ForegroundColor())
+	p.tempText.TextSize = 42
+	p.tempText.TextStyle = fyne.TextStyle{Bold: true}
+	p.tempText.Alignment = fyne.TextAlignCenter
 
 	p.descLabel = widget.NewLabel("--")
 	p.descLabel.Alignment = fyne.TextAlignCenter
+	p.descLabel.TextStyle = fyne.TextStyle{Italic: true}
 
-	p.cityLabel = widget.NewLabel("City, RG")
-	p.cityLabel.Alignment = fyne.TextAlignCenter
-
-	p.timeLabel = widget.NewLabel("--:--:--")
-	p.timeLabel.Alignment = fyne.TextAlignCenter
+	p.timeText = canvas.NewText("--:--:--", theme.ForegroundColor())
+	p.timeText.TextSize = 20
+	p.timeText.TextStyle = fyne.TextStyle{Bold: true}
+	p.timeText.Alignment = fyne.TextAlignCenter
 
 	p.dateLabel = widget.NewLabel("--/--/----")
 	p.dateLabel.Alignment = fyne.TextAlignCenter
@@ -77,15 +85,18 @@ func NewCityPanel() *CityPanel {
 	// Icon row: weather icon + error icon overlay.
 	iconRow := container.NewHBox(layout.NewSpacer(), p.iconWidget, p.errorIcon, layout.NewSpacer())
 
-	// Vertical stack: city, icon, temp, description, time, date.
-	p.container = container.NewVBox(
-		container.NewCenter(p.cityLabel),
+	// Vertical stack with extra breathing room and separators
+	p.container = container.NewPadded(container.NewVBox(
+		container.NewCenter(p.cityText),
+		layout.NewSpacer(),
 		iconRow,
-		container.NewCenter(p.tempLabel),
+		container.NewCenter(p.tempText),
 		container.NewCenter(p.descLabel),
-		container.NewCenter(p.timeLabel),
+		layout.NewSpacer(),
+		widget.NewSeparator(),
+		container.NewCenter(p.timeText),
 		container.NewCenter(p.dateLabel),
-	)
+	))
 
 	return p
 }
@@ -110,9 +121,13 @@ func (p *CityPanel) Update(data *weather.WeatherData) {
 	}
 
 	// Update labels.
-	p.tempLabel.SetText(weather.FormatTemperature(data.Temperature))
+	p.tempText.Text = weather.FormatTemperature(data.Temperature)
+	p.tempText.Refresh()
+	
 	p.descLabel.SetText(weather.FormatDescription(data.Description))
-	p.cityLabel.SetText(weather.FormatCityRegion(data.CityName, data.Region))
+	
+	p.cityText.Text = weather.FormatCityRegion(data.CityName, data.Region)
+	p.cityText.Refresh()
 
 	// Hide error indicator on successful update.
 	p.errorIcon.Hide()
@@ -158,7 +173,8 @@ func (p *CityPanel) StartClock(timezone string) {
 
 	// Set the time immediately before the first tick.
 	now := time.Now()
-	p.timeLabel.SetText(weather.FormatTime(now, timezone))
+	p.timeText.Text = weather.FormatTime(now, timezone)
+	p.timeText.Refresh()
 	p.dateLabel.SetText(weather.FormatDate(now, timezone))
 
 	go func() {
@@ -170,7 +186,8 @@ func (p *CityPanel) StartClock(timezone string) {
 				timeStr := weather.FormatTime(t, timezone)
 				dateStr := weather.FormatDate(t, timezone)
 				fyne.Do(func() {
-					p.timeLabel.SetText(timeStr)
+					p.timeText.Text = timeStr
+					p.timeText.Refresh()
 					p.dateLabel.SetText(dateStr)
 				})
 			}
