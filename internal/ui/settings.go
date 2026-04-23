@@ -62,14 +62,6 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 		window: win,
 	}
 
-	// ── Data Source ──────────────────────────────────────────────────────
-	dataSourceRadio := widget.NewRadioGroup([]string{"Remote API", "Local Database"}, nil)
-	if cfg.DataSource == config.DataSourceLocalDatabase {
-		dataSourceRadio.SetSelected("Local Database")
-	} else {
-		dataSourceRadio.SetSelected("Remote API")
-	}
-
 	// ── API config ───────────────────────────────────────────────────────
 	providerSelect := widget.NewSelect([]string{"OpenWeatherMap (Free)", "EasyWeatherWidget (Pro)"}, nil)
 	if cfg.APIConfig != nil && cfg.APIConfig.Provider != "" {
@@ -81,68 +73,35 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 	} else {
 		providerSelect.SetSelected("OpenWeatherMap (Free)")
 	}
+
+	getApiBtn := widget.NewButton("Get FREE API", func() {
+		parsedURL, _ := url.Parse("https://openweathermap.org/")
+		_ = u.app.OpenURL(parsedURL)
+	})
+	if providerSelect.Selected == "EasyWeatherWidget (Pro)" {
+		getApiBtn.SetText("Get PRO API")
+		getApiBtn.OnTapped = func() {
+			parsedURL, _ := url.Parse("https://easyweatherwidget.org/")
+			_ = u.app.OpenURL(parsedURL)
+		}
+	}
+
 	apiKeyEntry := widget.NewEntry()
 	apiKeyEntry.SetPlaceHolder("API Key")
 	if cfg.APIConfig != nil {
 		apiKeyEntry.SetText(cfg.APIConfig.APIKey)
 	}
+
+	noteLabel := widget.NewLabel("Note: Free = 120 minutes limited refresh rate. Pro = 30 minutes refresh rate unlimited.")
+	noteLabel.Wrapping = fyne.TextWrapWord
+
 	apiSection := container.NewVBox(
 		widget.NewForm(
-			widget.NewFormItem("Provider", providerSelect),
+			widget.NewFormItem("Provider", container.NewBorder(nil, nil, nil, getApiBtn, providerSelect)),
 			widget.NewFormItem("API Key", apiKeyEntry),
 		),
+		noteLabel,
 	)
-
-	// ── Database config ──────────────────────────────────────────────────
-	dbHostEntry := widget.NewEntry()
-	dbHostEntry.SetPlaceHolder("localhost")
-	dbPortEntry := widget.NewEntry()
-	dbPortEntry.SetPlaceHolder("5432")
-	dbNameEntry := widget.NewEntry()
-	dbNameEntry.SetPlaceHolder("weather_db")
-	dbUserEntry := widget.NewEntry()
-	dbUserEntry.SetPlaceHolder("postgres")
-	dbPassEntry := widget.NewPasswordEntry()
-	dbPassEntry.SetPlaceHolder("password")
-	dbQueryEntry := widget.NewMultiLineEntry()
-	dbQueryEntry.SetPlaceHolder("SELECT temperature, description, icon_code FROM weather WHERE city = $1")
-	dbQueryEntry.SetMinRowsVisible(2)
-	if cfg.DatabaseConfig != nil {
-		dbHostEntry.SetText(cfg.DatabaseConfig.Host)
-		if cfg.DatabaseConfig.Port > 0 {
-			dbPortEntry.SetText(strconv.Itoa(cfg.DatabaseConfig.Port))
-		}
-		dbNameEntry.SetText(cfg.DatabaseConfig.DBName)
-		dbUserEntry.SetText(cfg.DatabaseConfig.Username)
-		dbPassEntry.SetText(cfg.DatabaseConfig.Password)
-		dbQueryEntry.SetText(cfg.DatabaseConfig.Query)
-	}
-	dbSection := container.NewVBox(
-		widget.NewForm(
-			widget.NewFormItem("Host", dbHostEntry),
-			widget.NewFormItem("Port", dbPortEntry),
-			widget.NewFormItem("Database", dbNameEntry),
-			widget.NewFormItem("Username", dbUserEntry),
-			widget.NewFormItem("Password", dbPassEntry),
-			widget.NewFormItem("Query", dbQueryEntry),
-		),
-	)
-
-	apiSection.Show()
-	dbSection.Hide()
-	if cfg.DataSource == config.DataSourceLocalDatabase {
-		apiSection.Hide()
-		dbSection.Show()
-	}
-	dataSourceRadio.OnChanged = func(s string) {
-		if s == "Local Database" {
-			apiSection.Hide()
-			dbSection.Show()
-		} else {
-			apiSection.Show()
-			dbSection.Hide()
-		}
-	}
 
 	// ── Position ─────────────────────────────────────────────────────────
 	positionValueMap := map[string]string{
@@ -232,10 +191,7 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 	leftContent := container.NewVBox(
 		widget.NewLabelWithStyle("System", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
 		widget.NewSeparator(),
-		widget.NewLabel("Data Source"),
-		dataSourceRadio,
 		apiSection,
-		dbSection,
 		widget.NewSeparator(),
 		widget.NewLabel("Widget Position"),
 		positionRadio,
@@ -301,6 +257,20 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 	providerSelect.OnChanged = func(selected string) {
 		newProvider := providerDisplayToValue[selected]
 		applyProviderSliderConstraints(newProvider)
+
+		if newProvider == "openweathermap" {
+			getApiBtn.SetText("Get FREE API")
+			getApiBtn.OnTapped = func() {
+				parsedURL, _ := url.Parse("https://openweathermap.org/")
+				_ = u.app.OpenURL(parsedURL)
+			}
+		} else {
+			getApiBtn.SetText("Get PRO API")
+			getApiBtn.OnTapped = func() {
+				parsedURL, _ := url.Parse("https://easyweatherwidget.org/")
+				_ = u.app.OpenURL(parsedURL)
+			}
+		}
 
 		// Clear the city list when switching providers — each provider uses
 		// its own search API, so existing cities may not be valid.
@@ -542,8 +512,7 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 	// ── SAVE BAR (full width, pinned at bottom) ───────────────────────────
 	saveBtn := widget.NewButton("Save", func() {
 		newCfg := buildConfigFromUI(
-			dataSourceRadio, providerSelect, apiKeyEntry,
-			dbHostEntry, dbPortEntry, dbNameEntry, dbUserEntry, dbPassEntry, dbQueryEntry,
+			providerSelect, apiKeyEntry,
 			intervalSlider, state, positionValueMap, positionRadio, opacityRadio, opacityMap, cfg,
 		)
 		errs := config.Validate(newCfg)
@@ -581,10 +550,8 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 
 // buildConfigFromUI reads all form fields and constructs a Config struct.
 func buildConfigFromUI(
-	dataSourceRadio *widget.RadioGroup,
 	providerSelect *widget.Select,
 	apiKeyEntry *widget.Entry,
-	dbHostEntry, dbPortEntry, dbNameEntry, dbUserEntry, dbPassEntry, dbQueryEntry *widget.Entry,
 	intervalSlider *widget.Slider,
 	state *settingsState,
 	positionValueMap map[string]string,
@@ -602,6 +569,7 @@ func buildConfigFromUI(
 		opacity = 100
 	}
 	cfg := &config.Config{
+		DataSource:      config.DataSourceRemoteAPI,
 		Cities:          copyCities(state.cities),
 		RefreshInterval: int(intervalSlider.Value),
 		CornerPosition:  cornerPosition,
@@ -609,27 +577,13 @@ func buildConfigFromUI(
 		CustomY:         current.CustomY,
 		Opacity:         opacity,
 	}
-	if dataSourceRadio.Selected == "Local Database" {
-		cfg.DataSource = config.DataSourceLocalDatabase
-		port, _ := strconv.Atoi(strings.TrimSpace(dbPortEntry.Text))
-		cfg.DatabaseConfig = &config.DatabaseConfig{
-			Host:     strings.TrimSpace(dbHostEntry.Text),
-			Port:     port,
-			DBName:   strings.TrimSpace(dbNameEntry.Text),
-			Username: strings.TrimSpace(dbUserEntry.Text),
-			Password: dbPassEntry.Text,
-			Query:    strings.TrimSpace(dbQueryEntry.Text),
-		}
-	} else {
-		cfg.DataSource = config.DataSourceRemoteAPI
-		provider := providerDisplayToValue[providerSelect.Selected]
-		if provider == "" {
-			provider = "openweathermap"
-		}
-		cfg.APIConfig = &config.APIConfig{
-			Provider: provider,
-			APIKey:   strings.TrimSpace(apiKeyEntry.Text),
-		}
+	provider := providerDisplayToValue[providerSelect.Selected]
+	if provider == "" {
+		provider = "openweathermap"
+	}
+	cfg.APIConfig = &config.APIConfig{
+		Provider: provider,
+		APIKey:   strings.TrimSpace(apiKeyEntry.Text),
 	}
 	return cfg
 }
