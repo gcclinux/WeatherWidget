@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>WeatherWidget — Desktop Weather Widget</title>
+  <meta name="description" content="A compact, beautiful desktop weather widget for Windows and Linux. Monitor weather for multiple cities with a sleek transparent overlay." />
+  <link rel="icon" type="image/png" href="assets/icons/clear.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <!-- Animated background particles -->
+  <div class="bg-particles" aria-hidden="true">
+    <div class="particle particle-1"></div>
+    <div class="particle particle-2"></div>
+    <div class="particle particle-3"></div>
+    <div class="particle particle-4"></div>
+    <div class="particle particle-5"></div>
+    <div class="particle particle-6"></div>
+  </div>
+
+  <!-- Navigation -->
+  <nav class="navbar" role="navigation" aria-label="Main navigation">
+    <div class="nav-container">
+      <a href="index.html" class="nav-brand" aria-label="EasyWidge Home">
+        <span class="brand-icon">⛅</span>
+        <span class="brand-text">WeatherWidget</span>
+      </a>
+      <button class="nav-toggle" aria-label="Toggle navigation menu" aria-expanded="false">
+        <span></span><span></span><span></span>
+      </button>
+      <ul class="nav-links" role="menubar">
+        <li role="none"><a href="#features" role="menuitem">Features</a></li>
+        <li role="none"><a href="#screenshot" role="menuitem">Preview</a></li>
+        <li role="none"><a href="#download" role="menuitem">Download</a></li>
+        <li role="none"><a href="privacy.html" role="menuitem">Privacy</a></li>
+        <li role="none"><a href="license.html" role="menuitem">License</a></li>
+        <li role="none"><a href="terms.html" role="menuitem">Terms</a></li>
+        <li role="none"><a href="https://github.com/gcclinux/EasyWidge" class="nav-btn" role="menuitem" target="_blank" rel="noopener noreferrer">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
+          GitHub
+        </a></li>
+      </ul>
+    </div>
+  </nav>
+
+  <!-- Hero Section -->
+  <header class="hero" id="hero">
+    <div class="hero-content">
+      <div class="hero-badge">Open Source &bull; Free Forever</div>
+      <h1 class="hero-title">
+        Your Desktop.<br />
+        <span class="gradient-text">Your Weather.</span>
+      </h1>
+      <p class="hero-subtitle">
+        A compact, transparent weather widget that lives on your desktop.
+        Monitor up to 5 cities at a glance with a beautiful, always-on-top overlay.
+      </p>
+      <div class="hero-actions">
+        <a href="https://github.com/gcclinux/EasyWidge/releases" class="btn btn-primary" target="_blank" rel="noopener noreferrer">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          Download Latest
+        </a>
+        <a href="https://github.com/gcclinux/EasyWidge" class="btn btn-secondary" target="_blank" rel="noopener noreferrer">
+          View Source
+        </a>
+      </div>
+      <div class="hero-stats">
+        <div class="stat">
+          <span class="stat-value">5</span>
+          <span class="stat-label">Cities</span>
+        </div>
+        <div class="stat-divider"></div>
+        <div class="stat">
+          <span class="stat-value">2</span>
+          <span class="stat-label">Platforms</span>
+        </div>
+        <div class="stat-divider"></div>
+        <div class="stat">
+          <span class="stat-value">0</span>
+          <span class="stat-label">Ads</span>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Screenshot Section -->
+  <section class="screenshot-section" id="screenshot">
+    <div class="container">
+      <div class="section-header">
+        <h2 class="section-title">See It in Action</h2>
+        <p class="section-subtitle">A transparent overlay that blends seamlessly with your desktop</p>
+      </div>
+      <div class="screenshot-showcase">
+        <div class="screenshot-glow" aria-hidden="true"></div>
+        <img
+          src="assets/images/win32-transparent-background.png"
+          alt="EasyWidge weather widget showing multiple cities with transparent background on a Windows desktop"
+          class="screenshot-img"
+          loading="lazy"
+        />
+      </div>
+    </div>
+  </section>
+
+  <!-- Features Section -->
+  <section class="features-section" id="features">
+    <div class="container">
+      <div class="section-header">
+        <h2 class="section-title">Why EasyWidge?</h2>
+        <p class="section-subtitle">Built with care, designed for simplicity</p>
+      </div>
+      <div class="features-grid">
+        <div class="feature-card">
+          <div class="feature-icon">🌍</div>
+          <h3>Multi-City Support</h3>
+          <p>Track weather for up to 5 cities simultaneously, displayed side by side in a compact layout.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">🪟</div>
+          <h3>Transparent Overlay</h3>
+          <p>A borderless, always-on-top window with adjustable opacity that blends with your desktop.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">⚡</div>
+          <h3>Lightweight &amp; Native</h3>
+          <p>Built in Go as a single binary. No Electron, no browser engine — just pure performance.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">🔄</div>
+          <h3>Auto Refresh</h3>
+          <p>Configurable refresh intervals from 1 to 60 minutes keep your weather data current.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">🎨</div>
+          <h3>Customizable</h3>
+          <p>Position the widget in any corner, adjust transparency, and configure your preferred data source.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">🔒</div>
+          <h3>Privacy First</h3>
+          <p>No telemetry, no tracking, no accounts. Your weather data stays between you and the API.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- How It Works Section -->
+  <section class="how-section" id="how">
+    <div class="container">
+      <div class="section-header">
+        <h2 class="section-title">Up and Running in Minutes</h2>
+        <p class="section-subtitle">Three simple steps to weather and time on your desktop</p>
+      </div>
+      <div class="steps">
+        <div class="step">
+          <div class="step-number">1</div>
+          <h3>Download</h3>
+          <p>Grab the latest release for Windows or Linux from GitHub Releases.</p>
+        </div>
+        <div class="step-connector" aria-hidden="true"></div>
+        <div class="step">
+          <div class="step-number">2</div>
+          <h3>Configure</h3>
+          <p>Add your cities and API key through the built-in settings dialog.</p>
+        </div>
+        <div class="step-connector" aria-hidden="true"></div>
+        <div class="step">
+          <div class="step-number">3</div>
+          <h3>Enjoy</h3>
+          <p>The widget sits on your desktop, always showing the latest weather.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Download / CTA Section -->
+  <section class="cta-section" id="download">
+    <div class="container">
+      <div class="cta-card">
+        <div class="cta-glow" aria-hidden="true"></div>
+        <h2>Ready to Try WeatherWidget?</h2>
+        <p>Free, open source, and always will be. Download now or build from source.</p>
+        <div class="cta-actions">
+          <a href="https://github.com/gcclinux/EasyWidge/releases" class="btn btn-primary btn-lg" target="_blank" rel="noopener noreferrer">
+            Download for Free
+          </a>
+          <a href="https://github.com/gcclinux/EasyWidge" class="btn btn-ghost btn-lg" target="_blank" rel="noopener noreferrer">
+            Star on GitHub ⭐
+          </a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer class="footer">
+    <div class="container">
+      <div class="footer-grid">
+        <div class="footer-brand">
+          <span class="brand-icon">⛅</span>
+          <span class="brand-text">WeatherWidget</span>
+          <p class="footer-tagline">A compact weather and time widget for your desktop.</p>
+        </div>
+        <div class="footer-links">
+          <h4>Product</h4>
+          <ul>
+            <li><a href="#features">Features</a></li>
+            <li><a href="#screenshot">Preview</a></li>
+            <li><a href="#download">Download</a></li>
+          </ul>
+        </div>
+        <div class="footer-links">
+          <h4>Legal</h4>
+          <ul>
+            <li><a href="privacy.html">Privacy Policy</a></li>
+            <li><a href="license.html">License</a></li>
+            <li><a href="terms.html">Terms of Service</a></li>
+          </ul>
+        </div>
+        <div class="footer-links">
+          <h4>Community</h4>
+          <ul>
+            <li><a href="https://github.com/gcclinux/EasyWidge" target="_blank" rel="noopener noreferrer">GitHub</a></li>
+            <li><a href="https://github.com/gcclinux/EasyWidge/issues" target="_blank" rel="noopener noreferrer">Report a Bug</a></li>
+            <li><a href="https://github.com/gcclinux/EasyWidge/releases" target="_blank" rel="noopener noreferrer">Releases</a></li>
+          </ul>
+        </div>
+      </div>
+      <div class="footer-bottom">
+        <p>&copy; 2025 EasyWidge Contributors. Licensed under <a href="license.html">AGPL-3.0</a>.</p>
+      </div>
+    </div>
+  </footer>
+
+  <script src="js/main.js"></script>
+</body>
+</html>

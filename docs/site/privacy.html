@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Privacy Policy — EasyWidge and WeatherWidget</title>
+  <meta name="description" content="EasyWidge Privacy Policy. Learn how we handle your data — spoiler: we don't collect any." />
+  <link rel="icon" type="image/png" href="assets/icons/clear.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <div class="bg-particles" aria-hidden="true">
+    <div class="particle particle-1"></div>
+    <div class="particle particle-2"></div>
+    <div class="particle particle-3"></div>
+  </div>
+
+  <!-- Navigation -->
+  <nav class="navbar scrolled" role="navigation" aria-label="Main navigation">
+    <div class="nav-container">
+      <a href="index.html" class="nav-brand" aria-label="EasyWidge Home">
+        <span class="brand-icon">⛅</span>
+        <span class="brand-text">WeatherWidget</span>
+      </a>
+      <button class="nav-toggle" aria-label="Toggle navigation menu" aria-expanded="false">
+        <span></span><span></span><span></span>
+      </button>
+      <ul class="nav-links" role="menubar">
+        <li role="none"><a href="index.html#features" role="menuitem">Features</a></li>
+        <li role="none"><a href="index.html#download" role="menuitem">Download</a></li>
+        <li role="none"><a href="privacy.html" role="menuitem">Privacy</a></li>
+        <li role="none"><a href="license.html" role="menuitem">License</a></li>
+        <li role="none"><a href="terms.html" role="menuitem">Terms</a></li>
+        <li role="none"><a href="https://github.com/gcclinux/EasyWidge" class="nav-btn" role="menuitem" target="_blank" rel="noopener noreferrer">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
+          GitHub
+        </a></li>
+      </ul>
+    </div>
+  </nav>
+
+  <!-- Privacy Policy Content -->
+  <main class="legal-page">
+    <div class="legal-container">
+      <h1>Privacy Policy</h1>
+      <p class="legal-updated">Last updated: April 27, 2025</p>
+
+      <h2>Overview</h2>
+      <p>
+        EasyWidge also known as WeatherWidget is an open-source desktop weather widget. We are committed to protecting your privacy.
+        This policy explains what data the application handles and how it is used.
+      </p>
+      <p>
+        <strong>The short version:</strong> EasyWidge does not collect, store, or transmit any personal data.
+        There is no telemetry, no analytics, no tracking, and no user accounts.
+      </p>
+
+      <h2>1. Data We Do Not Collect</h2>
+      <p>WeatherWidget does <strong>not</strong> collect any of the following:</p>
+      <ul>
+        <li>Personal identification information (name, email, address, phone number)</li>
+        <li>Device identifiers or hardware fingerprints</li>
+        <li>Usage analytics or telemetry data</li>
+        <li>Location data from your device (GPS, Wi-Fi, or IP-based)</li>
+        <li>Browsing history or application usage patterns</li>
+        <li>Crash reports or diagnostic data</li>
+      </ul>
+
+      <h2>2. Data Stored Locally</h2>
+      <p>WeatherWidget stores the following data <strong>only on your local machine</strong>:</p>
+      <ul>
+        <li><strong>Configuration file:</strong> Your city list, refresh interval, display preferences, and API key are stored in a JSON file at <code>%APPDATA%\WeatherWidget\</code> (Windows) or <code>~/.config/WeatherWidget/</code> (Linux).</li>
+        <li><strong>No data is transmitted to us.</strong> The configuration file never leaves your computer.</li>
+      </ul>
+
+      <h2>3. Third-Party API Requests</h2>
+      <p>
+        When configured to use a remote weather API (such as OpenWeatherMap), WeatherWidget sends HTTPS requests
+        containing the latitude and longitude of your configured cities and your API key directly to the
+        third-party weather service provider.
+      </p>
+      <p>These requests are made:</p>
+      <ul>
+        <li>Directly from your machine to the weather API provider</li>
+        <li>Only for the cities you have explicitly configured</li>
+      </ul>
+      <p>
+        We encourage you to review the privacy policy of your chosen weather API provider to understand
+        how they handle your requests.
+      </p>
+
+      <h2>4. Local Database Option</h2>
+      <p>
+        If you configure EasyWidge to use a local PostgreSQL database as the data source, all weather
+        data queries remain entirely within your local network. No external API calls are made in this mode.
+      </p>
+
+      <h2>5. No Cookies or Web Tracking</h2>
+      <p>
+        EasyWidge is a native desktop application. It does not use cookies, web beacons, pixels,
+        or any other web-based tracking technologies.
+      </p>
+
+      <h2>6. No Data Sharing</h2>
+      <p>
+        Since we do not collect any data, there is no data to share, sell, rent, or disclose to
+        third parties. Period.
+      </p>
+
+      <h2>7. Children's Privacy</h2>
+      <p>
+        EasyWidge does not collect personal information from anyone, including children under the
+        age of 13. The application is safe for users of all ages.
+      </p>
+
+      <h2>8. Open Source Transparency</h2>
+      <p>
+        EasyWidge is fully open source under the AGPL-3.0 license. You can inspect the complete
+        source code at any time to verify these privacy claims:
+      </p>
+      <p>
+        <a href="https://github.com/gcclinux/EasyWidge" target="_blank" rel="noopener noreferrer">
+          https://github.com/gcclinux/EasyWidge
+        </a>
+      </p>
+
+      <h2>9. Changes to This Policy</h2>
+      <p>
+        If we ever update this privacy policy, the changes will be reflected on this page with an
+        updated revision date. Since EasyWidge collects no data, significant changes are unlikely.
+      </p>
+
+      <h2>10. Contact</h2>
+      <p>
+        If you have questions about this privacy policy, please open an issue on our
+        <a href="https://github.com/gcclinux/EasyWidge/issues" target="_blank" rel="noopener noreferrer">GitHub repository</a>.
+      </p>
+    </div>
+  </main>
+
+  <!-- Footer -->
+  <footer class="footer">
+    <div class="container">
+      <div class="footer-bottom" style="border-top: none; padding-top: 0;">
+        <p>&copy; 2025 EasyWidge Contributors. Licensed under <a href="license.html">AGPL-3.0</a>.</p>
+      </div>
+    </div>
+  </footer>
+
+  <script src="js/main.js"></script>
+</body>
+</html>
