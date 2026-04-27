@@ -14,6 +14,9 @@ import (
 	"weatherwidget/internal/ui"
 )
 
+// version is set at build time via -ldflags "-X main.version=1.0.0.0"
+var version = "dev"
+
 func main() {
 	fyneApp := app.NewWithID("com.weatherwidget")
 	fyneApp.Settings().SetTheme(ui.NewWidgetTheme(theme.DefaultTheme()))

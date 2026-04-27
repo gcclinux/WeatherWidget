@@ -1,0 +1,44 @@
+{
+  "RT_MANIFEST": {
+    "#1": {
+      "0409": {
+        "identity": {
+          "name": "WeatherWidget",
+          "version": "1.0.0.0"
+        },
+        "description": "Weather Widget - Desktop weather display",
+        "minimum-os": "win10",
+        "execution-level": "asInvoker",
+        "dpi-awareness": "system",
+        "auto-elevate": false
+      }
+    }
+  },
+  "RT_GROUP_ICON": {
+    "#1": {
+      "0409": "icon.ico"
+    }
+  },
+  "RT_VERSION": {
+    "#1": {
+      "0409": {
+        "fixed": {
+          "file_version": "1.0.0.0",
+          "product_version": "1.0.0.0"
+        },
+        "info": {
+          "0409": {
+            "CompanyName": "WeatherWidget",
+            "FileDescription": "Weather Widget Desktop Application",
+            "FileVersion": "1.0.0.0",
+            "InternalName": "weatherwidget",
+            "LegalCopyright": "© 2026 WeatherWidget",
+            "OriginalFilename": "weatherwidget.exe",
+            "ProductName": "Weather Widget",
+            "ProductVersion": "1.0.0.0"
+          }
+        }
+      }
+    }
+  }
+}

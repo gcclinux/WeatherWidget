@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  WiX v4+ installer definition for Weather Widget.
+  Per-user install to AppData\Local\WeatherWidget (no admin required).
+  
+  Build with:
+    wix build installer\Package.wxs -d BuildDir=. -d Version=1.0.0.0 -o WeatherWidget.msi
+-->
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+  <Package Name="Weather Widget"
+           Manufacturer="WeatherWidget"
+           Version="$(var.Version)"
+           UpgradeCode="E8F4B2A1-7C3D-4E5F-9A1B-2D3E4F5A6B7C"
+           Compressed="yes"
+           InstallerVersion="500"
+           Scope="perUser">
+
+    <MajorUpgrade DowngradeErrorMessage="A newer version of Weather Widget is already installed." />
+    <MediaTemplate EmbedCab="yes" />
+
+    <!-- Install to %LocalAppData%\WeatherWidget (per-user, no admin needed) -->
+    <StandardDirectory Id="LocalAppDataFolder">
+      <Directory Id="INSTALLFOLDER" Name="WeatherWidget">
+        <Component Id="MainExecutable" Guid="A1B2C3D4-E5F6-7890-ABCD-EF1234567890">
+          <File Id="WeatherWidgetExe"
+                Source="$(var.BuildDir)\weatherwidget.exe"
+                KeyPath="yes" />
+        </Component>
+      </Directory>
+    </StandardDirectory>
+
+    <!-- Start Menu shortcut -->
+    <StandardDirectory Id="ProgramMenuFolder">
+      <Directory Id="ApplicationProgramsFolder" Name="Weather Widget">
+        <Component Id="ApplicationShortcut" Guid="B2C3D4E5-F6A7-8901-BCDE-F12345678901">
+          <Shortcut Id="ApplicationStartMenuShortcut"
+                    Name="Weather Widget"
+                    Description="Desktop weather widget"
+                    Target="[INSTALLFOLDER]weatherwidget.exe"
+                    WorkingDirectory="INSTALLFOLDER"
+                    Icon="WeatherWidgetIcon" />
+          <RemoveFolder Id="CleanUpShortCut" On="uninstall" />
+          <RegistryValue Root="HKCU"
+                         Key="Software\WeatherWidget"
+                         Name="installed"
+                         Type="integer"
+                         Value="1"
+                         KeyPath="yes" />
+        </Component>
+      </Directory>
+    </StandardDirectory>
+
+    <!-- Icon for shortcuts (sourced from the .ico file directly) -->
+    <Icon Id="WeatherWidgetIcon" SourceFile="winres\icon.ico" />
+
+    <Feature Id="ProductFeature" Title="Weather Widget" Level="1">
+      <ComponentRef Id="MainExecutable" />
+      <ComponentRef Id="ApplicationShortcut" />
+    </Feature>
+
+    <!-- Optional: Launch after install -->
+    <CustomAction Id="LaunchApplication"
+                  FileRef="WeatherWidgetExe"
+                  ExeCommand=""
+                  Return="asyncNoWait" />
+  </Package>
+</Wix>

@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Package xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
+         xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
+         xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities">
+
+  <!-- 
+    Identity: 
+    - Name: Must match your Microsoft Partner Center reservation (e.g., "12345YourPublisher.WeatherWidget")
+    - Publisher: Must match your signing certificate subject (e.g., "CN=Your Publisher ID, O=Your Org, L=City, S=State, C=US")
+    - Update these values after registering your app in Partner Center
+  -->
+  <Identity Name="YourPublisherId.WeatherWidget"
+            Publisher="CN=YourPublisherId"
+            Version="1.0.0.0"
+            ProcessorArchitecture="x64" />
+
+  <Properties>
+    <DisplayName>Weather Widget</DisplayName>
+    <PublisherDisplayName>WeatherWidget</PublisherDisplayName>
+    <Logo>assets\StoreLogo.png</Logo>
+    <Description>A lightweight desktop weather widget that displays current conditions and forecasts.</Description>
+  </Properties>
+
+  <Dependencies>
+    <TargetDeviceFamily Name="Windows.Desktop"
+                        MinVersion="10.0.17763.0"
+                        MaxVersionTested="10.0.26100.0" />
+  </Dependencies>
+
+  <Resources>
+    <Resource Language="en-us" />
+  </Resources>
+
+  <Applications>
+    <Application Id="WeatherWidget"
+                 Executable="weatherwidget.exe"
+                 EntryPoint="Windows.FullTrustApplication">
+      <uap:VisualElements DisplayName="Weather Widget"
+                          Description="Desktop weather widget with real-time conditions"
+                          BackgroundColor="transparent"
+                          Square150x150Logo="assets\Square150x150Logo.png"
+                          Square44x44Logo="assets\Square44x44Logo.png">
+        <uap:DefaultTile Wide310x150Logo="assets\Wide310x150Logo.png"
+                         Square310x310Logo="assets\Square310x310Logo.png"
+                         ShortName="Weather" />
+      </uap:VisualElements>
+    </Application>
+  </Applications>
+
+  <Capabilities>
+    <rescap:Capability Name="runFullTrust" />
+    <Capability Name="internetClient" />
+  </Capabilities>
+</Package>
