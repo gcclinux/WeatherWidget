@@ -165,3 +165,80 @@ func setWindowOpacity(opacityPercent int) {
 		log.Printf("Linux: set window opacity to %d%% (user: %d%%, _NET_WM_WINDOW_OPACITY=%s)", x11Percent, opacityPercent, val)
 	}()
 }
+
+// getMonitorCount returns the number of display monitors using xrandr.
+// Falls back to 1 if xrandr is unavailable.
+func getMonitorCount() int {
+	out, err := exec.Command("xrandr", "--listmonitors").Output()
+	if err != nil {
+		return 1
+	}
+	// First line is "Monitors: N", remaining lines are one per monitor.
+	lines := strings.Split(strings.TrimSpace(string(out)), "\n")
+	if len(lines) <= 1 {
+		return 1
+	}
+	return len(lines) - 1
+}
+
+// getMonitorBounds returns the work-area rectangle (left, top, width, height)
+// for the monitor at the given 0-based index using xrandr.
+// Falls back to primary screen dimensions if parsing fails.
+func getMonitorBounds(index int) (int, int, int, int) {
+	out, err := exec.Command("xrandr", "--listmonitors").Output()
+	if err != nil {
+		w, h := getScreenSize()
+		return 0, 0, w, h
+	}
+	// Example output:
+	//   Monitors: 2
+	//    0: +*HDMI-1 1920/527x1080/296+0+0  HDMI-1
+	//    1: +DP-1 2560/597x1440/336+1920+0  DP-1
+	lines := strings.Split(strings.TrimSpace(string(out)), "\n")
+	if index < 0 || index >= len(lines)-1 {
+		index = 0
+	}
+	// Skip the header line.
+	line := lines[index+1]
+	// Parse the geometry: WIDTHxHEIGHT+X+Y (ignoring physical size /NNN parts).
+	// Find the resolution part after the colon.
+	parts := strings.Fields(line)
+	if len(parts) < 3 {
+		w, h := getScreenSize()
+		return 0, 0, w, h
+	}
+	geom := parts[2] // e.g. "1920/527x1080/296+0+0"
+	// Strip physical size info (everything between / and next delimiter).
+	// Simplify: replace /NNN with nothing.
+	cleaned := ""
+	skip := false
+	for _, ch := range geom {
+		if ch == '/' {
+			skip = true
+			continue
+		}
+		if skip && (ch == 'x' || ch == '+') {
+			skip = false
+		}
+		if !skip {
+			cleaned += string(ch)
+		}
+	}
+	// Now cleaned is like "1920x1080+0+0"
+	// Split on 'x' and '+'
+	cleaned = strings.ReplaceAll(cleaned, "x", "+")
+	nums := strings.Split(cleaned, "+")
+	if len(nums) < 4 {
+		w, h := getScreenSize()
+		return 0, 0, w, h
+	}
+	mw, _ := strconv.Atoi(nums[0])
+	mh, _ := strconv.Atoi(nums[1])
+	mx, _ := strconv.Atoi(nums[2])
+	my, _ := strconv.Atoi(nums[3])
+	if mw == 0 || mh == 0 {
+		w, h := getScreenSize()
+		return 0, 0, w, h
+	}
+	return mx, my, mw, mh
+}

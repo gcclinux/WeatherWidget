@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"crypto/rand"
 	"encoding/json"
 	"fmt"
 	"image/color"
@@ -20,8 +21,22 @@ import (
 
 	"github.com/bradfitz/latlong"
 
+	"weatherwidget/assets"
 	"weatherwidget/internal/config"
 )
+
+// generateClientReferenceID creates a random UUID v4 string (e.g. "f169fecc-de0c-4de1-b8c8-4ec3701b671c")
+// to be used as a unique client_reference_id for Stripe payment links.
+func generateClientReferenceID() string {
+	var uuid [16]byte
+	_, _ = rand.Read(uuid[:])
+	// Set version 4 (bits 12-15 of time_hi_and_version).
+	uuid[6] = (uuid[6] & 0x0f) | 0x40
+	// Set variant bits (10xx for RFC 4122).
+	uuid[8] = (uuid[8] & 0x3f) | 0x80
+	return fmt.Sprintf("%08x-%04x-%04x-%04x-%012x",
+		uuid[0:4], uuid[4:6], uuid[6:8], uuid[8:10], uuid[10:16])
+}
 
 // providerDisplayToValue maps UI display strings to internal config values.
 var providerDisplayToValue = map[string]string{
@@ -84,7 +99,8 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 	if providerSelect.Selected == "EasyWeatherWidget (Pro)" {
 		getApiBtn.SetText("Get PRO API")
 		getApiBtn.OnTapped = func() {
-			parsedURL, _ := url.Parse("https://easyweatherwidget.org/")
+			clientRef := generateClientReferenceID()
+			parsedURL, _ := url.Parse("https://buy.stripe.com/bJe3cvaJOa650fQ8cPdZ603?client_reference_id=" + clientRef)
 			_ = u.app.OpenURL(parsedURL)
 		}
 	}
@@ -95,7 +111,7 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 		apiKeyEntry.SetText(cfg.APIConfig.APIKey)
 	}
 
-	noteLabel := widget.NewLabel("Note: \nFree = 120 minutes refresh rate (limited). \nPro = 30 minutes refresh rate (unlimited).")
+	noteLabel := widget.NewLabel("Note: \nFree = 120 minutes refresh rate (limited). \nPro = 10 minutes refresh rate (unlimited).")
 	noteLabel.Wrapping = fyne.TextWrapWord
 
 	apiSection := container.NewVBox(
@@ -130,6 +146,27 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 	}
 	positionRadio.OnChanged = func(_ string) { customPosLabel.SetText("") }
 
+	// ── Monitor selector ─────────────────────────────────────────────────
+	monitorCount := u.GetMonitorCount()
+	var monitorOptions []string
+	for i := 0; i < monitorCount; i++ {
+		monitorOptions = append(monitorOptions, fmt.Sprintf("Monitor %d", i+1))
+	}
+	monitorSelect := widget.NewSelect(monitorOptions, nil)
+	if cfg.MonitorIndex >= 0 && cfg.MonitorIndex < monitorCount {
+		monitorSelect.SetSelected(fmt.Sprintf("Monitor %d", cfg.MonitorIndex+1))
+	} else {
+		monitorSelect.SetSelected("Monitor 1")
+	}
+	// Build the position card contents — include monitor selector only
+	// when multiple monitors are detected.
+	positionItems := []fyne.CanvasObject{positionRadio, customPosLabel}
+	if monitorCount > 1 {
+		monitorLabel := widget.NewLabel("Display Monitor")
+		monitorLabel.TextStyle = fyne.TextStyle{Bold: true}
+		positionItems = append(positionItems, monitorLabel, monitorSelect)
+	}
+
 	// ── Transparency ─────────────────────────────────────────────────────
 	opacityRadio := widget.NewRadioGroup([]string{"25%", "50%", "75%", "100%"}, nil)
 	opacityRadio.Horizontal = true
@@ -146,7 +183,7 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 	}
 
 	// ── Refresh interval ─────────────────────────────────────────────────
-	intervalSlider := widget.NewSlider(30, 120)
+	intervalSlider := widget.NewSlider(10, 120)
 	intervalSlider.Step = 1
 	intervalSlider.Value = float64(cfg.RefreshInterval)
 	intervalLabel := widget.NewLabel(fmt.Sprintf("%d min", cfg.RefreshInterval))
@@ -162,7 +199,7 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 			intervalSlider.Max = 120
 			intervalSlider.SetValue(120)
 		case "easyweatherwidget":
-			intervalSlider.Min = 30
+			intervalSlider.Min = 10
 			intervalSlider.Max = 120
 			if intervalSlider.Value < 30 {
 				intervalSlider.SetValue(30)
@@ -252,7 +289,8 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 		} else {
 			getApiBtn.SetText("Get PRO API")
 			getApiBtn.OnTapped = func() {
-				parsedURL, _ := url.Parse("https://easyweatherwidget.org/")
+				clientRef := generateClientReferenceID()
+				parsedURL, _ := url.Parse("https://buy.stripe.com/bJe3cvaJOa650fQ8cPdZ603?client_reference_id=" + clientRef)
 				_ = u.app.OpenURL(parsedURL)
 			}
 		}
@@ -488,16 +526,30 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 		container.NewHBox(layout.NewSpacer(), addBtnContainer),
 	)
 
+	// ── Auto-start toggle ────────────────────────────────────────────────
+	autoStartCheck := widget.NewCheck("Launch WeatherWidget when Windows starts", nil)
+	autoStartCheck.SetChecked(isAutoStartEnabled())
+	autoStartCheck.OnChanged = func(checked bool) {
+		if err := setAutoStartEnabled(checked); err != nil {
+			dialog.ShowError(fmt.Errorf("failed to update auto-start: %w", err), win)
+			// Revert the checkbox to the actual state.
+			autoStartCheck.SetChecked(isAutoStartEnabled())
+		}
+	}
+
 	// ── Tabs Assembly ─────────────────────────────────────────────────────
 	appearanceContent := container.NewPadded(container.NewVScroll(container.NewVBox(
 		widget.NewCard("Widget Position", "Where should the widget appear?",
-			container.NewVBox(positionRadio, customPosLabel),
+			container.NewVBox(positionItems...),
 		),
 		widget.NewCard("Background Transparency", "Adjust how see-through the widget is.",
 			opacityRadio,
 		),
 		widget.NewCard("Refresh Interval", "How often to fetch new data.",
 			container.NewHBox(intervalSlider, intervalLabel),
+		),
+		widget.NewCard("Startup", "Start automatically when you log in.",
+			autoStartCheck,
 		),
 	)))
 	appearanceTab := container.NewTabItemWithIcon("Appearance", theme.ColorPaletteIcon(), appearanceContent)
@@ -520,14 +572,36 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 	)
 	locationsTab := container.NewTabItemWithIcon("Locations", theme.ListIcon(), locationsContent)
 
-	tabs := container.NewAppTabs(appearanceTab, providerTab, locationsTab)
+	// ── About tab ─────────────────────────────────────────────────────────
+	aboutVersion := widget.NewRichTextFromMarkdown("**Version:** 0.0.5")
+	aboutDesc := widget.NewLabel("A compact, transparent time & weather widget that lives on your desktop.\nMonitor up to 5 cities at a glance with a beautiful, always-on-top overlay.")
+	aboutDesc.Wrapping = fyne.TextWrapWord
+
+	websiteLink := widget.NewHyperlink("gcclinux.github.io/WeatherWidget", parseURL("https://gcclinux.github.io/WeatherWidget/"))
+
+	demoResource := fyne.NewStaticResource("demo.png", assets.DemoPNG)
+	demoImage := canvas.NewImageFromResource(demoResource)
+	demoImage.FillMode = canvas.ImageFillContain
+	demoImage.SetMinSize(fyne.NewSize(400, 250))
+
+	aboutContent := container.NewPadded(container.NewVScroll(container.NewVBox(
+		widget.NewCard("WeatherWidget", "", container.NewVBox(
+			aboutDesc,
+			container.NewHBox(widget.NewLabel("Website:"), websiteLink),
+			aboutVersion,
+		)),
+		widget.NewCard("Preview", "", container.NewCenter(demoImage)),
+	)))
+	aboutTab := container.NewTabItemWithIcon("About", theme.InfoIcon(), aboutContent)
+
+	tabs := container.NewAppTabs(appearanceTab, providerTab, locationsTab, aboutTab)
 	tabs.SetTabLocation(container.TabLocationLeading)
 
 	// ── SAVE BAR (full width, pinned at bottom) ───────────────────────────
 	saveBtn := widget.NewButton("Save", func() {
 		newCfg := buildConfigFromUI(
 			providerSelect, apiKeyEntry,
-			intervalSlider, state, positionValueMap, positionRadio, opacityRadio, opacityMap, cfg,
+			intervalSlider, state, positionValueMap, positionRadio, monitorSelect, opacityRadio, opacityMap, cfg,
 		)
 		errs := config.Validate(newCfg)
 		if len(errs) > 0 {
@@ -568,6 +642,7 @@ func buildConfigFromUI(
 	state *settingsState,
 	positionValueMap map[string]string,
 	positionRadio *widget.RadioGroup,
+	monitorSelect *widget.Select,
 	opacityRadio *widget.RadioGroup,
 	opacityMap map[string]int,
 	current *config.Config,
@@ -580,13 +655,33 @@ func buildConfigFromUI(
 	if opacity == 0 {
 		opacity = 100
 	}
+	// When the user picks a corner position, clear any previous custom
+	// drag coordinates so applyPosition uses SetCorner instead.
+	var customX, customY *int
+	if positionRadio.Selected == "" && current.CustomX != nil && current.CustomY != nil {
+		// No corner selected — preserve existing custom coordinates.
+		customX = current.CustomX
+		customY = current.CustomY
+	}
+
+	// Parse monitor index from the "Monitor N" selection (0-based).
+	monitorIndex := 0
+	if monitorSelect.Selected != "" {
+		fmt.Sscanf(monitorSelect.Selected, "Monitor %d", &monitorIndex)
+		monitorIndex-- // convert 1-based display to 0-based index
+		if monitorIndex < 0 {
+			monitorIndex = 0
+		}
+	}
+
 	cfg := &config.Config{
 		DataSource:      config.DataSourceRemoteAPI,
 		Cities:          copyCities(state.cities),
 		RefreshInterval: int(intervalSlider.Value),
 		CornerPosition:  cornerPosition,
-		CustomX:         current.CustomX,
-		CustomY:         current.CustomY,
+		MonitorIndex:    monitorIndex,
+		CustomX:         customX,
+		CustomY:         customY,
 		Opacity:         opacity,
 	}
 	provider := providerDisplayToValue[providerSelect.Selected]
@@ -605,4 +700,10 @@ func copyCities(cities []config.CityConfig) []config.CityConfig {
 	result := make([]config.CityConfig, len(cities))
 	copy(result, cities)
 	return result
+}
+
+// parseURL is a convenience wrapper around url.Parse that discards the error.
+func parseURL(rawURL string) *url.URL {
+	u, _ := url.Parse(rawURL)
+	return u
 }

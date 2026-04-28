@@ -1,4 +1,4 @@
-# EasyWidge
+# EasyWeatherWidget
 
 A compact weather widget for your desktop.
 

@@ -25,3 +25,9 @@ func getWindowPosition() (int, int) {
 
 // setWindowOpacity is a no-op on non-Windows platforms.
 func setWindowOpacity(_ int) {}
+
+// getMonitorCount returns 1 on unsupported platforms.
+func getMonitorCount() int { return 1 }
+
+// getMonitorBounds returns the default screen bounds on unsupported platforms.
+func getMonitorBounds(_ int) (int, int, int, int) { return 0, 0, 1920, 1080 }

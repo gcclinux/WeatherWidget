@@ -41,10 +41,10 @@ func Validate(cfg *Config) []ValidationError {
 				})
 			}
 		case "easyweatherwidget":
-			if cfg.RefreshInterval < 30 {
+			if cfg.RefreshInterval < 10 {
 				errs = append(errs, ValidationError{
 					Field:   "refreshInterval",
-					Message: "must be at least 30 for easyweatherwidget",
+					Message: "must be at least 10 for easyweatherwidget",
 				})
 			}
 		}

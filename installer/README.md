@@ -48,11 +48,20 @@ installers for the Weather Widget application.
 .\installer\build-msi.ps1 -Version "1.0.0.0" -CertPath ".\cert.pfx" -CertPassword "yourpassword"
 ```
 
-### Build an MSIX for Microsoft Store
+### Build an MSIX for Microsoft Store (recommended)
 
 ```powershell
+# For Store submission — no certificate needed, Microsoft signs it:
+.\installer\build-msix.ps1 -Version "1.0.0.0" -StoreUpload
+
+# For local sideload testing with your own cert:
 .\installer\build-msix.ps1 -Version "1.0.0.0" -CertPath ".\cert.pfx" -CertPassword "yourpassword"
 ```
+
+The `-StoreUpload` flag produces an unsigned `.msixupload` file that you
+upload directly to Partner Center. Microsoft signs the package during
+certification — you do not need your own code signing certificate for Store
+submissions.
 
 Output goes to `.\build\`.
 
@@ -84,11 +93,25 @@ magick convert icon.png -define icon:auto-resize=256,128,64,48,32,16 icon.ico
 
 ## AppxManifest.xml Configuration
 
-Before submitting to the Store, update these fields in `AppxManifest.xml`:
+Before submitting to the Store, verify these fields in `AppxManifest.xml`
+match your Partner Center **Product Identity** page exactly:
 
-- `Identity Name` — your Partner Center app reservation name
-- `Identity Publisher` — must match your signing certificate subject exactly
-- `PublisherDisplayName` — your display name in the Store
+- `Identity Name` — from Partner Center > Product Identity > "Package/Identity/Name"
+- `Identity Publisher` — from Partner Center > Product Identity > "Package/Identity/Publisher"
+- `PublisherDisplayName` — your publisher display name from Partner Center
+
+The manifest is currently configured with the Partner Center App ID
+(`47955afa-afc7-46ee-abc1-02ab2632b4ad`) as a placeholder. You **must**
+replace the Name and Publisher with the exact values from your Product
+Identity page before uploading, or Partner Center will reject the package.
+
+### How to find your Product Identity values
+
+1. Go to [Partner Center](https://partner.microsoft.com/dashboard)
+2. Select your app (Weather Widget)
+3. Go to **Product management** > **Product Identity**
+4. Copy the **Package/Identity/Name** and **Package/Identity/Publisher** values
+5. Update `installer/AppxManifest.xml` with those values
 
 ## File Structure
 

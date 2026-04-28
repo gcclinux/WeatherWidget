@@ -2,15 +2,27 @@
 # Weather Widget - MSIX Package Builder (Microsoft Store)
 # ============================================================================
 # Usage:
-#   .\installer\build-msix.ps1 -Version "1.0.0.0"
+#   # For Microsoft Store submission (unsigned — Store signs it for you):
+#   .\installer\build-msix.ps1 -Version "1.0.0.0" -StoreUpload
+#
+#   # For local testing with self-signed cert:
 #   .\installer\build-msix.ps1 -Version "1.0.0.0" -CertPath "cert.pfx" -CertPassword "pass"
+#
+#   # For local testing without signing:
 #   .\installer\build-msix.ps1 -Version "1.0.0.0" -SkipSign
 #
 # Prerequisites:
 #   - Go 1.25+ with CGO enabled (for Fyne)
 #   - go-winres: go install github.com/tc-hib/go-winres@latest
 #   - Windows SDK (for MakeAppx.exe and SignTool.exe)
-#   - Code signing certificate (for production builds)
+#   - Code signing certificate (only for local/sideload builds)
+#
+# Microsoft Store Notes:
+#   - Use -StoreUpload to produce an .msixupload file for Partner Center.
+#   - The Store signs the package — you do NOT need a certificate for submission.
+#   - The AppxManifest.xml Identity Name and Publisher must match Partner Center
+#     values exactly. Check Partner Center > Product Identity for your values.
+#   - Partner Center App ID: 47955afa-afc7-46ee-abc1-02ab2632b4ad
 # ============================================================================
 
 param(
@@ -20,7 +32,8 @@ param(
     [string]$CertPath = "",
     [string]$CertPassword = "",
     [switch]$SkipSign,
-    [switch]$SkipBuild
+    [switch]$SkipBuild,
+    [switch]$StoreUpload
 )
 
 $ErrorActionPreference = "Stop"
@@ -42,17 +55,28 @@ try {
     $BuildDir = ".\build"
     $PackageDir = ".\build\package"
     $OutputMsix = ".\build\WeatherWidget-$Version.msix"
+    $OutputMsixUpload = ".\build\WeatherWidget-$Version.msixupload"
+
+    # Determine total steps based on mode
+    if ($StoreUpload) {
+        $totalSteps = 7
+    } else {
+        $totalSteps = 6
+    }
 
     Write-Host ""
     Write-Host "============================================" -ForegroundColor Cyan
     Write-Host "  Weather Widget MSIX Builder v$Version" -ForegroundColor Cyan
+    if ($StoreUpload) {
+        Write-Host "  Mode: Microsoft Store Upload" -ForegroundColor Cyan
+    }
     Write-Host "============================================" -ForegroundColor Cyan
     Write-Host ""
 
     # -------------------------------------------------------------------------
     # Step 1: Clean previous build
     # -------------------------------------------------------------------------
-    Write-Host "[1/6] Cleaning previous build..." -ForegroundColor Yellow
+    Write-Host "[1/$totalSteps] Cleaning previous build..." -ForegroundColor Yellow
     if (Test-Path $BuildDir) { Remove-Item -Recurse -Force $BuildDir }
     New-Item -ItemType Directory -Path $PackageDir -Force | Out-Null
     New-Item -ItemType Directory -Path "$PackageDir\assets" -Force | Out-Null
@@ -62,7 +86,7 @@ try {
     # Step 2: Generate Windows resources (icon, manifest, version info)
     # -------------------------------------------------------------------------
     if (-not $SkipBuild) {
-        Write-Host "[2/6] Generating Windows resources..." -ForegroundColor Yellow
+        Write-Host "[2/$totalSteps] Generating Windows resources..." -ForegroundColor Yellow
 
         # Update version in winres.json before generating
         $winresJson = Get-Content ".\winres\winres.json" -Raw | ConvertFrom-Json
@@ -79,7 +103,7 @@ try {
         # ---------------------------------------------------------------------
         # Step 3: Build the executable
         # ---------------------------------------------------------------------
-        Write-Host "[3/6] Building weatherwidget.exe..." -ForegroundColor Yellow
+        Write-Host "[3/$totalSteps] Building weatherwidget.exe..." -ForegroundColor Yellow
         $env:GOOS = "windows"
         $env:GOARCH = "amd64"
         $env:CGO_ENABLED = "1"
@@ -89,18 +113,20 @@ try {
         if ($LASTEXITCODE -ne 0) { throw "Go build failed" }
         Write-Host "       Done. Output: $BuildDir\weatherwidget.exe" -ForegroundColor Green
     } else {
-        Write-Host "[2/6] Skipping resource generation (SkipBuild)." -ForegroundColor DarkGray
-        Write-Host "[3/6] Skipping build (SkipBuild)." -ForegroundColor DarkGray
+        Write-Host "[2/$totalSteps] Skipping resource generation (SkipBuild)." -ForegroundColor DarkGray
+        Write-Host "[3/$totalSteps] Skipping build (SkipBuild)." -ForegroundColor DarkGray
         if (-not (Test-Path "$BuildDir\weatherwidget.exe")) {
             throw "No existing exe found at $BuildDir\weatherwidget.exe. Remove -SkipBuild flag."
         }
     }
 
     # -------------------------------------------------------------------------
-    # Step 4: Sign the executable
+    # Step 4: Sign the executable (skip for Store uploads)
     # -------------------------------------------------------------------------
-    if (-not $SkipSign -and $CertPath) {
-        Write-Host "[4/6] Signing executable..." -ForegroundColor Yellow
+    if ($StoreUpload) {
+        Write-Host "[4/$totalSteps] Skipping exe signing (Store signs the package)." -ForegroundColor DarkGray
+    } elseif (-not $SkipSign -and $CertPath) {
+        Write-Host "[4/$totalSteps] Signing executable..." -ForegroundColor Yellow
         $signArgs = @(
             "sign", "/fd", "SHA256",
             "/tr", "http://timestamp.digicert.com",
@@ -114,13 +140,13 @@ try {
         if ($LASTEXITCODE -ne 0) { throw "Executable signing failed" }
         Write-Host "       Done." -ForegroundColor Green
     } else {
-        Write-Host "[4/6] Skipping exe signing." -ForegroundColor DarkGray
+        Write-Host "[4/$totalSteps] Skipping exe signing." -ForegroundColor DarkGray
     }
 
     # -------------------------------------------------------------------------
     # Step 5: Assemble MSIX package layout
     # -------------------------------------------------------------------------
-    Write-Host "[5/6] Assembling package layout..." -ForegroundColor Yellow
+    Write-Host "[5/$totalSteps] Assembling package layout..." -ForegroundColor Yellow
 
     # Copy exe
     Copy-Item "$BuildDir\weatherwidget.exe" "$PackageDir\"
@@ -150,9 +176,9 @@ try {
     Write-Host "       Done." -ForegroundColor Green
 
     # -------------------------------------------------------------------------
-    # Step 6: Create and sign MSIX
+    # Step 6: Create MSIX package
     # -------------------------------------------------------------------------
-    Write-Host "[6/6] Creating MSIX package..." -ForegroundColor Yellow
+    Write-Host "[6/$totalSteps] Creating MSIX package..." -ForegroundColor Yellow
 
     # Find MakeAppx.exe from Windows SDK
     $sdkPaths = @(
@@ -182,9 +208,14 @@ try {
 
     & $makeAppx pack /d $PackageDir /p $OutputMsix /o
     if ($LASTEXITCODE -ne 0) { throw "MakeAppx failed" }
+    Write-Host "       Done." -ForegroundColor Green
 
-    # Sign the MSIX
-    if (-not $SkipSign -and $CertPath) {
+    # -------------------------------------------------------------------------
+    # Step 6b: Sign the MSIX (local/sideload only — not for Store)
+    # -------------------------------------------------------------------------
+    if ($StoreUpload) {
+        # No signing needed — Partner Center signs Store packages
+    } elseif (-not $SkipSign -and $CertPath) {
         Write-Host "       Signing MSIX..." -ForegroundColor Yellow
         $signArgs = @(
             "sign", "/fd", "SHA256",
@@ -197,17 +228,50 @@ try {
 
         & signtool @signArgs
         if ($LASTEXITCODE -ne 0) { throw "MSIX signing failed" }
+        Write-Host "       Signed." -ForegroundColor Green
     }
 
+    # -------------------------------------------------------------------------
+    # Step 7 (Store only): Create .msixupload for Partner Center
+    # -------------------------------------------------------------------------
+    if ($StoreUpload) {
+        Write-Host "[7/$totalSteps] Creating .msixupload for Partner Center..." -ForegroundColor Yellow
+
+        # .msixupload is a ZIP containing the .msix (and optionally .msixsym)
+        # Partner Center expects this format for Store submissions.
+        if (Test-Path $OutputMsixUpload) { Remove-Item $OutputMsixUpload -Force }
+        Compress-Archive -Path $OutputMsix -DestinationPath $OutputMsixUpload -Force
+
+        Write-Host "       Done." -ForegroundColor Green
+    }
+
+    # -------------------------------------------------------------------------
+    # Summary
+    # -------------------------------------------------------------------------
     Write-Host ""
     Write-Host "============================================" -ForegroundColor Green
     Write-Host "  BUILD SUCCESSFUL" -ForegroundColor Green
-    Write-Host "  Output: $OutputMsix" -ForegroundColor Green
+    Write-Host "  MSIX:   $OutputMsix" -ForegroundColor Green
+    if ($StoreUpload) {
+        Write-Host "  Upload: $OutputMsixUpload" -ForegroundColor Green
+    }
     Write-Host "============================================" -ForegroundColor Green
     Write-Host ""
 
-    if ($SkipSign -or -not $CertPath) {
-        Write-Host "  NOTE: Package is unsigned. For Store submission," -ForegroundColor Yellow
+    if ($StoreUpload) {
+        Write-Host "  NEXT STEPS for Microsoft Store submission:" -ForegroundColor Cyan
+        Write-Host "  1. Verify AppxManifest.xml Identity Name and Publisher" -ForegroundColor White
+        Write-Host "     match your Partner Center > Product Identity values." -ForegroundColor White
+        Write-Host "  2. Replace placeholder store assets in installer\store-assets\" -ForegroundColor White
+        Write-Host "     with properly sized PNGs before final submission." -ForegroundColor White
+        Write-Host "  3. Upload $OutputMsixUpload to Partner Center." -ForegroundColor White
+        Write-Host "     (Partner Center > Your App > Packages)" -ForegroundColor White
+        Write-Host "  4. Microsoft will sign the package during certification." -ForegroundColor White
+        Write-Host ""
+        Write-Host "  Partner Center App ID: 47955afa-afc7-46ee-abc1-02ab2632b4ad" -ForegroundColor DarkGray
+        Write-Host ""
+    } elseif ($SkipSign -or -not $CertPath) {
+        Write-Host "  NOTE: Package is unsigned. For sideloading," -ForegroundColor Yellow
         Write-Host "  provide -CertPath and -CertPassword parameters." -ForegroundColor Yellow
         Write-Host ""
     }

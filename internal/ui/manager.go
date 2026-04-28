@@ -92,11 +92,11 @@ func (u *UIManager) Panels() []*panel.CityPanel {
 	return u.panels
 }
 
-// SetCorner repositions the widget window to the specified screen corner.
-// Valid positions: "top-left", "top-right", "bottom-left", "bottom-right".
-// Unrecognised values default to "bottom-right".
-func (u *UIManager) SetCorner(position string) {
-	screenW, screenH := getScreenSize()
+// SetCorner repositions the widget window to the specified screen corner
+// on the given monitor. Valid positions: "top-left", "top-right",
+// "bottom-left", "bottom-right". Unrecognised values default to "bottom-right".
+func (u *UIManager) SetCorner(position string, monitorIndex int) {
+	monX, monY, monW, monH := getMonitorBounds(monitorIndex)
 	winSize := u.widget.Canvas().Size()
 	ww := int(winSize.Width)
 	wh := int(winSize.Height)
@@ -113,21 +113,26 @@ func (u *UIManager) SetCorner(position string) {
 	var x, y int
 	switch position {
 	case "top-left":
-		x, y = 0, 0
+		x, y = monX, monY
 	case "top-right":
-		x = screenW - ww
-		y = 0
+		x = monX + monW - ww
+		y = monY
 	case "bottom-left":
-		x = 0
-		y = screenH - wh
+		x = monX
+		y = monY + monH - wh
 	default: // "bottom-right" and any unrecognised value
-		x = screenW - ww
-		y = screenH - wh
+		x = monX + monW - ww
+		y = monY + monH - wh
 	}
 
 	// Fyne doesn't expose a direct MoveWindow API, so we use the
 	// platform-specific helper on Windows and a no-op elsewhere.
 	moveWindow(u.widget, x, y)
+}
+
+// GetMonitorCount returns the number of display monitors attached to the system.
+func (u *UIManager) GetMonitorCount() int {
+	return getMonitorCount()
 }
 
 // EnableDrag enables left-click drag-to-reposition on the widget window.

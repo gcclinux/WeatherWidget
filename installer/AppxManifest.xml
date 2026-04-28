@@ -5,13 +5,15 @@
 
   <!-- 
     Identity: 
-    - Name: Must match your Microsoft Partner Center reservation (e.g., "12345YourPublisher.WeatherWidget")
-    - Publisher: Must match your signing certificate subject (e.g., "CN=Your Publisher ID, O=Your Org, L=City, S=State, C=US")
-    - Update these values after registering your app in Partner Center
+    - Name and Publisher MUST match the values from Microsoft Partner Center > Product Identity.
+    - Partner Center App ID: 47955afa-afc7-46ee-abc1-02ab2632b4ad
+    - Go to Partner Center > Your App > Product Identity to find the exact Name and Publisher values.
+    - The Publisher field must match exactly (including CN= prefix).
+    - For Store submissions, Microsoft signs the package — no local certificate needed.
   -->
-  <Identity Name="YourPublisherId.WeatherWidget"
-            Publisher="CN=YourPublisherId"
-            Version="1.0.0.0"
+  <Identity Name="47955afa-afc7-46ee-abc1-02ab2632b4ad"
+            Publisher="CN=47955afa-afc7-46ee-abc1-02ab2632b4ad"
+            Version="0.0.5"
             ProcessorArchitecture="x64" />
 
   <Properties>

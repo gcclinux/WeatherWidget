@@ -155,7 +155,7 @@ func (a *AppManager) applyPosition(cfg *config.Config) {
 		a.ui.SetPosition(*cfg.CustomX, *cfg.CustomY)
 		log.Printf("positioned widget at custom coordinates (%d, %d)", *cfg.CustomX, *cfg.CustomY)
 	} else {
-		a.ui.SetCorner(cfg.CornerPosition)
+		a.ui.SetCorner(cfg.CornerPosition, cfg.MonitorIndex)
 	}
 	opacity := cfg.Opacity
 	if opacity == 0 {

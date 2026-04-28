@@ -6,3 +6,8 @@ import "embed"
 //
 //go:embed icons/*.png
 var Icons embed.FS
+
+// DemoPNG embeds the demo screenshot shown in the About tab.
+//
+//go:embed demo.png
+var DemoPNG []byte

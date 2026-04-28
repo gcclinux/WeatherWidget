@@ -14,6 +14,7 @@ type Config struct {
 	Cities          []CityConfig    `json:"cities"`
 	RefreshInterval int             `json:"refreshInterval"` // minutes, 1–60, default 10
 	CornerPosition  string          `json:"cornerPosition"`  // "top-left"|"top-right"|"bottom-left"|"bottom-right"
+	MonitorIndex    int             `json:"monitorIndex"`    // 0-based monitor index; 0 = primary
 	CustomX         *int            `json:"customX,omitempty"`
 	CustomY         *int            `json:"customY,omitempty"`
 	Opacity         int             `json:"opacity"` // 25, 50, 75, or 100 (percent)

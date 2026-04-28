@@ -19,6 +19,8 @@ var (
 	procGetSystemMetrics           = user32.NewProc("GetSystemMetrics")
 	procGetWindowRect              = user32.NewProc("GetWindowRect")
 	procSetLayeredWindowAttributes = user32.NewProc("SetLayeredWindowAttributes")
+	procEnumDisplayMonitors        = user32.NewProc("EnumDisplayMonitors")
+	procGetMonitorInfoW            = user32.NewProc("GetMonitorInfoW")
 )
 
 const (
@@ -146,4 +148,71 @@ func setWindowOpacity(opacityPercent int) {
 	// Color key: R=1, G=1, B=1 as a COLORREF (0x00BBGGRR).
 	colorKey := uintptr(0x00010101)
 	procSetLayeredWindowAttributes.Call(hwnd, colorKey, 0, lwaColorKey)
+}
+
+// MonitorRect describes the bounding rectangle of a display monitor.
+type MonitorRect struct {
+	Left, Top, Right, Bottom int
+}
+
+// monitorInfoW matches the Win32 MONITORINFO structure (cbSize + rcMonitor + rcWork + dwFlags).
+type monitorInfoW struct {
+	CbSize    uint32
+	RcMonitor rect // full monitor area
+	RcWork    rect // work area (excludes taskbar)
+	DwFlags   uint32
+}
+
+// enumeratedMonitors collects monitor handles during EnumDisplayMonitors callback.
+var enumeratedMonitors []uintptr
+
+// monitorEnumProc is the callback for EnumDisplayMonitors.
+// It appends each monitor handle to enumeratedMonitors.
+func monitorEnumProc(hMonitor, hdc, lprcClip, dwData uintptr) uintptr {
+	enumeratedMonitors = append(enumeratedMonitors, hMonitor)
+	return 1 // TRUE — continue enumeration
+}
+
+// getMonitorCount returns the number of display monitors attached to the system.
+func getMonitorCount() int {
+	enumeratedMonitors = nil
+	cb := windows.NewCallback(monitorEnumProc)
+	procEnumDisplayMonitors.Call(0, 0, cb, 0)
+	n := len(enumeratedMonitors)
+	if n == 0 {
+		return 1
+	}
+	return n
+}
+
+// getMonitorBounds returns the work-area rectangle for the monitor at the
+// given 0-based index. If the index is out of range it falls back to the
+// primary monitor (index 0). Returns (left, top, width, height).
+func getMonitorBounds(index int) (int, int, int, int) {
+	enumeratedMonitors = nil
+	cb := windows.NewCallback(monitorEnumProc)
+	procEnumDisplayMonitors.Call(0, 0, cb, 0)
+
+	if len(enumeratedMonitors) == 0 {
+		// Fallback to primary via GetSystemMetrics.
+		w, h := getScreenSize()
+		return 0, 0, w, h
+	}
+
+	if index < 0 || index >= len(enumeratedMonitors) {
+		index = 0
+	}
+
+	hMon := enumeratedMonitors[index]
+	var mi monitorInfoW
+	mi.CbSize = uint32(unsafe.Sizeof(mi))
+	ret, _, _ := procGetMonitorInfoW.Call(hMon, uintptr(unsafe.Pointer(&mi)))
+	if ret == 0 {
+		w, h := getScreenSize()
+		return 0, 0, w, h
+	}
+
+	work := mi.RcWork
+	return int(work.Left), int(work.Top),
+		int(work.Right - work.Left), int(work.Bottom - work.Top)
 }
