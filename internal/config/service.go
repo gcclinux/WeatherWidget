@@ -50,6 +50,11 @@ func (s *ConfigService) Load() (*Config, error) {
 		cfg.APIConfig = &APIConfig{Provider: "openweathermap"}
 	}
 
+	// Default locale to en-GB when missing or empty.
+	if cfg.Locale == "" {
+		cfg.Locale = "en-GB"
+	}
+
 	return &cfg, nil
 }
 

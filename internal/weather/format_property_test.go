@@ -8,6 +8,8 @@ import (
 	"testing"
 	"time"
 
+	"weatherwidget/internal/i18n"
+
 	"pgregory.net/rapid"
 )
 
@@ -18,7 +20,7 @@ func TestProperty9_FormatTemperature(t *testing.T) {
 	rapid.Check(t, func(t *rapid.T) {
 		temp := rapid.Int().Draw(t, "temperature")
 
-		result := FormatTemperature(temp)
+		result := FormatTemperature(temp, nil)
 
 		expected := fmt.Sprintf("%d°C", temp)
 		if result != expected {
@@ -87,7 +89,7 @@ func TestProperty10_FormatDateTime(t *testing.T) {
 		tzIdx := rapid.IntRange(0, len(validTimezones)-1).Draw(t, "tzIndex")
 		tz := validTimezones[tzIdx]
 
-		result := FormatDateTime(ts, tz)
+		result := FormatDateTime(ts, tz, nil)
 
 		// Verify the output matches the DD/MM/YYYY - HH:MM:SS pattern
 		if !dateTimePattern.MatchString(result) {
@@ -140,6 +142,95 @@ func TestProperty10_FormatDateTime(t *testing.T) {
 		}
 		if timeParts[2] != expectedSecond {
 			t.Fatalf("second mismatch: got %q, want %q (input: %v, tz: %q)", timeParts[2], expectedSecond, ts, tz)
+		}
+	})
+}
+
+// **Feature: i18n-localization, Property 4: Locale-aware formatting preserves structure**
+// **Validates: Requirements 6.1, 6.2, 6.3**
+
+func TestProperty4_LocaleAwareFormattingPreservesStructure(t *testing.T) {
+	// Load the real locale manager with embedded locale files.
+	lm, err := i18n.NewLocaleManager(i18n.LocaleFS)
+	if err != nil {
+		t.Fatalf("NewLocaleManager error = %v", err)
+	}
+
+	locales := lm.AvailableLocales()
+	localeCodes := make([]string, len(locales))
+	for i, l := range locales {
+		localeCodes[i] = l.Code
+	}
+
+	rapid.Check(t, func(rt *rapid.T) {
+		// Pick a random locale.
+		localeIdx := rapid.IntRange(0, len(localeCodes)-1).Draw(rt, "localeIdx")
+		locale := localeCodes[localeIdx]
+
+		// Create a fresh manager and set the locale.
+		mgr, err := i18n.NewLocaleManager(i18n.LocaleFS)
+		if err != nil {
+			rt.Fatalf("NewLocaleManager error = %v", err)
+		}
+		if err := mgr.SetLocale(locale); err != nil {
+			rt.Fatalf("SetLocale(%q) error = %v", locale, err)
+		}
+
+		// Get the locale's expected suffix and formats.
+		tempSuffix := mgr.T("weather.tempSuffix")
+		dateFormat := mgr.T("weather.dateFormat")
+		timeFormat := mgr.T("weather.timeFormat")
+
+		// --- FormatTemperature ---
+		temp := rapid.IntRange(-100, 100).Draw(rt, "temperature")
+		tempResult := FormatTemperature(temp, mgr)
+
+		if !strings.HasSuffix(tempResult, tempSuffix) {
+			rt.Fatalf("FormatTemperature(%d, %q) = %q does not end with locale suffix %q",
+				temp, locale, tempResult, tempSuffix)
+		}
+
+		// Verify the numeric prefix is a valid integer.
+		prefix := strings.TrimSuffix(tempResult, tempSuffix)
+		parsedTemp, err := strconv.Atoi(prefix)
+		if err != nil {
+			rt.Fatalf("FormatTemperature(%d, %q) prefix %q is not a valid integer: %v",
+				temp, locale, prefix, err)
+		}
+		if parsedTemp != temp {
+			rt.Fatalf("FormatTemperature(%d, %q) parsed temp = %d, want %d",
+				temp, locale, parsedTemp, temp)
+		}
+
+		// --- FormatDate ---
+		year := rapid.IntRange(1970, 2099).Draw(rt, "year")
+		month := rapid.IntRange(1, 12).Draw(rt, "month")
+		day := rapid.IntRange(1, 28).Draw(rt, "day")
+		ts := time.Date(year, time.Month(month), day, 12, 0, 0, 0, time.UTC)
+
+		dateResult := FormatDate(ts, "UTC", mgr)
+
+		// Verify the date matches the expected format by formatting the same time
+		// with the locale's date format directly.
+		expectedDate := ts.Format(dateFormat)
+		if dateResult != expectedDate {
+			rt.Fatalf("FormatDate(%v, UTC, %q) = %q, want %q (format=%q)",
+				ts, locale, dateResult, expectedDate, dateFormat)
+		}
+
+		// --- FormatTime ---
+		hour := rapid.IntRange(0, 23).Draw(rt, "hour")
+		minute := rapid.IntRange(0, 59).Draw(rt, "minute")
+		second := rapid.IntRange(0, 59).Draw(rt, "second")
+		tsTime := time.Date(2024, 1, 1, hour, minute, second, 0, time.UTC)
+
+		timeResult := FormatTime(tsTime, "UTC", mgr)
+
+		// Verify the time matches the expected format.
+		expectedTime := tsTime.Format(timeFormat)
+		if timeResult != expectedTime {
+			rt.Fatalf("FormatTime(%v, UTC, %q) = %q, want %q (format=%q)",
+				tsTime, locale, timeResult, expectedTime, timeFormat)
 		}
 	})
 }

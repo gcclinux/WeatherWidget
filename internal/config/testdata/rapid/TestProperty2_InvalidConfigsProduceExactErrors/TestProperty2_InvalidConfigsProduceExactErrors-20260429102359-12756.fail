@@ -1,0 +1,90 @@
+# 2026/04/29 10:23:59.126729 [TestProperty2_InvalidConfigsProduceExactErrors] [rapid] draw invalidCitiesCount: false
+# 2026/04/29 10:23:59.126729 [TestProperty2_InvalidConfigsProduceExactErrors] [rapid] draw validCityCount: 1
+# 2026/04/29 10:23:59.126729 [TestProperty2_InvalidConfigsProduceExactErrors] [rapid] draw city0_invalidName: true
+# 2026/04/29 10:23:59.126729 [TestProperty2_InvalidConfigsProduceExactErrors] [rapid] draw city0_region: "CHFA"
+# 2026/04/29 10:23:59.126729 [TestProperty2_InvalidConfigsProduceExactErrors] [rapid] draw city0_provideCoords: true
+# 2026/04/29 10:23:59.126729 [TestProperty2_InvalidConfigsProduceExactErrors] [rapid] draw city0_invalidLat: true
+# 2026/04/29 10:23:59.126729 [TestProperty2_InvalidConfigsProduceExactErrors] [rapid] draw city0_latHigh: true
+# 2026/04/29 10:23:59.126729 [TestProperty2_InvalidConfigsProduceExactErrors] [rapid] draw city0_highLat: 385.656193465717
+# 2026/04/29 10:23:59.126729 [TestProperty2_InvalidConfigsProduceExactErrors] [rapid] draw city0_invalidLon: true
+# 2026/04/29 10:23:59.126729 [TestProperty2_InvalidConfigsProduceExactErrors] [rapid] draw city0_lonHigh: true
+# 2026/04/29 10:23:59.126729 [TestProperty2_InvalidConfigsProduceExactErrors] [rapid] draw city0_highLon: 478.25
+# 2026/04/29 10:23:59.126729 [TestProperty2_InvalidConfigsProduceExactErrors] [rapid] draw invalidCorner: false
+# 2026/04/29 10:23:59.126729 [TestProperty2_InvalidConfigsProduceExactErrors] [rapid] draw validCornerIdx: 3
+# 2026/04/29 10:23:59.126729 [TestProperty2_InvalidConfigsProduceExactErrors] [rapid] draw dsIdx: 0
+# 2026/04/29 10:23:59.126729 [TestProperty2_InvalidConfigsProduceExactErrors] [rapid] draw nilAPI: false
+# 2026/04/29 10:23:59.126729 [TestProperty2_InvalidConfigsProduceExactErrors] [rapid] draw invalidAPIKey: true
+# 2026/04/29 10:23:59.126729 [TestProperty2_InvalidConfigsProduceExactErrors] [rapid] draw invalidProvider: false
+# 2026/04/29 10:23:59.126729 [TestProperty2_InvalidConfigsProduceExactErrors] [rapid] draw validProvIdx: 1
+# 2026/04/29 10:23:59.126729 [TestProperty2_InvalidConfigsProduceExactErrors] [rapid] draw invalidRefresh: true
+# 2026/04/29 10:23:59.126729 [TestProperty2_InvalidConfigsProduceExactErrors] [rapid] draw refreshTooLow: true
+# 2026/04/29 10:23:59.126729 [TestProperty2_InvalidConfigsProduceExactErrors] [rapid] draw lowRefresh: 20
+# 2026/04/29 10:23:59.126729 [TestProperty2_InvalidConfigsProduceExactErrors] [rapid] draw localeIdx: 0
+# 2026/04/29 10:23:59.126729 [TestProperty2_InvalidConfigsProduceExactErrors] expected error for field "refreshInterval" but got none.
+# Config: &{DataSource:remote_api Cities:[{Name: Region:CHFA Latitude:385.656193465717 Longitude:478.25 Timezone:}] RefreshInterval:20 CornerPosition:bottom-right MonitorIndex:0 CustomX:<nil> CustomY:<nil> Opacity:0 Locale:en-GB APIConfig:0xc0003591c0 DatabaseConfig:<nil>}
+# Expected fields: [apiConfig.apiKey cities[0].latitude cities[0].longitude cities[0].name refreshInterval]
+# Actual errors: [apiConfig.apiKey: must not be empty cities[0].name: must not be empty cities[0].latitude: must be between -90 and 90, got 385.656193465717 cities[0].longitude: must be between -180 and 180, got 478.25]
+# 
+v0.4.8#8926774608835506630
+0x0
+0x47888a97692eb
+0x1ce3df559d075
+0x0
+0x1
+0x342797350f65c
+0x0
+0x119803831b35bd
+0x2
+0x1f74d9862b1936
+0x0
+0x18c9788ba357be
+0x7
+0x16858ecad3df6a
+0x0
+0x1c7807a26df5c3
+0x5
+0x1c3c26be6b7400
+0x0
+0x941286314868a
+0x0
+0x52bf99320b87f
+0x1
+0x1
+0x1
+0xe0568c72ff38d
+0x1e5af22aeb6bb6
+0xe4ff8da93b607
+0x2
+0x81
+0x2e
+0xa7fc4b831a8
+0x1
+0x1
+0x1a97fc298bba8
+0x1b1591c749d25c
+0x1a3ba347b70259
+0x1
+0xde
+0x2
+0x56c1df87563
+0x0
+0x1e266cda43dca4
+0xdedabb26b2cac
+0x3
+0xf5b3221cefacd
+0xefb67d6b808ae
+0x0
+0x0
+0x1
+0x0
+0xa88ee73d1c857
+0x7eb27ffc629b4
+0x1
+0x1
+0x1
+0x6bef4ab4f77fb
+0x18519955e00a2d
+0x14
+0xc77f00e26884
+0xec76920e11772
+0x0

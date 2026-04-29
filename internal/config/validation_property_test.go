@@ -17,7 +17,7 @@ func TestProperty2_ValidConfigsProduceNoErrors(t *testing.T) {
 	rapid.Check(t, func(rt *rapid.T) {
 		cfg := genConfig(rt)
 
-		errs := Validate(cfg)
+		errs := Validate(cfg, nil)
 		if len(errs) != 0 {
 			var fields []string
 			for _, e := range errs {
@@ -34,7 +34,7 @@ func TestProperty2_InvalidConfigsProduceExactErrors(t *testing.T) {
 	rapid.Check(t, func(rt *rapid.T) {
 		cfg, expectedFields := genMaybeInvalidConfig(rt)
 
-		errs := Validate(cfg)
+		errs := Validate(cfg, nil)
 
 		// Collect actual error fields
 		actualFields := make(map[string]bool)
@@ -191,6 +191,7 @@ func genMaybeInvalidConfig(t *rapid.T) (*Config, map[string]bool) {
 		Cities:          cities,
 		RefreshInterval: refreshInterval,
 		CornerPosition:  cornerPos,
+		Locale:          validLocales[rapid.IntRange(0, len(validLocales)-1).Draw(t, "localeIdx")],
 		APIConfig:       apiCfg,
 		DatabaseConfig:  dbCfg,
 	}
@@ -387,7 +388,7 @@ func TestProperty5_OWM_IntervalBelow120_ReturnsError(t *testing.T) {
 		// Override interval to be below 120 (range: 1–119)
 		cfg.RefreshInterval = rapid.IntRange(1, 119).Draw(rt, "owmLowInterval")
 
-		errs := Validate(cfg)
+		errs := Validate(cfg, nil)
 
 		if !hasFieldError(errs, "refreshInterval") {
 			rt.Fatalf("expected refreshInterval error for OWM with interval %d, got errors: %v",
@@ -405,7 +406,7 @@ func TestProperty5_EWW_IntervalBelow30_ReturnsError(t *testing.T) {
 		// Override interval to be below 30 (range: 1–29)
 		cfg.RefreshInterval = rapid.IntRange(1, 29).Draw(rt, "ewwLowInterval")
 
-		errs := Validate(cfg)
+		errs := Validate(cfg, nil)
 
 		if !hasFieldError(errs, "refreshInterval") {
 			rt.Fatalf("expected refreshInterval error for EWW with interval %d, got errors: %v",
@@ -423,7 +424,7 @@ func TestProperty5_EWW_Interval30to120_NoRefreshError(t *testing.T) {
 		// Override interval to be in the valid range 30–120
 		cfg.RefreshInterval = rapid.IntRange(30, 120).Draw(rt, "ewwValidInterval")
 
-		errs := Validate(cfg)
+		errs := Validate(cfg, nil)
 
 		if hasFieldError(errs, "refreshInterval") {
 			rt.Fatalf("unexpected refreshInterval error for EWW with interval %d, got errors: %v",
@@ -464,6 +465,7 @@ func genValidRemoteAPIConfig(rt *rapid.T, provider string) *Config {
 		RefreshInterval: refreshInterval,
 		CornerPosition:  cornerPositions[cpIdx],
 		Opacity:         100,
+		Locale:          "en-GB",
 		APIConfig: &APIConfig{
 			Provider: provider,
 			APIKey:   apiKey,
@@ -479,4 +481,114 @@ func hasFieldError(errs []ValidationError, field string) bool {
 		}
 	}
 	return false
+}
+
+// **Feature: i18n-localization, Property 3: Locale validation accepts valid and rejects invalid**
+// **Validates: Requirements 3.4, 3.5**
+
+// TestProperty3_LocaleValidation_AcceptsValid verifies that for any available locale code,
+// ValidateLocale returns no errors.
+func TestProperty3_LocaleValidation_AcceptsValid(t *testing.T) {
+	validCodes := availableLocaleCodes()
+
+	// Convert to slice for rapid sampling
+	codeSlice := make([]string, 0, len(validCodes))
+	for code := range validCodes {
+		codeSlice = append(codeSlice, code)
+	}
+
+	rapid.Check(t, func(rt *rapid.T) {
+		idx := rapid.IntRange(0, len(codeSlice)-1).Draw(rt, "localeIdx")
+		locale := codeSlice[idx]
+
+		errs := ValidateLocale(locale, validCodes, nil)
+		if len(errs) != 0 {
+			rt.Fatalf("expected no errors for valid locale %q, got %v", locale, errs)
+		}
+	})
+}
+
+// TestProperty3_LocaleValidation_RejectsInvalid verifies that for any string that is NOT
+// one of the available locale codes, ValidateLocale returns a validation error.
+func TestProperty3_LocaleValidation_RejectsInvalid(t *testing.T) {
+	validCodes := availableLocaleCodes()
+
+	rapid.Check(t, func(rt *rapid.T) {
+		locale := rapid.StringMatching(`[a-zA-Z\-]{0,10}`).Draw(rt, "randomLocale")
+
+		// Skip if accidentally generated a valid locale
+		if validCodes[locale] {
+			return
+		}
+
+		errs := ValidateLocale(locale, validCodes, nil)
+		if len(errs) == 0 {
+			rt.Fatalf("expected validation error for invalid locale %q, got none", locale)
+		}
+		if errs[0].Field != "locale" {
+			rt.Fatalf("expected error field %q, got %q", "locale", errs[0].Field)
+		}
+	})
+}
+
+// **Feature: i18n-localization, Property 7: Translated validation errors**
+// **Validates: Requirements 7.1**
+
+// TestProperty7_ValidationErrorsAreHumanReadable verifies that for any invalid configuration,
+// the validation engine produces error messages that are non-empty, human-readable strings
+// (not raw message keys).
+func TestProperty7_ValidationErrorsAreHumanReadable(t *testing.T) {
+	rapid.Check(t, func(rt *rapid.T) {
+		cfg, expectedFields := genMaybeInvalidConfig(rt)
+
+		// Only test configs that actually have expected errors
+		if len(expectedFields) == 0 {
+			return
+		}
+
+		errs := Validate(cfg, nil)
+
+		for _, e := range errs {
+			// Error message must be non-empty
+			if e.Message == "" {
+				rt.Fatalf("validation error for field %q has empty message", e.Field)
+			}
+
+			// Error message must not look like a raw message key
+			// (message keys follow the pattern "section.subsection.key")
+			if isMessageKey(e.Message) {
+				rt.Fatalf("validation error for field %q appears to be a raw message key: %q",
+					e.Field, e.Message)
+			}
+
+			// Error message must be a human-readable string (contains spaces or descriptive text)
+			if len(e.Message) < 3 {
+				rt.Fatalf("validation error for field %q has suspiciously short message: %q",
+					e.Field, e.Message)
+			}
+		}
+	})
+}
+
+// isMessageKey checks if a string looks like a raw i18n message key
+// (e.g. "validation.locale.invalid" rather than "must be a supported locale").
+func isMessageKey(s string) bool {
+	// Message keys are dot-separated identifiers with no spaces
+	if len(s) == 0 {
+		return false
+	}
+	// If it contains spaces, it's likely a human-readable message
+	for _, c := range s {
+		if c == ' ' {
+			return false
+		}
+	}
+	// Check if it looks like a dotted key path (at least one dot)
+	dotCount := 0
+	for _, c := range s {
+		if c == '.' {
+			dotCount++
+		}
+	}
+	return dotCount >= 2
 }

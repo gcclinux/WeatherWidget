@@ -33,16 +33,19 @@ func (u *UIManager) SetupSystemTray(appDataDir string, onSettings func(), onExit
 	u.app.SetIcon(res)
 	desk.SetSystemTrayIcon(res)
 
-	// Define menu items with icons for a more premium look and feel.
-	settingsItem := fyne.NewMenuItem("Settings", onSettings)
-	quitItem := fyne.NewMenuItem("Quit", onExit)
+	// Define menu items using translated labels via u.t().
+	// Because labels are resolved at build time (not cached), the tray menu
+	// will display the current locale's translations whenever SetupSystemTray
+	// is called again after a locale change — no extra refresh logic needed.
+	settingsItem := fyne.NewMenuItem(u.t("tray.settings"), onSettings)
+	quitItem := fyne.NewMenuItem(u.t("tray.quit"), onExit)
 	quitItem.IsQuit = true
 
 	m := fyne.NewMenu("WeatherWidget",
-		fyne.NewMenuItem("Show Widget", func() {
+		fyne.NewMenuItem(u.t("tray.showWidget"), func() {
 			u.widget.Show()
 		}),
-		fyne.NewMenuItem("Hide Widget", func() {
+		fyne.NewMenuItem(u.t("tray.hideWidget"), func() {
 			u.widget.Hide()
 		}),
 		fyne.NewMenuItemSeparator(),

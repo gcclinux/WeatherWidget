@@ -42,6 +42,12 @@ var providers = []string{
 	"easyweatherwidget",
 }
 
+// validLocales is the set of available locale codes.
+var validLocales = []string{
+	"en-GB",
+	"pt-BR",
+}
+
 // genCityConfig generates a random valid CityConfig.
 func genCityConfig(t *rapid.T, label string) CityConfig {
 	name := rapid.StringMatching(`[A-Za-z][A-Za-z ]{0,19}`).Draw(t, label+"_name")
@@ -108,6 +114,7 @@ func genConfig(t *rapid.T) *Config {
 		Cities:          cities,
 		RefreshInterval: refreshInterval,
 		CornerPosition:  cornerPos,
+		Locale:          validLocales[rapid.IntRange(0, len(validLocales)-1).Draw(t, "localeIdx")],
 		APIConfig:       apiCfg,
 		DatabaseConfig:  dbCfg,
 	}

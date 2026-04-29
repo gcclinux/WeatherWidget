@@ -20,6 +20,7 @@ func validRemoteConfig() *Config {
 		Cities:          []CityConfig{{Name: "Berlin", Region: "BE", Timezone: "Europe/Berlin"}},
 		RefreshInterval: 120,
 		CornerPosition:  "bottom-right",
+		Locale:          "en-GB",
 		APIConfig:       &APIConfig{Provider: "openweathermap", APIKey: "key123"},
 	}
 }
@@ -30,19 +31,20 @@ func validDatabaseConfig() *Config {
 		Cities:          []CityConfig{{Name: "Berlin", Region: "BE", Timezone: "Europe/Berlin"}},
 		RefreshInterval: 10,
 		CornerPosition:  "bottom-right",
+		Locale:          "en-GB",
 		DatabaseConfig:  &DatabaseConfig{Host: "localhost", Port: 5432, DBName: "weather", Username: "user"},
 	}
 }
 
 func TestValidate_ValidRemoteConfig(t *testing.T) {
-	errs := Validate(validRemoteConfig())
+	errs := Validate(validRemoteConfig(), nil)
 	if len(errs) != 0 {
 		t.Errorf("expected no errors for valid remote config, got %v", errs)
 	}
 }
 
 func TestValidate_ValidDatabaseConfig(t *testing.T) {
-	errs := Validate(validDatabaseConfig())
+	errs := Validate(validDatabaseConfig(), nil)
 	if len(errs) != 0 {
 		t.Errorf("expected no errors for valid database config, got %v", errs)
 	}
@@ -52,7 +54,7 @@ func TestValidate_CitiesLength(t *testing.T) {
 	// Zero cities
 	cfg := validRemoteConfig()
 	cfg.Cities = nil
-	errs := Validate(cfg)
+	errs := Validate(cfg, nil)
 	if !hasError(errs, "cities") {
 		t.Error("expected error for empty cities")
 	}
@@ -61,7 +63,7 @@ func TestValidate_CitiesLength(t *testing.T) {
 	cfg.Cities = []CityConfig{
 		{Name: "A"}, {Name: "B"}, {Name: "C"}, {Name: "D"}, {Name: "E"}, {Name: "F"},
 	}
-	errs = Validate(cfg)
+	errs = Validate(cfg, nil)
 	if !hasError(errs, "cities") {
 		t.Error("expected error for 6 cities")
 	}
@@ -72,25 +74,25 @@ func TestValidate_RefreshInterval(t *testing.T) {
 	cfg := validDatabaseConfig()
 
 	cfg.RefreshInterval = 0
-	errs := Validate(cfg)
+	errs := Validate(cfg, nil)
 	if !hasError(errs, "refreshInterval") {
 		t.Error("expected error for refreshInterval=0")
 	}
 
 	cfg.RefreshInterval = 61
-	errs = Validate(cfg)
+	errs = Validate(cfg, nil)
 	if !hasError(errs, "refreshInterval") {
 		t.Error("expected error for refreshInterval=61")
 	}
 
 	cfg.RefreshInterval = 1
-	errs = Validate(cfg)
+	errs = Validate(cfg, nil)
 	if hasError(errs, "refreshInterval") {
 		t.Error("unexpected error for refreshInterval=1")
 	}
 
 	cfg.RefreshInterval = 60
-	errs = Validate(cfg)
+	errs = Validate(cfg, nil)
 	if hasError(errs, "refreshInterval") {
 		t.Error("unexpected error for refreshInterval=60")
 	}
@@ -101,14 +103,14 @@ func TestValidate_CornerPosition(t *testing.T) {
 
 	for _, pos := range []string{"top-left", "top-right", "bottom-left", "bottom-right"} {
 		cfg.CornerPosition = pos
-		errs := Validate(cfg)
+		errs := Validate(cfg, nil)
 		if hasError(errs, "cornerPosition") {
 			t.Errorf("unexpected error for cornerPosition=%q", pos)
 		}
 	}
 
 	cfg.CornerPosition = "center"
-	errs := Validate(cfg)
+	errs := Validate(cfg, nil)
 	if !hasError(errs, "cornerPosition") {
 		t.Error("expected error for invalid cornerPosition")
 	}
@@ -117,7 +119,7 @@ func TestValidate_CornerPosition(t *testing.T) {
 func TestValidate_APIConfig_EmptyKey(t *testing.T) {
 	cfg := validRemoteConfig()
 	cfg.APIConfig.APIKey = ""
-	errs := Validate(cfg)
+	errs := Validate(cfg, nil)
 	if !hasError(errs, "apiConfig.apiKey") {
 		t.Error("expected error for empty API key")
 	}
@@ -126,7 +128,7 @@ func TestValidate_APIConfig_EmptyKey(t *testing.T) {
 func TestValidate_APIConfig_InvalidProvider(t *testing.T) {
 	cfg := validRemoteConfig()
 	cfg.APIConfig.Provider = "invalid"
-	errs := Validate(cfg)
+	errs := Validate(cfg, nil)
 	if !hasError(errs, "apiConfig.provider") {
 		t.Error("expected error for invalid provider")
 	}
@@ -135,7 +137,7 @@ func TestValidate_APIConfig_InvalidProvider(t *testing.T) {
 func TestValidate_APIConfig_Nil(t *testing.T) {
 	cfg := validRemoteConfig()
 	cfg.APIConfig = nil
-	errs := Validate(cfg)
+	errs := Validate(cfg, nil)
 	if !hasError(errs, "apiConfig") {
 		t.Error("expected error for nil apiConfig when dataSource is remote_api")
 	}
@@ -146,7 +148,7 @@ func TestValidate_DatabaseConfig_EmptyFields(t *testing.T) {
 	cfg.DatabaseConfig.Host = ""
 	cfg.DatabaseConfig.DBName = ""
 	cfg.DatabaseConfig.Username = ""
-	errs := Validate(cfg)
+	errs := Validate(cfg, nil)
 	if !hasError(errs, "databaseConfig.host") {
 		t.Error("expected error for empty host")
 	}
@@ -162,13 +164,13 @@ func TestValidate_DatabaseConfig_InvalidPort(t *testing.T) {
 	cfg := validDatabaseConfig()
 
 	cfg.DatabaseConfig.Port = 0
-	errs := Validate(cfg)
+	errs := Validate(cfg, nil)
 	if !hasError(errs, "databaseConfig.port") {
 		t.Error("expected error for port=0")
 	}
 
 	cfg.DatabaseConfig.Port = 65536
-	errs = Validate(cfg)
+	errs = Validate(cfg, nil)
 	if !hasError(errs, "databaseConfig.port") {
 		t.Error("expected error for port=65536")
 	}
@@ -177,7 +179,7 @@ func TestValidate_DatabaseConfig_InvalidPort(t *testing.T) {
 func TestValidate_DatabaseConfig_Nil(t *testing.T) {
 	cfg := validDatabaseConfig()
 	cfg.DatabaseConfig = nil
-	errs := Validate(cfg)
+	errs := Validate(cfg, nil)
 	if !hasError(errs, "databaseConfig") {
 		t.Error("expected error for nil databaseConfig when dataSource is local_database")
 	}
@@ -186,7 +188,7 @@ func TestValidate_DatabaseConfig_Nil(t *testing.T) {
 func TestValidate_CityEmptyName(t *testing.T) {
 	cfg := validRemoteConfig()
 	cfg.Cities = []CityConfig{{Name: "", Region: "X"}}
-	errs := Validate(cfg)
+	errs := Validate(cfg, nil)
 	if !hasError(errs, "cities[0].name") {
 		t.Error("expected error for empty city name")
 	}
@@ -195,13 +197,13 @@ func TestValidate_CityEmptyName(t *testing.T) {
 func TestValidate_CityInvalidCoordinates(t *testing.T) {
 	cfg := validRemoteConfig()
 	cfg.Cities = []CityConfig{{Name: "Test", Latitude: 91, Longitude: 0}}
-	errs := Validate(cfg)
+	errs := Validate(cfg, nil)
 	if !hasError(errs, "cities[0].latitude") {
 		t.Error("expected error for latitude=91")
 	}
 
 	cfg.Cities = []CityConfig{{Name: "Test", Latitude: 0, Longitude: 181}}
-	errs = Validate(cfg)
+	errs = Validate(cfg, nil)
 	if !hasError(errs, "cities[0].longitude") {
 		t.Error("expected error for longitude=181")
 	}
@@ -210,7 +212,7 @@ func TestValidate_CityInvalidCoordinates(t *testing.T) {
 func TestValidate_CityValidCoordinates(t *testing.T) {
 	cfg := validRemoteConfig()
 	cfg.Cities = []CityConfig{{Name: "Test", Latitude: -22.63, Longitude: -47.05}}
-	errs := Validate(cfg)
+	errs := Validate(cfg, nil)
 	if hasError(errs, "cities[0].latitude") || hasError(errs, "cities[0].longitude") {
 		t.Error("unexpected coordinate errors for valid coordinates")
 	}
@@ -219,7 +221,7 @@ func TestValidate_CityValidCoordinates(t *testing.T) {
 func TestValidate_CityZeroCoordinatesSkipped(t *testing.T) {
 	cfg := validRemoteConfig()
 	cfg.Cities = []CityConfig{{Name: "Test", Latitude: 0, Longitude: 0}}
-	errs := Validate(cfg)
+	errs := Validate(cfg, nil)
 	if hasError(errs, "cities[0].latitude") || hasError(errs, "cities[0].longitude") {
 		t.Error("should not validate coordinates when both are zero")
 	}
@@ -231,23 +233,24 @@ func TestValidate_AcceptsEasyWeatherWidget(t *testing.T) {
 		Cities:          []CityConfig{{Name: "Berlin", Region: "BE", Timezone: "Europe/Berlin"}},
 		RefreshInterval: 30,
 		CornerPosition:  "bottom-right",
+		Locale:          "en-GB",
 		APIConfig:       &APIConfig{Provider: "easyweatherwidget", APIKey: "eww-key-123"},
 	}
-	errs := Validate(cfg)
+	errs := Validate(cfg, nil)
 	if len(errs) != 0 {
 		t.Errorf("expected no errors for valid EWW config with interval 30, got %v", errs)
 	}
 
 	// Also valid at the upper bound
 	cfg.RefreshInterval = 120
-	errs = Validate(cfg)
+	errs = Validate(cfg, nil)
 	if len(errs) != 0 {
 		t.Errorf("expected no errors for valid EWW config with interval 120, got %v", errs)
 	}
 
 	// Mid-range value
 	cfg.RefreshInterval = 75
-	errs = Validate(cfg)
+	errs = Validate(cfg, nil)
 	if len(errs) != 0 {
 		t.Errorf("expected no errors for valid EWW config with interval 75, got %v", errs)
 	}
@@ -261,13 +264,13 @@ func TestValidate_RejectsEWWIntervalBelow30(t *testing.T) {
 		CornerPosition:  "bottom-right",
 		APIConfig:       &APIConfig{Provider: "easyweatherwidget", APIKey: "eww-key-123"},
 	}
-	errs := Validate(cfg)
+	errs := Validate(cfg, nil)
 	if !hasError(errs, "refreshInterval") {
 		t.Error("expected refreshInterval error for EWW with interval 29")
 	}
 
 	cfg.RefreshInterval = 1
-	errs = Validate(cfg)
+	errs = Validate(cfg, nil)
 	if !hasError(errs, "refreshInterval") {
 		t.Error("expected refreshInterval error for EWW with interval 1")
 	}
@@ -281,13 +284,13 @@ func TestValidate_RejectsOWMIntervalBelow120(t *testing.T) {
 		CornerPosition:  "bottom-right",
 		APIConfig:       &APIConfig{Provider: "openweathermap", APIKey: "owm-key-123"},
 	}
-	errs := Validate(cfg)
+	errs := Validate(cfg, nil)
 	if !hasError(errs, "refreshInterval") {
 		t.Error("expected refreshInterval error for OWM with interval 119")
 	}
 
 	cfg.RefreshInterval = 30
-	errs = Validate(cfg)
+	errs = Validate(cfg, nil)
 	if !hasError(errs, "refreshInterval") {
 		t.Error("expected refreshInterval error for OWM with interval 30")
 	}
@@ -299,9 +302,10 @@ func TestValidate_AcceptsOWMInterval120(t *testing.T) {
 		Cities:          []CityConfig{{Name: "Berlin", Region: "BE", Timezone: "Europe/Berlin"}},
 		RefreshInterval: 120,
 		CornerPosition:  "bottom-right",
+		Locale:          "en-GB",
 		APIConfig:       &APIConfig{Provider: "openweathermap", APIKey: "owm-key-123"},
 	}
-	errs := Validate(cfg)
+	errs := Validate(cfg, nil)
 	if len(errs) != 0 {
 		t.Errorf("expected no errors for OWM config with interval 120, got %v", errs)
 	}
@@ -316,14 +320,14 @@ func TestValidate_RejectsIntervalAbove120(t *testing.T) {
 		CornerPosition:  "bottom-right",
 		APIConfig:       &APIConfig{Provider: "openweathermap", APIKey: "owm-key-123"},
 	}
-	errs := Validate(cfg)
+	errs := Validate(cfg, nil)
 	if !hasError(errs, "refreshInterval") {
 		t.Error("expected refreshInterval error for OWM with interval 121")
 	}
 
 	// Test with EWW provider
 	cfg.APIConfig.Provider = "easyweatherwidget"
-	errs = Validate(cfg)
+	errs = Validate(cfg, nil)
 	if !hasError(errs, "refreshInterval") {
 		t.Error("expected refreshInterval error for EWW with interval 121")
 	}

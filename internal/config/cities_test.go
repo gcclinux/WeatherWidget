@@ -12,7 +12,7 @@ func city(name, region string) CityConfig {
 
 func TestAddCity_AppendsToList(t *testing.T) {
 	cities := []CityConfig{city("A", "R1")}
-	result, err := AddCity(cities, city("B", "R2"))
+	result, err := AddCity(cities, city("B", "R2"), nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -29,7 +29,7 @@ func TestAddCity_AppendsToList(t *testing.T) {
 
 func TestAddCity_RejectsWhenFull(t *testing.T) {
 	cities := []CityConfig{city("A", "R1"), city("B", "R2"), city("C", "R3"), city("D", "R4"), city("E", "R5")}
-	_, err := AddCity(cities, city("F", "R6"))
+	_, err := AddCity(cities, city("F", "R6"), nil)
 	if err == nil {
 		t.Fatal("expected error when adding to full list")
 	}
@@ -40,7 +40,7 @@ func TestAddCity_RejectsWhenFull(t *testing.T) {
 
 func TestAddCity_AllowsUpToFive(t *testing.T) {
 	cities := []CityConfig{city("A", "R1"), city("B", "R2"), city("C", "R3"), city("D", "R4")}
-	result, err := AddCity(cities, city("E", "R5"))
+	result, err := AddCity(cities, city("E", "R5"), nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -53,7 +53,7 @@ func TestAddCity_AllowsUpToFive(t *testing.T) {
 
 func TestRemoveCity_RemovesAtIndex(t *testing.T) {
 	cities := []CityConfig{city("A", "R1"), city("B", "R2"), city("C", "R3")}
-	result, err := RemoveCity(cities, 1)
+	result, err := RemoveCity(cities, 1, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -67,7 +67,7 @@ func TestRemoveCity_RemovesAtIndex(t *testing.T) {
 
 func TestRemoveCity_RejectsLastCity(t *testing.T) {
 	cities := []CityConfig{city("A", "R1")}
-	_, err := RemoveCity(cities, 0)
+	_, err := RemoveCity(cities, 0, nil)
 	if err == nil {
 		t.Fatal("expected error when removing last city")
 	}
@@ -79,12 +79,12 @@ func TestRemoveCity_RejectsLastCity(t *testing.T) {
 func TestRemoveCity_RejectsOutOfBounds(t *testing.T) {
 	cities := []CityConfig{city("A", "R1"), city("B", "R2")}
 
-	_, err := RemoveCity(cities, -1)
+	_, err := RemoveCity(cities, -1, nil)
 	if err == nil {
 		t.Error("expected error for negative index")
 	}
 
-	_, err = RemoveCity(cities, 2)
+	_, err = RemoveCity(cities, 2, nil)
 	if err == nil {
 		t.Error("expected error for index equal to length")
 	}
@@ -92,7 +92,7 @@ func TestRemoveCity_RejectsOutOfBounds(t *testing.T) {
 
 func TestRemoveCity_FirstElement(t *testing.T) {
 	cities := []CityConfig{city("A", "R1"), city("B", "R2")}
-	result, err := RemoveCity(cities, 0)
+	result, err := RemoveCity(cities, 0, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -103,7 +103,7 @@ func TestRemoveCity_FirstElement(t *testing.T) {
 
 func TestRemoveCity_LastElement(t *testing.T) {
 	cities := []CityConfig{city("A", "R1"), city("B", "R2")}
-	result, err := RemoveCity(cities, 1)
+	result, err := RemoveCity(cities, 1, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -116,7 +116,7 @@ func TestRemoveCity_LastElement(t *testing.T) {
 
 func TestReorderCities_ValidPermutation(t *testing.T) {
 	cities := []CityConfig{city("A", "R1"), city("B", "R2"), city("C", "R3")}
-	result, err := ReorderCities(cities, []int{2, 0, 1})
+	result, err := ReorderCities(cities, []int{2, 0, 1}, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -127,7 +127,7 @@ func TestReorderCities_ValidPermutation(t *testing.T) {
 
 func TestReorderCities_IdentityPermutation(t *testing.T) {
 	cities := []CityConfig{city("A", "R1"), city("B", "R2")}
-	result, err := ReorderCities(cities, []int{0, 1})
+	result, err := ReorderCities(cities, []int{0, 1}, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -138,7 +138,7 @@ func TestReorderCities_IdentityPermutation(t *testing.T) {
 
 func TestReorderCities_RejectsWrongLength(t *testing.T) {
 	cities := []CityConfig{city("A", "R1"), city("B", "R2")}
-	_, err := ReorderCities(cities, []int{0})
+	_, err := ReorderCities(cities, []int{0}, nil)
 	if err == nil {
 		t.Error("expected error for wrong length newOrder")
 	}
@@ -146,7 +146,7 @@ func TestReorderCities_RejectsWrongLength(t *testing.T) {
 
 func TestReorderCities_RejectsDuplicateIndices(t *testing.T) {
 	cities := []CityConfig{city("A", "R1"), city("B", "R2")}
-	_, err := ReorderCities(cities, []int{0, 0})
+	_, err := ReorderCities(cities, []int{0, 0}, nil)
 	if err == nil {
 		t.Error("expected error for duplicate indices")
 	}
@@ -154,7 +154,7 @@ func TestReorderCities_RejectsDuplicateIndices(t *testing.T) {
 
 func TestReorderCities_RejectsOutOfBoundsIndex(t *testing.T) {
 	cities := []CityConfig{city("A", "R1"), city("B", "R2")}
-	_, err := ReorderCities(cities, []int{0, 5})
+	_, err := ReorderCities(cities, []int{0, 5}, nil)
 	if err == nil {
 		t.Error("expected error for out-of-bounds index")
 	}
@@ -162,7 +162,7 @@ func TestReorderCities_RejectsOutOfBoundsIndex(t *testing.T) {
 
 func TestReorderCities_SingleCity(t *testing.T) {
 	cities := []CityConfig{city("A", "R1")}
-	result, err := ReorderCities(cities, []int{0})
+	result, err := ReorderCities(cities, []int{0}, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

@@ -7,6 +7,7 @@ import (
 	"fyne.io/fyne/v2/container"
 
 	"weatherwidget/internal/config"
+	"weatherwidget/internal/i18n"
 	"weatherwidget/internal/ui/panel"
 	"weatherwidget/internal/weather"
 )
@@ -16,6 +17,7 @@ const widgetTitle = "WeatherWidget"
 // UIManager manages the Fyne application windows and city panels.
 type UIManager struct {
 	app      fyne.App
+	lm       *i18n.LocaleManager
 	widget   fyne.Window
 	settings fyne.Window
 	panels   []*panel.CityPanel
@@ -24,13 +26,14 @@ type UIManager struct {
 // NewUIManager creates a new UIManager and its main widget window.
 // After the window is shown, call applyToolWindowStyle to set Win32
 // WS_EX_TOOLWINDOW and HWND_TOPMOST styles (no-op on non-Windows).
-func NewUIManager(app fyne.App) *UIManager {
+func NewUIManager(app fyne.App, lm *i18n.LocaleManager) *UIManager {
 	w := app.NewWindow(widgetTitle)
 	w.SetFixedSize(true)
 	w.SetPadded(false)
 
 	return &UIManager{
 		app:    app,
+		lm:     lm,
 		widget: w,
 	}
 }
@@ -61,7 +64,7 @@ func (u *UIManager) ShowWidget(cities []config.CityConfig) {
 	u.panels = make([]*panel.CityPanel, count)
 	objects := make([]fyne.CanvasObject, count)
 	for i := 0; i < count; i++ {
-		p := panel.NewCityPanel()
+		p := panel.NewCityPanel(nil)
 		u.panels[i] = p
 		objects[i] = p.Container()
 	}

@@ -1,0 +1,64 @@
+# 2026/04/29 10:17:23.776808 [TestProperty5_EWW_IntervalBelow30_ReturnsError] [rapid] draw cityCount: 1
+# 2026/04/29 10:17:23.776808 [TestProperty5_EWW_IntervalBelow30_ReturnsError] [rapid] draw city0_name: "A"
+# 2026/04/29 10:17:23.776808 [TestProperty5_EWW_IntervalBelow30_ReturnsError] [rapid] draw city0_region: "A"
+# 2026/04/29 10:17:23.776808 [TestProperty5_EWW_IntervalBelow30_ReturnsError] [rapid] draw city0_tzIdx: 0
+# 2026/04/29 10:17:23.776808 [TestProperty5_EWW_IntervalBelow30_ReturnsError] [rapid] draw cornerPosIdx: 0
+# 2026/04/29 10:17:23.776808 [TestProperty5_EWW_IntervalBelow30_ReturnsError] [rapid] draw apiKey: "00000000"
+# 2026/04/29 10:17:23.776808 [TestProperty5_EWW_IntervalBelow30_ReturnsError] [rapid] draw ewwLowInterval: 10
+# 2026/04/29 10:17:23.777310 [TestProperty5_EWW_IntervalBelow30_ReturnsError] expected refreshInterval error for EWW with interval 10, got errors: []
+# 
+v0.4.8#4233776675743300641
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x9867f1f40f739
+0x9

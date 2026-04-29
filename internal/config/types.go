@@ -18,6 +18,7 @@ type Config struct {
 	CustomX         *int            `json:"customX,omitempty"`
 	CustomY         *int            `json:"customY,omitempty"`
 	Opacity         int             `json:"opacity"` // 25, 50, 75, or 100 (percent)
+	Locale          string          `json:"locale"`
 	APIConfig       *APIConfig      `json:"apiConfig,omitempty"`
 	DatabaseConfig  *DatabaseConfig `json:"databaseConfig,omitempty"`
 }
@@ -74,6 +75,7 @@ func DefaultConfig() *Config {
 		RefreshInterval: 120,
 		CornerPosition:  "bottom-right",
 		Opacity:         100,
+		Locale:          "en-GB",
 		APIConfig: &APIConfig{
 			Provider: "openweathermap",
 		},

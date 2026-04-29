@@ -14,11 +14,13 @@ import (
 	"fyne.io/fyne/v2/widget"
 
 	"weatherwidget/assets"
+	"weatherwidget/internal/i18n"
 	"weatherwidget/internal/weather"
 )
 
 // CityPanel renders weather data for a single city within the widget.
 type CityPanel struct {
+	lm         *i18n.LocaleManager
 	container  *fyne.Container
 	iconWidget *canvas.Image
 	tempText   *canvas.Text
@@ -33,6 +35,15 @@ type CityPanel struct {
 	stopCh     chan struct{}
 }
 
+// translate returns the translated string for the given key using the panel's
+// LocaleManager. If the LocaleManager is nil, it returns the provided fallback.
+func (p *CityPanel) translate(key, fallback string) string {
+	if p.lm != nil {
+		return p.lm.T(key)
+	}
+	return fallback
+}
+
 // loadIconFromAssets reads an icon PNG from the embedded assets FS and returns it as a Fyne resource.
 func loadIconFromAssets(iconCode string) fyne.Resource {
 	path := fmt.Sprintf("icons/%s.png", iconCode)
@@ -44,8 +55,9 @@ func loadIconFromAssets(iconCode string) fyne.Resource {
 }
 
 // NewCityPanel creates a new CityPanel with placeholder content.
-func NewCityPanel() *CityPanel {
-	p := &CityPanel{}
+// If lm is nil, hardcoded English defaults are used for placeholder text.
+func NewCityPanel(lm *i18n.LocaleManager) *CityPanel {
+	p := &CityPanel{lm: lm}
 
 	// Weather icon — start with the default cloudy icon.
 	res := loadIconFromAssets(weather.IconCloudy)
@@ -60,26 +72,26 @@ func NewCityPanel() *CityPanel {
 	p.errorIcon.Hide()
 
 	// Labels with appealing typography.
-	p.cityText = canvas.NewText("City, RG", theme.ForegroundColor())
+	p.cityText = canvas.NewText(p.translate("panel.placeholder.city", "City, RG"), theme.ForegroundColor())
 	p.cityText.TextSize = 18
 	p.cityText.TextStyle = fyne.TextStyle{Bold: true}
 	p.cityText.Alignment = fyne.TextAlignCenter
 
-	p.tempText = canvas.NewText("--°C", theme.ForegroundColor())
+	p.tempText = canvas.NewText(p.translate("panel.placeholder.temp", "--°C"), theme.ForegroundColor())
 	p.tempText.TextSize = 42
 	p.tempText.TextStyle = fyne.TextStyle{Bold: true}
 	p.tempText.Alignment = fyne.TextAlignCenter
 
-	p.descLabel = widget.NewLabel("--")
+	p.descLabel = widget.NewLabel(p.translate("panel.placeholder.desc", "--"))
 	p.descLabel.Alignment = fyne.TextAlignCenter
 	p.descLabel.TextStyle = fyne.TextStyle{Italic: true}
 
-	p.timeText = canvas.NewText("--:--:--", theme.ForegroundColor())
+	p.timeText = canvas.NewText(p.translate("panel.placeholder.time", "--:--:--"), theme.ForegroundColor())
 	p.timeText.TextSize = 20
 	p.timeText.TextStyle = fyne.TextStyle{Bold: true}
 	p.timeText.Alignment = fyne.TextAlignCenter
 
-	p.dateLabel = widget.NewLabel("--/--/----")
+	p.dateLabel = widget.NewLabel(p.translate("panel.placeholder.date", "--/--/----"))
 	p.dateLabel.Alignment = fyne.TextAlignCenter
 
 	// Icon row: weather icon + error icon overlay.
@@ -121,11 +133,11 @@ func (p *CityPanel) Update(data *weather.WeatherData) {
 	}
 
 	// Update labels.
-	p.tempText.Text = weather.FormatTemperature(data.Temperature)
+	p.tempText.Text = weather.FormatTemperature(data.Temperature, p.lm)
 	p.tempText.Refresh()
-	
+
 	p.descLabel.SetText(weather.FormatDescription(data.Description))
-	
+
 	p.cityText.Text = weather.FormatCityRegion(data.CityName, data.Region)
 	p.cityText.Refresh()
 
@@ -146,7 +158,7 @@ func (p *CityPanel) ShowError(stale bool) {
 		p.errorIcon.SetMinSize(fyne.NewSize(20, 20))
 		p.errorIcon.Show()
 		p.errorIcon.Refresh()
-		p.descLabel.SetText("Data may be stale")
+		p.descLabel.SetText(p.translate("panel.staleWarning", "Data may be stale"))
 	} else {
 		// Show small error indicator — use fog icon as error indicator.
 		res := loadIconFromAssets("fog")
@@ -173,9 +185,9 @@ func (p *CityPanel) StartClock(timezone string) {
 
 	// Set the time immediately before the first tick.
 	now := time.Now()
-	p.timeText.Text = weather.FormatTime(now, timezone)
+	p.timeText.Text = weather.FormatTime(now, timezone, p.lm)
 	p.timeText.Refresh()
-	p.dateLabel.SetText(weather.FormatDate(now, timezone))
+	p.dateLabel.SetText(weather.FormatDate(now, timezone, p.lm))
 
 	go func() {
 		for {
@@ -183,8 +195,8 @@ func (p *CityPanel) StartClock(timezone string) {
 			case <-p.stopCh:
 				return
 			case t := <-p.timeTicker.C:
-				timeStr := weather.FormatTime(t, timezone)
-				dateStr := weather.FormatDate(t, timezone)
+				timeStr := weather.FormatTime(t, timezone, p.lm)
+				dateStr := weather.FormatDate(t, timezone, p.lm)
 				fyne.Do(func() {
 					p.timeText.Text = timeStr
 					p.timeText.Refresh()

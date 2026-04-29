@@ -22,7 +22,7 @@ func TestProperty4_CityListAddPreservesExistingAndAppends(t *testing.T) {
 		newCity := genCityConfig(rt, "newCity")
 
 		// Call AddCity
-		result, err := AddCity(cities, newCity)
+		result, err := AddCity(cities, newCity, nil)
 		if err != nil {
 			rt.Fatalf("AddCity() unexpected error: %v", err)
 		}
@@ -63,7 +63,7 @@ func TestProperty5_CityListRemoveDecreasesLengthAndExcludesTarget(t *testing.T) 
 		removed := cities[index]
 
 		// Call RemoveCity
-		result, err := RemoveCity(cities, index)
+		result, err := RemoveCity(cities, index, nil)
 		if err != nil {
 			rt.Fatalf("RemoveCity() unexpected error: %v", err)
 		}
@@ -106,7 +106,7 @@ func TestProperty6_CityListReorderPreservesSet(t *testing.T) {
 		}
 
 		// Call ReorderCities
-		result, err := ReorderCities(cities, perm)
+		result, err := ReorderCities(cities, perm, nil)
 		if err != nil {
 			rt.Fatalf("ReorderCities() unexpected error: %v", err)
 		}

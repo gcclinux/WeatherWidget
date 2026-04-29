@@ -17,7 +17,7 @@ func TestFormatTemperature(t *testing.T) {
 		{-40, "-40°C"},
 	}
 	for _, tc := range tests {
-		got := FormatTemperature(tc.input)
+		got := FormatTemperature(tc.input, nil)
 		if got != tc.expected {
 			t.Errorf("FormatTemperature(%d) = %q, want %q", tc.input, got, tc.expected)
 		}
@@ -44,14 +44,14 @@ func TestFormatDateTime(t *testing.T) {
 	// 2024-01-05 09:03:07 UTC
 	ts := time.Date(2024, 1, 5, 9, 3, 7, 0, time.UTC)
 
-	got := FormatDateTime(ts, "UTC")
+	got := FormatDateTime(ts, "UTC", nil)
 	expected := "05/01/2024 - 09:03:07"
 	if got != expected {
 		t.Errorf("FormatDateTime(UTC) = %q, want %q", got, expected)
 	}
 
 	// America/Sao_Paulo is UTC-3
-	got = FormatDateTime(ts, "America/Sao_Paulo")
+	got = FormatDateTime(ts, "America/Sao_Paulo", nil)
 	expected = "05/01/2024 - 06:03:07"
 	if got != expected {
 		t.Errorf("FormatDateTime(America/Sao_Paulo) = %q, want %q", got, expected)
@@ -61,7 +61,7 @@ func TestFormatDateTime(t *testing.T) {
 func TestFormatDateTimeZeroPadding(t *testing.T) {
 	// Ensure zero-padding for single-digit day, month, hours, minutes, seconds
 	ts := time.Date(2024, 3, 2, 1, 5, 8, 0, time.UTC)
-	got := FormatDateTime(ts, "UTC")
+	got := FormatDateTime(ts, "UTC", nil)
 	expected := "02/03/2024 - 01:05:08"
 	if got != expected {
 		t.Errorf("FormatDateTime zero-padding = %q, want %q", got, expected)
@@ -70,7 +70,7 @@ func TestFormatDateTimeZeroPadding(t *testing.T) {
 
 func TestFormatDateTimeInvalidTimezone(t *testing.T) {
 	ts := time.Date(2024, 6, 15, 12, 30, 45, 0, time.UTC)
-	got := FormatDateTime(ts, "Invalid/Timezone")
+	got := FormatDateTime(ts, "Invalid/Timezone", nil)
 	expected := "15/06/2024 - 12:30:45" // Falls back to UTC
 	if got != expected {
 		t.Errorf("FormatDateTime(invalid tz) = %q, want %q", got, expected)

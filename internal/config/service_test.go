@@ -77,6 +77,7 @@ func TestSaveAndLoad_RoundTrip(t *testing.T) {
 		},
 		RefreshInterval: 30,
 		CornerPosition:  "top-left",
+		Locale:          "en-GB",
 		DatabaseConfig: &DatabaseConfig{
 			Host:     "localhost",
 			Port:     5432,
@@ -152,6 +153,7 @@ func TestSave_AtomicWrite_NoPartialFile(t *testing.T) {
 		Cities:          []CityConfig{{Name: "NewCity", Region: "NC", Timezone: "UTC"}},
 		RefreshInterval: 120,
 		CornerPosition:  "top-right",
+		Locale:          "en-GB",
 		APIConfig: &APIConfig{
 			Provider: "easyweatherwidget",
 			APIKey:   "test-key-123",

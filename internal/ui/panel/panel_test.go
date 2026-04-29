@@ -4,13 +4,14 @@ import (
 	"testing"
 	"time"
 
-	"fyne.io/fyne/v2/test"
 	"weatherwidget/internal/weather"
+
+	"fyne.io/fyne/v2/test"
 )
 
 func TestNewCityPanel(t *testing.T) {
 	test.NewApp()
-	p := NewCityPanel()
+	p := NewCityPanel(nil)
 	if p == nil {
 		t.Fatal("NewCityPanel returned nil")
 	}
@@ -36,7 +37,7 @@ func TestNewCityPanel(t *testing.T) {
 		t.Error("errorIcon is nil")
 	}
 
-	// Placeholder content checks.
+	// Placeholder content checks (nil lm uses hardcoded defaults).
 	if p.tempText.Text != "--°C" {
 		t.Errorf("tempText placeholder = %q, want %q", p.tempText.Text, "--°C")
 	}
@@ -50,7 +51,7 @@ func TestNewCityPanel(t *testing.T) {
 
 func TestCityPanel_Container(t *testing.T) {
 	test.NewApp()
-	p := NewCityPanel()
+	p := NewCityPanel(nil)
 	c := p.Container()
 	if c == nil {
 		t.Fatal("Container() returned nil")
@@ -62,7 +63,7 @@ func TestCityPanel_Container(t *testing.T) {
 
 func TestCityPanel_Update(t *testing.T) {
 	test.NewApp()
-	p := NewCityPanel()
+	p := NewCityPanel(nil)
 
 	data := &weather.WeatherData{
 		CityName:    "Holambra",
@@ -92,7 +93,7 @@ func TestCityPanel_Update(t *testing.T) {
 
 func TestCityPanel_UpdateNil(t *testing.T) {
 	test.NewApp()
-	p := NewCityPanel()
+	p := NewCityPanel(nil)
 	// Should not panic.
 	p.Update(nil)
 	if p.tempText.Text != "--°C" {
@@ -102,7 +103,7 @@ func TestCityPanel_UpdateNil(t *testing.T) {
 
 func TestCityPanel_ShowError(t *testing.T) {
 	test.NewApp()
-	p := NewCityPanel()
+	p := NewCityPanel(nil)
 
 	// Non-stale error.
 	p.ShowError(false)
@@ -122,7 +123,7 @@ func TestCityPanel_ShowError(t *testing.T) {
 
 func TestCityPanel_ShowErrorThenUpdate(t *testing.T) {
 	test.NewApp()
-	p := NewCityPanel()
+	p := NewCityPanel(nil)
 	p.ShowError(false)
 	if !p.errorIcon.Visible() {
 		t.Error("errorIcon should be visible after ShowError")
@@ -145,7 +146,7 @@ func TestCityPanel_ShowErrorThenUpdate(t *testing.T) {
 
 func TestCityPanel_StartStopClock(t *testing.T) {
 	test.NewApp()
-	p := NewCityPanel()
+	p := NewCityPanel(nil)
 
 	p.StartClock("America/Sao_Paulo")
 
@@ -165,7 +166,7 @@ func TestCityPanel_StartStopClock(t *testing.T) {
 
 func TestCityPanel_StartClockReplacesExisting(t *testing.T) {
 	test.NewApp()
-	p := NewCityPanel()
+	p := NewCityPanel(nil)
 
 	p.StartClock("UTC")
 	time.Sleep(100 * time.Millisecond)

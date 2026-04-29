@@ -12,6 +12,7 @@ import (
 
 	"weatherwidget/internal/config"
 	"weatherwidget/internal/guard"
+	"weatherwidget/internal/i18n"
 	"weatherwidget/internal/scheduler"
 	"weatherwidget/internal/ui"
 	"weatherwidget/internal/weather"
@@ -31,6 +32,7 @@ type AppManager struct {
 	guard      *guard.SingleInstanceGuard
 	cfg        *config.Config // current loaded config
 	dbAdapter  *database.DatabaseAdapter
+	localeMgr  *i18n.LocaleManager
 }
 
 // NewAppManager creates an AppManager with the given Fyne app and data directory.
@@ -61,8 +63,19 @@ func (a *AppManager) Run() error {
 	}
 	a.cfg = cfg
 
+	// 2b. Create locale manager and load the configured locale.
+	lm, err := i18n.NewLocaleManager(i18n.LocaleFS)
+	if err != nil {
+		log.Printf("warning: failed to create locale manager: %v", err)
+	} else {
+		if cfg.Locale != "" {
+			_ = lm.SetLocale(cfg.Locale)
+		}
+		a.localeMgr = lm
+	}
+
 	// 3. Create UI manager.
-	a.ui = ui.NewUIManager(a.app)
+	a.ui = ui.NewUIManager(a.app, a.localeMgr)
 
 	// 4. Setup system tray.
 	a.ui.SetupSystemTray(
@@ -191,6 +204,11 @@ func (a *AppManager) onSettingsSave(newCfg *config.Config) error {
 	}
 
 	a.cfg = newCfg
+
+	// Update locale if it changed.
+	if oldCfg.Locale != newCfg.Locale && a.localeMgr != nil {
+		_ = a.localeMgr.SetLocale(newCfg.Locale)
+	}
 
 	// Switch weather provider if data source / credentials changed.
 	if providerChanged {
