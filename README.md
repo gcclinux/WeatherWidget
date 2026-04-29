@@ -76,15 +76,16 @@ You can download the latest pre-compiled binaries for Windows and Linux from the
     {
       "name": "Warsaw",
       "region": "PL",
-      "latitude": 52.23,
-      "longitude": 21.01,
+      "latitude": 52.231958,
+      "longitude": 21.006725,
       "timezone": "Europe/Warsaw"
     }
   ],
-  "refreshInterval": 30,
+  "refreshInterval": 10,
   "cornerPosition": "top-right",
-  "customX": -819,
-  "customY": 99,
+  "monitorIndex": 0,
+  "opacity": 25,
+  "locale": "en-GB",
   "apiConfig": {
     "provider": "openweathermap",
     "apiKey": "YOUR_API_KEY"
@@ -94,14 +95,11 @@ You can download the latest pre-compiled binaries for Windows and Linux from the
 
 ### Windows Config location
 
+#### Windows
 ```powershell
-Get-Content "$env:APPDATA\WeatherWidget\WeatherWidget\config.json"
-or
 type "$env:APPDATA\WeatherWidget\WeatherWidget\config.json"
 ```
-
+#### Linux
 ```bash
 cat $HOME/.config/WeatherWidget/WeatherWidget/config.json
-or
-more $HOME/.config/WeatherWidget/WeatherWidget/config.json
 ```
