@@ -152,9 +152,12 @@ try {
     Copy-Item "$BuildDir\weatherwidget.exe" "$PackageDir\"
 
     # Copy and update AppxManifest with current version
+    # Use a lookbehind to only replace the Version inside the Identity element,
+    # not the version="1.0" in the <?xml ?> declaration.
     $manifest = Get-Content ".\installer\AppxManifest.xml" -Raw
-    $manifest = $manifest -replace 'Version="[^"]*"', "Version=`"$Version`""
-    Set-Content -Path "$PackageDir\AppxManifest.xml" -Value $manifest
+    $manifest = $manifest -replace '(?<=<Identity\s[^>]*)Version="[^"]*"', "Version=`"$Version`""
+    # MakeAppx requires UTF-8 without BOM — Set-Content adds a BOM which breaks the XML declaration
+    [System.IO.File]::WriteAllText("$PackageDir\AppxManifest.xml", $manifest, (New-Object System.Text.UTF8Encoding $false))
 
     # Copy store assets (user must provide these)
     $storeAssetsDir = ".\installer\store-assets"
@@ -239,8 +242,13 @@ try {
 
         # .msixupload is a ZIP containing the .msix (and optionally .msixsym)
         # Partner Center expects this format for Store submissions.
+        # Compress-Archive in Windows PowerShell 5.1 only allows .zip extension,
+        # so create as .zip first, then rename to .msixupload.
         if (Test-Path $OutputMsixUpload) { Remove-Item $OutputMsixUpload -Force }
-        Compress-Archive -Path $OutputMsix -DestinationPath $OutputMsixUpload -Force
+        $tempZip = "$OutputMsixUpload.zip"
+        if (Test-Path $tempZip) { Remove-Item $tempZip -Force }
+        Compress-Archive -Path $OutputMsix -DestinationPath $tempZip -Force
+        Move-Item -Path $tempZip -Destination $OutputMsixUpload -Force
 
         Write-Host "       Done." -ForegroundColor Green
     }
