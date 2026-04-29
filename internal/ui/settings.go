@@ -140,12 +140,6 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 	} else {
 		positionRadio.SetSelected("Bottom-Right")
 	}
-	customPosLabel := widget.NewLabel("")
-	if cfg.CustomX != nil && cfg.CustomY != nil {
-		customPosLabel.SetText(fmt.Sprintf("Custom: (%d, %d) — picking a corner clears it.", *cfg.CustomX, *cfg.CustomY))
-	}
-	positionRadio.OnChanged = func(_ string) { customPosLabel.SetText("") }
-
 	// ── Monitor selector ─────────────────────────────────────────────────
 	monitorCount := u.GetMonitorCount()
 	var monitorOptions []string
@@ -160,7 +154,7 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 	}
 	// Build the position card contents — include monitor selector only
 	// when multiple monitors are detected.
-	positionItems := []fyne.CanvasObject{positionRadio, customPosLabel}
+	positionItems := []fyne.CanvasObject{positionRadio}
 	if monitorCount > 1 {
 		monitorLabel := widget.NewLabel("Display Monitor")
 		monitorLabel.TextStyle = fyne.TextStyle{Bold: true}
@@ -538,17 +532,28 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 	}
 
 	// ── Tabs Assembly ─────────────────────────────────────────────────────
+
+	// sectionBlock builds a consistent section with a bold title, a muted
+	// subtitle, and the content below — matching the "Display Monitor" label style.
+	sectionBlock := func(title, subtitle string, content fyne.CanvasObject) *fyne.Container {
+		titleLabel := widget.NewLabel(title)
+		titleLabel.TextStyle = fyne.TextStyle{Bold: true}
+		subtitleLabel := widget.NewLabel(subtitle)
+		subtitleLabel.TextStyle = fyne.TextStyle{Italic: true}
+		return container.NewVBox(titleLabel, subtitleLabel, content, widget.NewSeparator())
+	}
+
 	appearanceContent := container.NewPadded(container.NewVScroll(container.NewVBox(
-		widget.NewCard("Widget Position", "Where should the widget appear?",
+		sectionBlock("Widget Position", "Where should the widget appear?",
 			container.NewVBox(positionItems...),
 		),
-		widget.NewCard("Background Transparency", "Adjust how see-through the widget is.",
+		sectionBlock("Background Transparency", "Adjust how see-through the widget is.",
 			opacityRadio,
 		),
-		widget.NewCard("Refresh Interval", "How often to fetch new data.",
+		sectionBlock("Refresh Interval", "How often to fetch new data.",
 			container.NewHBox(intervalSlider, intervalLabel),
 		),
-		widget.NewCard("Startup", "Start automatically when you log in.",
+		sectionBlock("Startup", "Start automatically when you log in.",
 			autoStartCheck,
 		),
 	)))
