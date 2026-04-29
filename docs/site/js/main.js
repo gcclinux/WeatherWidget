@@ -71,4 +71,20 @@
       }
     });
   });
+
+  // --- Fetch current version ---
+  const versionUrl = "https://raw.githubusercontent.com/gcclinux/WeatherWidget/refs/heads/main/release";
+  const versionElement = document.getElementById("app-version");
+  if (versionElement) {
+    fetch(versionUrl)
+      .then(response => response.text())
+      .then(version => {
+        if (version) {
+          versionElement.textContent = `v${version.trim()}`;
+        }
+      })
+      .catch(err => {
+        console.error("Failed to fetch version:", err);
+      });
+  }
 })();
