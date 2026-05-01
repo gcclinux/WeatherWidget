@@ -3,12 +3,16 @@
   WiX v4+ installer definition for Weather Widget.
   Per-user install to AppData\Local\WeatherWidget (no admin required).
   
+  IMPORTANT: The Manufacturer value MUST match the legal entity name from your
+  Microsoft Partner Center account (Settings > Account settings > Organization profile).
+  Replace "Ricardo Wagemaker" below if your Partner Center legal entity name differs.
+  
   Build with:
     wix build installer\Package.wxs -d BuildDir=. -d Version=1.0.0.0 -o WeatherWidget.msi
 -->
 <Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
   <Package Name="Weather Widget"
-           Manufacturer="WeatherWidget"
+           Manufacturer="Ricardo Wagemaker"
            Version="$(var.Version)"
            UpgradeCode="E8F4B2A1-7C3D-4E5F-9A1B-2D3E4F5A6B7C"
            Compressed="yes"
@@ -26,6 +30,10 @@
                 Source="$(var.BuildDir)\weatherwidget.exe"
                 KeyPath="yes" />
         </Component>
+
+        <!-- No manual ARP registry entries needed here.
+             The icon is set via ARPPRODUCTICON property below, which is the correct
+             MSI mechanism for per-user installs. -->
       </Directory>
     </StandardDirectory>
 
@@ -50,8 +58,12 @@
       </Directory>
     </StandardDirectory>
 
-    <!-- Icon for shortcuts (sourced from the .ico file directly) -->
+    <!-- Icon for shortcuts and Add/Remove Programs display -->
     <Icon Id="WeatherWidgetIcon" SourceFile="winres\icon.ico" />
+
+    <!-- ARPPRODUCTICON tells Windows which icon to show in Settings > Apps.
+         It must reference an Icon element Id defined above. -->
+    <Property Id="ARPPRODUCTICON" Value="WeatherWidgetIcon" />
 
     <Feature Id="ProductFeature" Title="Weather Widget" Level="1">
       <ComponentRef Id="MainExecutable" />

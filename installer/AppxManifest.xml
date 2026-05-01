@@ -9,6 +9,8 @@
     - Partner Center App ID: 47955afa-afc7-46ee-abc1-02ab2632b4ad
     - Go to Partner Center > Your App > Product Identity to find the exact Name and Publisher values.
     - The Publisher field must match exactly (including CN= prefix).
+    - PublisherDisplayName MUST match the legal entity name from Partner Center > 
+      Settings (gear icon) > Account settings > Organization profile > "Legal entity" name.
     - For Store submissions, Microsoft signs the package — no local certificate needed.
   -->
   <Identity Name="47955afa-afc7-46ee-abc1-02ab2632b4ad"
@@ -18,7 +20,7 @@
 
   <Properties>
     <DisplayName>Weather Widget</DisplayName>
-    <PublisherDisplayName>WeatherWidget</PublisherDisplayName>
+    <PublisherDisplayName>Ricardo Wagemaker</PublisherDisplayName>
     <Logo>assets\StoreLogo.png</Logo>
     <Description>A lightweight desktop weather widget that displays current conditions and forecasts.</Description>
   </Properties>
