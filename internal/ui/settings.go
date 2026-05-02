@@ -25,6 +25,12 @@ import (
 	"weatherwidget/internal/i18n"
 )
 
+// ewwAPIKeyLen is the expected length of an EasyWeatherWidget API key (UUID v4).
+const ewwAPIKeyLen = 36
+
+// owmAPIKeyLen is the expected length of an OpenWeatherMap API key.
+const owmAPIKeyLen = 33
+
 // generateClientReferenceID creates a random UUID v4 string (e.g. "f169fecc-de0c-4de1-b8c8-4ec3701b671c")
 // to be used as a unique client_reference_id for Stripe payment links.
 func generateClientReferenceID() string {
@@ -121,23 +127,74 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 			providerSelect.SetSelected("OpenWeatherMap (Free)")
 		}
 
+		apiKeyEntry := widget.NewEntry()
+		apiKeyEntry.SetPlaceHolder(u.t("settings.provider.apiKeyPlaceholder"))
+		if cfg.APIConfig != nil {
+			apiKeyEntry.SetText(cfg.APIConfig.APIKey)
+		}
+
+		// Activation card — shown when a Pro API key is active or just generated.
+		// Uses a Card with bold title, monospace key, and descriptive message
+		// for a polished look that stands out from the plain note above.
+		activationKeyText := widget.NewRichTextFromMarkdown("")
+		activationMsg := widget.NewLabel("")
+		activationMsg.Wrapping = fyne.TextWrapWord
+		activationCard := widget.NewCard("", "", container.NewVBox(
+			activationKeyText,
+			activationMsg,
+		))
+		activationCard.Hide()
+
+		// showActivationCard populates and reveals the activation card.
+		showActivationCard := func(key string) {
+			activationCard.SetTitle(u.t("settings.provider.apiKeyActivation.title"))
+			activationKeyText.ParseMarkdown(fmt.Sprintf("`%s`", key))
+			activationMsg.SetText(u.t("settings.provider.apiKeyActivation.message"))
+			activationCard.Show()
+		}
+
+		// If the config already has an EWW-length key, show the activation card on load.
+		if cfg.APIConfig != nil && cfg.APIConfig.Provider == "easyweatherwidget" && len(cfg.APIConfig.APIKey) == ewwAPIKeyLen {
+			showActivationCard(cfg.APIConfig.APIKey)
+		}
+
+		// handleGetProAPI generates a new client reference ID, persists it as
+		// the EWW API key in config.json, updates the UI entry and activation
+		// label, then opens the Stripe payment link.
+		handleGetProAPI := func() {
+			currentKey := strings.TrimSpace(apiKeyEntry.Text)
+
+			// If the key is already a 36-char EWW UUID, reuse it instead of
+			// generating a new one — the user already has a key.
+			clientRef := currentKey
+			if len(currentKey) != ewwAPIKeyLen {
+				clientRef = generateClientReferenceID()
+
+				// Persist provider + new key to config.json immediately.
+				if cfg.APIConfig == nil {
+					cfg.APIConfig = &config.APIConfig{}
+				}
+				cfg.APIConfig.Provider = "easyweatherwidget"
+				cfg.APIConfig.APIKey = clientRef
+
+				// Update the UI entry so the user sees the new key.
+				apiKeyEntry.SetText(clientRef)
+			}
+
+			// Show the activation card.
+			showActivationCard(clientRef)
+
+			parsedURL, _ := url.Parse("https://buy.stripe.com/bJe3cvaJOa650fQ8cPdZ603?client_reference_id=" + clientRef)
+			_ = u.app.OpenURL(parsedURL)
+		}
+
 		getApiBtn := widget.NewButton(u.t("settings.provider.getFreeApi"), func() {
 			parsedURL, _ := url.Parse("https://openweathermap.org/")
 			_ = u.app.OpenURL(parsedURL)
 		})
 		if providerSelect.Selected == "EasyWeatherWidget (Pro)" {
 			getApiBtn.SetText(u.t("settings.provider.getProApi"))
-			getApiBtn.OnTapped = func() {
-				clientRef := generateClientReferenceID()
-				parsedURL, _ := url.Parse("https://buy.stripe.com/bJe3cvaJOa650fQ8cPdZ603?client_reference_id=" + clientRef)
-				_ = u.app.OpenURL(parsedURL)
-			}
-		}
-
-		apiKeyEntry := widget.NewEntry()
-		apiKeyEntry.SetPlaceHolder(u.t("settings.provider.apiKeyPlaceholder"))
-		if cfg.APIConfig != nil {
-			apiKeyEntry.SetText(cfg.APIConfig.APIKey)
+			getApiBtn.OnTapped = handleGetProAPI
 		}
 
 		noteLabel := widget.NewLabel(u.t("settings.provider.note"))
@@ -149,6 +206,7 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 				widget.NewFormItem(u.t("settings.provider.apiKeyLabel"), apiKeyEntry),
 			),
 			noteLabel,
+			activationCard,
 		)
 
 		// ── Position ─────────────────────────────────────────────────────────
@@ -315,12 +373,17 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 					parsedURL, _ := url.Parse("https://openweathermap.org/")
 					_ = u.app.OpenURL(parsedURL)
 				}
+				activationCard.Hide()
 			} else {
 				getApiBtn.SetText(u.t("settings.provider.getProApi"))
-				getApiBtn.OnTapped = func() {
-					clientRef := generateClientReferenceID()
-					parsedURL, _ := url.Parse("https://buy.stripe.com/bJe3cvaJOa650fQ8cPdZ603?client_reference_id=" + clientRef)
-					_ = u.app.OpenURL(parsedURL)
+				getApiBtn.OnTapped = handleGetProAPI
+
+				// If the current key is already an EWW-length key, show the activation card.
+				currentKey := strings.TrimSpace(apiKeyEntry.Text)
+				if len(currentKey) == ewwAPIKeyLen {
+					showActivationCard(currentKey)
+				} else {
+					activationCard.Hide()
 				}
 			}
 

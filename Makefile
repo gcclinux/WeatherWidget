@@ -1,7 +1,7 @@
 # Weather Widget Build Configuration
 BINARY_NAME=weatherwidget
 CMD_PATH=./cmd/weatherwidget/
-GO_CMD=/usr/local/go/bin/go
+GO_CMD=/usr/bin/go
 
 # Detect OS
 ifeq ($(OS),Windows_NT)

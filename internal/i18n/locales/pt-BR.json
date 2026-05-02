@@ -29,6 +29,8 @@
   "settings.provider.getFreeApi": "Obter API GRATUITA",
   "settings.provider.getProApi": "Obter API PRO",
   "settings.provider.note": "Nota: \nGratuito = taxa de atualização de 120 minutos (limitado). \nPro = taxa de atualização de 10 minutos (ilimitado).",
+  "settings.provider.apiKeyActivation.title": "Sua Chave API Pro",
+  "settings.provider.apiKeyActivation.message": "Guarde esta chave com segurança. Ela será ativada assim que a sua assinatura for confirmada e será desativada se a assinatura for cancelada.",
   "settings.locations.savedTitle": "Cidades Salvas",
   "settings.locations.savedSubtitle": "Gerencie suas localizações rastreadas (1–5 cidades).",
   "settings.locations.addTitle": "Adicionar Nova Cidade",

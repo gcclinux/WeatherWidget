@@ -29,6 +29,8 @@
   "settings.provider.getFreeApi": "Get FREE API",
   "settings.provider.getProApi": "Get PRO API",
   "settings.provider.note": "Note: \nFree = 120 minutes refresh rate (limited). \nPro = 10 minutes refresh rate (unlimited).",
+  "settings.provider.apiKeyActivation.title": "Your Pro API Key",
+  "settings.provider.apiKeyActivation.message": "Keep this key safe. It is, or will be, activated once your subscription is confirmed and will be disabled if the subscription is cancelled.",
   "settings.locations.savedTitle": "Saved Cities",
   "settings.locations.savedSubtitle": "Manage your tracked locations (1–5 cities).",
   "settings.locations.addTitle": "Add New City",
