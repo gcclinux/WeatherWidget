@@ -3,7 +3,9 @@
 package ui
 
 import (
+	"fmt"
 	"log"
+	"os"
 	"os/exec"
 	"strconv"
 	"strings"
@@ -12,79 +14,286 @@ import (
 	"fyne.io/fyne/v2"
 )
 
-// applyToolWindowStyle attempts to remove the title bar on Linux/X11
-// by setting the _MOTIF_WM_HINTS property via xprop.
-func applyToolWindowStyle(_ string) {
-	// We need to wait a brief moment for the window to be managed by the WM
-	// so that xprop can find it by its title.
-	go func() {
-		time.Sleep(500 * time.Millisecond)
+// sessionType returns "wayland", "x11", or "unknown" based on the current
+// display server session. Ubuntu 22.04+ defaults to Wayland.
+func sessionType() string {
+	if st := os.Getenv("XDG_SESSION_TYPE"); st != "" {
+		return strings.ToLower(st)
+	}
+	if os.Getenv("WAYLAND_DISPLAY") != "" {
+		return "wayland"
+	}
+	if os.Getenv("DISPLAY") != "" {
+		return "x11"
+	}
+	return "unknown"
+}
 
-		// Use xprop to remove decorations.
-		// _MOTIF_WM_HINTS: 2 = functions/decorations, 0 = no decorations
-		cmd := exec.Command("xprop", "-name", widgetTitle, "-f", "_MOTIF_WM_HINTS", "32c", "-set", "_MOTIF_WM_HINTS", "0x2, 0x0, 0x0, 0x0, 0x0")
-		if err := cmd.Run(); err != nil {
-			log.Printf("Linux: failed to remove title bar via xprop (is x11-utils installed?): %v", err)
-			return
+// isWayland returns true when the session is running under a Wayland compositor.
+func isWayland() bool {
+	return sessionType() == "wayland"
+}
+
+// ---------------------------------------------------------------------------
+// applyToolWindowStyle removes window decorations and sets window hints.
+//
+// On Wayland the window is already undecorated via CreateSplashWindow.
+// We use wmctrl (if available) to set skip_taskbar and below hints.
+//
+// On X11 we use xprop to remove decorations via _MOTIF_WM_HINTS.
+// ---------------------------------------------------------------------------
+
+func applyToolWindowStyle(_ string) {
+	go func() {
+		if isWayland() {
+			// On Wayland, the window is already undecorated via CreateSplashWindow.
+			// Wait for it to be mapped, then apply skip_taskbar/below hints.
+			for _, delay := range []time.Duration{
+				500 * time.Millisecond,
+				1000 * time.Millisecond,
+				2000 * time.Millisecond,
+			} {
+				time.Sleep(delay)
+				if applyWaylandWindowHints() {
+					return
+				}
+			}
+			log.Println("Linux/Wayland: window hints could not be applied (wmctrl may not be installed)")
+		} else {
+			time.Sleep(500 * time.Millisecond)
+			applyX11WindowStyle()
 		}
-		log.Printf("Linux: successfully requested title bar removal via xprop")
 	}()
 }
 
-// getScreenSize returns the primary screen dimensions using xdotool.
-// Falls back to 1920×1080 if xdotool is unavailable or fails.
+// applyWaylandWindowHints uses wmctrl to set skip_taskbar and below hints.
+// Returns true if at least one hint was applied successfully.
+func applyWaylandWindowHints() bool {
+	if _, err := exec.LookPath("wmctrl"); err != nil {
+		return false
+	}
+
+	success := false
+
+	cmd := exec.Command("wmctrl", "-r", widgetTitle, "-b", "add,skip_taskbar,skip_pager")
+	if err := cmd.Run(); err != nil {
+		log.Printf("Linux/Wayland: wmctrl skip_taskbar failed: %v", err)
+	} else {
+		log.Println("Linux/Wayland: set skip_taskbar,skip_pager via wmctrl")
+		success = true
+	}
+
+	cmd = exec.Command("wmctrl", "-r", widgetTitle, "-b", "add,below")
+	if err := cmd.Run(); err != nil {
+		log.Printf("Linux/Wayland: wmctrl below failed: %v", err)
+	} else {
+		log.Println("Linux/Wayland: set window to below via wmctrl")
+		success = true
+	}
+
+	return success
+}
+
+// applyX11WindowStyle uses xprop to remove the title bar on X11 sessions.
+func applyX11WindowStyle() {
+	if _, err := exec.LookPath("xprop"); err != nil {
+		log.Printf("Linux/X11: xprop not found, skipping decoration removal")
+		return
+	}
+	cmd := exec.Command("xprop", "-name", widgetTitle,
+		"-f", "_MOTIF_WM_HINTS", "32c",
+		"-set", "_MOTIF_WM_HINTS", "0x2, 0x0, 0x0, 0x0, 0x0")
+	if err := cmd.Run(); err != nil {
+		log.Printf("Linux/X11: failed to remove title bar via xprop: %v", err)
+		return
+	}
+	log.Println("Linux/X11: successfully removed title bar via xprop")
+}
+
+// ---------------------------------------------------------------------------
+// Screen / monitor queries
+// ---------------------------------------------------------------------------
+
+// getScreenSize returns the primary screen dimensions.
 func getScreenSize() (int, int) {
+	// xrandr works on both X11 and XWayland.
+	if w, h, ok := getScreenSizeXrandr(); ok {
+		return w, h
+	}
+	if w, h, ok := getScreenSizeXdotool(); ok {
+		return w, h
+	}
+	log.Println("Linux: getScreenSize: all methods failed, using fallback 1920x1080")
+	return 1920, 1080
+}
+
+// getScreenSizeXrandr parses xrandr --current output for screen dimensions.
+func getScreenSizeXrandr() (int, int, bool) {
+	out, err := exec.Command("xrandr", "--current").Output()
+	if err != nil {
+		return 0, 0, false
+	}
+	firstLine := strings.Split(string(out), "\n")[0]
+	if idx := strings.Index(firstLine, "current "); idx >= 0 {
+		rest := firstLine[idx+8:]
+		parts := strings.Fields(rest)
+		if len(parts) >= 3 {
+			w, e1 := strconv.Atoi(parts[0])
+			hStr := strings.TrimRight(parts[2], ",")
+			h, e2 := strconv.Atoi(hStr)
+			if e1 == nil && e2 == nil && w > 0 && h > 0 {
+				return w, h, true
+			}
+		}
+	}
+	// Fallback: parse connected output lines for active resolution.
+	for _, line := range strings.Split(string(out), "\n") {
+		if strings.Contains(line, "*") {
+			fields := strings.Fields(line)
+			if len(fields) > 0 {
+				res := strings.Split(fields[0], "x")
+				if len(res) == 2 {
+					w, e1 := strconv.Atoi(res[0])
+					h, e2 := strconv.Atoi(res[1])
+					if e1 == nil && e2 == nil && w > 0 && h > 0 {
+						return w, h, true
+					}
+				}
+			}
+		}
+	}
+	return 0, 0, false
+}
+
+// getScreenSizeXdotool is the legacy X11 fallback.
+func getScreenSizeXdotool() (int, int, bool) {
 	out, err := exec.Command("xdotool", "getdisplaygeometry").Output()
 	if err != nil {
-		log.Printf("Linux: getScreenSize: xdotool failed: %v; using fallback 1920x1080", err)
-		return 1920, 1080
+		return 0, 0, false
 	}
 	parts := strings.Fields(strings.TrimSpace(string(out)))
 	if len(parts) < 2 {
-		log.Printf("Linux: getScreenSize: unexpected xdotool output %q; using fallback 1920x1080", string(out))
-		return 1920, 1080
+		return 0, 0, false
 	}
-	w, err1 := strconv.Atoi(parts[0])
-	h, err2 := strconv.Atoi(parts[1])
-	if err1 != nil || err2 != nil {
-		log.Printf("Linux: getScreenSize: parse error (%v, %v); using fallback 1920x1080", err1, err2)
-		return 1920, 1080
+	w, e1 := strconv.Atoi(parts[0])
+	h, e2 := strconv.Atoi(parts[1])
+	if e1 != nil || e2 != nil {
+		return 0, 0, false
 	}
-	return w, h
+	return w, h, true
 }
 
-// moveWindow repositions the widget window on Linux using xdotool.
-// It finds the window by title and moves it to (x, y).
+// ---------------------------------------------------------------------------
+// Window positioning
+// ---------------------------------------------------------------------------
+
+// moveWindow repositions the widget window.
+// On Wayland, uses wmctrl with retry logic (window must be mapped first).
+// On X11, uses xdotool or wmctrl.
 func moveWindow(_ fyne.Window, x, y int) {
-	// Mark this as a programmatic move so the drag poller ignores it.
 	notifyLinuxMoveByUs()
 
-	// Give Fyne a moment to finish rendering before moving, then move in background.
 	go func() {
-		time.Sleep(100 * time.Millisecond)
-		// Search for the window ID by name.
-		idOut, err := exec.Command("xdotool", "search", "--name", widgetTitle).Output()
-		if err != nil || len(strings.TrimSpace(string(idOut))) == 0 {
-			log.Printf("Linux: moveWindow: could not find window %q via xdotool: %v", widgetTitle, err)
-			return
+		if isWayland() {
+			for _, delay := range []time.Duration{
+				300 * time.Millisecond,
+				700 * time.Millisecond,
+				1500 * time.Millisecond,
+			} {
+				time.Sleep(delay)
+				if moveWindowWmctrl(x, y) {
+					return
+				}
+			}
+			if moveWindowXdotool(x, y) {
+				return
+			}
+			log.Printf("Linux/Wayland: window positioning failed after retries")
+		} else {
+			time.Sleep(100 * time.Millisecond)
+			if moveWindowXdotool(x, y) {
+				return
+			}
+			moveWindowWmctrl(x, y)
 		}
-		// xdotool may return multiple IDs; take the last one (the most recently mapped).
-		lines := strings.Fields(strings.TrimSpace(string(idOut)))
-		wid := lines[len(lines)-1]
-
-		cmd := exec.Command("xdotool", "windowmove", wid,
-			strconv.Itoa(x), strconv.Itoa(y))
-		if err := cmd.Run(); err != nil {
-			log.Printf("Linux: moveWindow: xdotool windowmove failed: %v", err)
-			return
-		}
-		log.Printf("Linux: moved window %q (id=%s) to (%d, %d)", widgetTitle, wid, x, y)
 	}()
 }
 
-// getWindowPosition returns the current top-left position of the widget window
-// using xdotool on Linux. Returns (0, 0) if the position cannot be determined.
+// moveWindowWmctrl uses wmctrl to position the window. Returns true if successful.
+func moveWindowWmctrl(x, y int) bool {
+	if _, err := exec.LookPath("wmctrl"); err != nil {
+		return false
+	}
+	cmd := exec.Command("wmctrl", "-r", widgetTitle, "-e",
+		fmt.Sprintf("0,%d,%d,-1,-1", x, y))
+	if err := cmd.Run(); err != nil {
+		return false
+	}
+	log.Printf("Linux: moved window to (%d, %d) via wmctrl", x, y)
+	return true
+}
+
+// moveWindowXdotool uses xdotool to position the window. Returns true if successful.
+func moveWindowXdotool(x, y int) bool {
+	if _, err := exec.LookPath("xdotool"); err != nil {
+		return false
+	}
+	idOut, err := exec.Command("xdotool", "search", "--name", widgetTitle).Output()
+	if err != nil || len(strings.TrimSpace(string(idOut))) == 0 {
+		return false
+	}
+	lines := strings.Fields(strings.TrimSpace(string(idOut)))
+	wid := lines[len(lines)-1]
+	cmd := exec.Command("xdotool", "windowmove", wid,
+		strconv.Itoa(x), strconv.Itoa(y))
+	if err := cmd.Run(); err != nil {
+		return false
+	}
+	log.Printf("Linux: moved window to (%d, %d) via xdotool (wid=%s)", x, y, wid)
+	return true
+}
+
+// ---------------------------------------------------------------------------
+// Window position queries
+// ---------------------------------------------------------------------------
+
+// getWindowPosition returns the current top-left position of the widget window.
 func getWindowPosition() (int, int) {
+	if x, y, ok := getWindowPositionWmctrl(); ok {
+		return x, y
+	}
+	return getWindowPositionXdotool()
+}
+
+// getWindowPositionWmctrl uses wmctrl -lG to find the window position.
+func getWindowPositionWmctrl() (int, int, bool) {
+	if _, err := exec.LookPath("wmctrl"); err != nil {
+		return 0, 0, false
+	}
+	out, err := exec.Command("wmctrl", "-lG").Output()
+	if err != nil {
+		return 0, 0, false
+	}
+	for _, line := range strings.Split(string(out), "\n") {
+		if strings.Contains(line, widgetTitle) {
+			fields := strings.Fields(line)
+			if len(fields) >= 5 {
+				x, e1 := strconv.Atoi(fields[2])
+				y, e2 := strconv.Atoi(fields[3])
+				if e1 == nil && e2 == nil {
+					return x, y, true
+				}
+			}
+		}
+	}
+	return 0, 0, false
+}
+
+// getWindowPositionXdotool uses xdotool on X11 sessions.
+func getWindowPositionXdotool() (int, int) {
+	if _, err := exec.LookPath("xdotool"); err != nil {
+		return 0, 0
+	}
 	idOut, err := exec.Command("xdotool", "search", "--name", widgetTitle).Output()
 	if err != nil || len(strings.TrimSpace(string(idOut))) == 0 {
 		return 0, 0
@@ -108,50 +317,54 @@ func getWindowPosition() (int, int) {
 	return x, y
 }
 
-// setWindowOpacity applies whole-window transparency on Linux/X11 by setting
-// the _NET_WM_WINDOW_OPACITY property via xprop. This requires a compositing
-// manager (Picom, Mutter, KWin, etc.) to take effect.
-//
-// Unlike Windows (which supports background-only color-key transparency),
-// X11 _NET_WM_WINDOW_OPACITY affects the entire window including content.
-// To keep text and icons readable, the user-facing opacity values are mapped
-// to less aggressive X11 values:
-//
-//	User 100% → X11 100% (fully opaque)
-//	User  75% → X11  85%
-//	User  50% → X11  70%
-//	User  25% → X11  55%
+// ---------------------------------------------------------------------------
+// Window opacity / transparency
+// ---------------------------------------------------------------------------
+
+// setWindowOpacity controls the widget background appearance.
+// On Wayland: adjusts the theme background shade (true transparency not possible).
+// On X11: uses _NET_WM_WINDOW_OPACITY via xprop.
 func setWindowOpacity(opacityPercent int) {
-	// Map user-facing opacity to X11 whole-window opacity so content stays
-	// readable. The window background dims while text/icons remain legible.
-	x11Percent := opacityPercent
-	switch {
-	case opacityPercent >= 100:
-		x11Percent = 100
-	case opacityPercent >= 75:
-		x11Percent = 85
-	case opacityPercent >= 50:
-		x11Percent = 70
-	case opacityPercent >= 25:
-		x11Percent = 55
-	default:
-		x11Percent = 55
+	if isWayland() {
+		setWindowOpacityWayland(opacityPercent)
+	} else {
+		setWindowOpacityX11(opacityPercent)
 	}
+}
+
+// setWindowOpacityWayland controls the background shade on Linux/Wayland.
+// Since true see-through transparency is not possible with Fyne on Wayland,
+// the opacity setting controls the background darkness level:
+//
+//	100% → dark background (RGB 30) — content most prominent
+//	 75% → slightly lighter (RGB 50)
+//	 50% → medium grey (RGB 70)
+//	 25% → lighter grey (RGB 90)
+func setWindowOpacityWayland(opacityPercent int) {
+	SetLinuxBackgroundShade(opacityPercent)
+	log.Printf("Linux/Wayland: background shade set for opacity %d%%", opacityPercent)
+}
+
+// setWindowOpacityX11 applies whole-window transparency on X11 via xprop.
+func setWindowOpacityX11(opacityPercent int) {
+	x11Percent := mapOpacityForDisplay(opacityPercent)
 
 	go func() {
-		// Give the window a moment to be mapped if called at startup.
 		time.Sleep(600 * time.Millisecond)
 
-		if x11Percent >= 100 {
-			// Remove the property entirely — fully opaque.
-			cmd := exec.Command("xprop", "-name", widgetTitle, "-remove", "_NET_WM_WINDOW_OPACITY")
-			if err := cmd.Run(); err != nil {
-				log.Printf("Linux: setWindowOpacity: failed to remove _NET_WM_WINDOW_OPACITY: %v", err)
-			}
+		if _, err := exec.LookPath("xprop"); err != nil {
+			// Fall back to theme shade if xprop not available.
+			SetLinuxBackgroundShade(opacityPercent)
+			log.Printf("Linux/X11: xprop not found, using theme shade for opacity")
 			return
 		}
 
-		// _NET_WM_WINDOW_OPACITY is a 32-bit cardinal where 0xFFFFFFFF = fully opaque.
+		if x11Percent >= 100 {
+			cmd := exec.Command("xprop", "-name", widgetTitle, "-remove", "_NET_WM_WINDOW_OPACITY")
+			cmd.Run()
+			return
+		}
+
 		opacity := uint64(x11Percent) * 0xFFFFFFFF / 100
 		val := strconv.FormatUint(opacity, 10)
 
@@ -159,21 +372,38 @@ func setWindowOpacity(opacityPercent int) {
 			"-f", "_NET_WM_WINDOW_OPACITY", "32c",
 			"-set", "_NET_WM_WINDOW_OPACITY", val)
 		if err := cmd.Run(); err != nil {
-			log.Printf("Linux: setWindowOpacity: xprop failed (is x11-utils installed? is a compositor running?): %v", err)
+			log.Printf("Linux/X11: xprop opacity failed: %v", err)
 			return
 		}
-		log.Printf("Linux: set window opacity to %d%% (user: %d%%, _NET_WM_WINDOW_OPACITY=%s)", x11Percent, opacityPercent, val)
+		log.Printf("Linux/X11: set window opacity to %d%% (user: %d%%)", x11Percent, opacityPercent)
 	}()
 }
 
-// getMonitorCount returns the number of display monitors using xrandr.
-// Falls back to 1 if xrandr is unavailable.
+// mapOpacityForDisplay maps user-facing opacity percentages to display
+// values that keep content readable when using whole-window opacity.
+func mapOpacityForDisplay(opacityPercent int) int {
+	switch {
+	case opacityPercent >= 100:
+		return 100
+	case opacityPercent >= 75:
+		return 85
+	case opacityPercent >= 50:
+		return 70
+	default:
+		return 55
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Monitor enumeration
+// ---------------------------------------------------------------------------
+
+// getMonitorCount returns the number of display monitors.
 func getMonitorCount() int {
 	out, err := exec.Command("xrandr", "--listmonitors").Output()
 	if err != nil {
 		return 1
 	}
-	// First line is "Monitors: N", remaining lines are one per monitor.
 	lines := strings.Split(strings.TrimSpace(string(out)), "\n")
 	if len(lines) <= 1 {
 		return 1
@@ -181,35 +411,24 @@ func getMonitorCount() int {
 	return len(lines) - 1
 }
 
-// getMonitorBounds returns the work-area rectangle (left, top, width, height)
-// for the monitor at the given 0-based index using xrandr.
-// Falls back to primary screen dimensions if parsing fails.
+// getMonitorBounds returns the work-area rectangle for the given monitor.
 func getMonitorBounds(index int) (int, int, int, int) {
 	out, err := exec.Command("xrandr", "--listmonitors").Output()
 	if err != nil {
 		w, h := getScreenSize()
 		return 0, 0, w, h
 	}
-	// Example output:
-	//   Monitors: 2
-	//    0: +*HDMI-1 1920/527x1080/296+0+0  HDMI-1
-	//    1: +DP-1 2560/597x1440/336+1920+0  DP-1
 	lines := strings.Split(strings.TrimSpace(string(out)), "\n")
 	if index < 0 || index >= len(lines)-1 {
 		index = 0
 	}
-	// Skip the header line.
 	line := lines[index+1]
-	// Parse the geometry: WIDTHxHEIGHT+X+Y (ignoring physical size /NNN parts).
-	// Find the resolution part after the colon.
 	parts := strings.Fields(line)
 	if len(parts) < 3 {
 		w, h := getScreenSize()
 		return 0, 0, w, h
 	}
-	geom := parts[2] // e.g. "1920/527x1080/296+0+0"
-	// Strip physical size info (everything between / and next delimiter).
-	// Simplify: replace /NNN with nothing.
+	geom := parts[2]
 	cleaned := ""
 	skip := false
 	for _, ch := range geom {
@@ -224,8 +443,6 @@ func getMonitorBounds(index int) (int, int, int, int) {
 			cleaned += string(ch)
 		}
 	}
-	// Now cleaned is like "1920x1080+0+0"
-	// Split on 'x' and '+'
 	cleaned = strings.ReplaceAll(cleaned, "x", "+")
 	nums := strings.Split(cleaned, "+")
 	if len(nums) < 4 {

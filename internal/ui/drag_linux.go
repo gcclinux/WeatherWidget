@@ -19,12 +19,12 @@ var (
 
 // enableWindowDrag enables drag-to-reposition detection on Linux.
 //
-// Since the title bar is removed, most window managers still allow moving
-// via Alt+left-click drag or Super+drag. This function starts a background
-// poller that detects when the window position changes and calls onDragEnd
-// so the caller can persist the new coordinates.
+// On Wayland, direct window-move interception is not possible through the
+// protocol. Instead we poll the window position (via wmctrl or xdotool)
+// and detect when the user has moved the window using the compositor's
+// built-in drag mechanism (Super+drag or Alt+drag on GNOME).
 //
-// Requires xdotool to be installed.
+// On X11, the same polling approach is used with xdotool.
 func enableWindowDrag(onDragEnd func()) {
 	linuxDragMu.Lock()
 	defer linuxDragMu.Unlock()
@@ -39,7 +39,12 @@ func enableWindowDrag(onDragEnd func()) {
 	linuxLastX, linuxLastY = getWindowPosition()
 
 	go pollWindowPosition(linuxDragStop)
-	log.Println("Linux drag: position poller started")
+
+	if isWayland() {
+		log.Println("Linux/Wayland: drag position poller started (use Super+drag or Alt+drag to reposition)")
+	} else {
+		log.Println("Linux/X11: drag position poller started")
+	}
 }
 
 // notifyLinuxMoveByUs should be called before programmatic moves so the
@@ -71,7 +76,6 @@ func pollWindowPosition(stop chan struct{}) {
 			linuxDragMu.Unlock()
 
 			if movedByUs {
-				// Update last known position but don't fire callback.
 				linuxDragMu.Lock()
 				linuxLastX = x
 				linuxLastY = y
@@ -86,7 +90,7 @@ func pollWindowPosition(stop chan struct{}) {
 				linuxDragMu.Unlock()
 
 				if cb != nil {
-					log.Printf("Linux drag: position changed from (%d,%d) to (%d,%d), saving", lastX, lastY, x, y)
+					log.Printf("Linux: position changed from (%d,%d) to (%d,%d), saving", lastX, lastY, x, y)
 					cb()
 				}
 			}

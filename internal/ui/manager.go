@@ -24,12 +24,11 @@ type UIManager struct {
 }
 
 // NewUIManager creates a new UIManager and its main widget window.
-// After the window is shown, call applyToolWindowStyle to set Win32
-// WS_EX_TOOLWINDOW and HWND_TOPMOST styles (no-op on non-Windows).
+// On Linux the window is created without decorations (borderless) via
+// CreateSplashWindow. On Windows decorations are removed post-creation
+// by applyToolWindowStyle using Win32 API calls.
 func NewUIManager(app fyne.App, lm *i18n.LocaleManager) *UIManager {
-	w := app.NewWindow(widgetTitle)
-	w.SetFixedSize(true)
-	w.SetPadded(false)
+	w := createWidgetWindow(app, widgetTitle)
 
 	return &UIManager{
 		app:    app,
