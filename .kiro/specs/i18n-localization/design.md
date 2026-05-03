@@ -183,7 +183,7 @@ Each file follows this structure:
   "settings.save": "Save",
   "settings.dialog.saved": "Saved",
   "settings.dialog.savedMsg": "Settings saved successfully!",
-  "settings.about.version": "**Version:** 0.0.5",
+  "settings.about.version": "**Version:** 0.0.5.1",
   "settings.about.description": "A compact, transparent time & weather widget that lives on your desktop.\nMonitor up to 5 cities at a glance with a beautiful, always-on-top overlay.",
   "settings.about.websiteLabel": "Website:",
   "settings.about.previewLabel": "Preview",
