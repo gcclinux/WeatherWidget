@@ -29,6 +29,7 @@ type UIManager struct {
 // by applyToolWindowStyle using Win32 API calls.
 func NewUIManager(app fyne.App, lm *i18n.LocaleManager) *UIManager {
 	w := createWidgetWindow(app, widgetTitle)
+	initPlatformWindow(w)
 
 	return &UIManager{
 		app:    app,

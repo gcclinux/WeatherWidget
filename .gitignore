@@ -1,5 +1,7 @@
 # Build artifacts
 weatherwidget.exe
+weatherwidget-darwin-amd64
+weatherwidget-darwin-arm64
 weatherwidget
 build/
 
