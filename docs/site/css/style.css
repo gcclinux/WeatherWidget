@@ -274,7 +274,7 @@ img {
 }
 
 .hero-content {
-  max-width: 720px;
+  max-width: 900px;
 }
 
 .hero-badge {
@@ -361,6 +361,18 @@ img {
   border-color: var(--color-border-hover);
   transform: translateY(-2px);
   color: var(--color-text);
+}
+
+.btn-darwin {
+  background: linear-gradient(135deg, #1e293b, #334155);
+  color: #f8fafc;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.btn-darwin:hover {
+  background: linear-gradient(135deg, #334155, #475569);
+  border-color: rgba(255, 255, 255, 0.2);
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
 }
 
 .btn-ghost {
