@@ -202,10 +202,60 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 		noteLabel := widget.NewLabel(u.t("settings.provider.note"))
 		noteLabel.Wrapping = fyne.TextWrapWord
 
+		// ── Refresh interval ─────────────────────────────────────────────────
+		intervalSlider := widget.NewSlider(10, 120)
+		intervalSlider.Step = 1
+		intervalSlider.Value = float64(cfg.RefreshInterval)
+		intervalLabel := widget.NewLabel(u.tFmt("settings.interval.format", cfg.RefreshInterval))
+		intervalSlider.OnChanged = func(v float64) {
+			intervalLabel.SetText(u.tFmt("settings.interval.format", int(v)))
+		}
+
+		// applyProviderSliderConstraints updates the slider range and, when
+		// enforceFloor is true, also clamps the value to the provider minimum.
+		// Pass enforceFloor=false on initial load so the saved config value is
+		// preserved; pass enforceFloor=true when the user switches providers.
+		applyProviderSliderConstraints := func(providerValue string, enforceFloor bool) {
+			switch providerValue {
+			case "openweathermap":
+				intervalSlider.Min = 120
+				intervalSlider.Max = 120
+				intervalSlider.SetValue(120)
+			case "easyweatherwidget":
+				intervalSlider.Min = 10
+				intervalSlider.Max = 120
+				if enforceFloor && intervalSlider.Value < 30 {
+					intervalSlider.SetValue(30)
+				}
+			}
+			intervalLabel.SetText(u.tFmt("settings.interval.format", int(intervalSlider.Value)))
+		}
+
+		// Set initial constraints from current config — do NOT enforce the
+		// floor so the value saved in config is shown as-is.
+		if cfg.APIConfig != nil && cfg.APIConfig.Provider != "" {
+			applyProviderSliderConstraints(cfg.APIConfig.Provider, false)
+		} else {
+			applyProviderSliderConstraints("openweathermap", false)
+		}
+
+		// Track the initial provider so we can detect changes.
+		initialProvider := "openweathermap"
+		if cfg.APIConfig != nil && cfg.APIConfig.Provider != "" {
+			initialProvider = cfg.APIConfig.Provider
+		}
+
+		// Provider change handler is set below, after refreshCityList is defined,
+		// because switching providers clears the city list.
+		providerSelect.OnChanged = func(selected string) {
+			applyProviderSliderConstraints(providerDisplayToValue[selected], true)
+		}
+
 		apiSection := container.NewVBox(
 			widget.NewForm(
 				widget.NewFormItem(u.t("settings.provider.label"), container.NewBorder(nil, nil, nil, getApiBtn, providerSelect)),
 				widget.NewFormItem(u.t("settings.provider.apiKeyLabel"), apiKeyEntry),
+				widget.NewFormItem(u.t("settings.interval.title"), container.NewHBox(intervalSlider, intervalLabel)),
 			),
 			noteLabel,
 			activationCard,
@@ -300,51 +350,6 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 			unitRadio.SetSelected(unitCelsiusLabel)
 		}
 
-		// ── Refresh interval ─────────────────────────────────────────────────
-		intervalSlider := widget.NewSlider(10, 120)
-		intervalSlider.Step = 1
-		intervalSlider.Value = float64(cfg.RefreshInterval)
-		intervalLabel := widget.NewLabel(u.tFmt("settings.interval.format", cfg.RefreshInterval))
-		intervalSlider.OnChanged = func(v float64) {
-			intervalLabel.SetText(u.tFmt("settings.interval.format", int(v)))
-		}
-
-		// Apply initial slider constraints based on current provider.
-		applyProviderSliderConstraints := func(providerValue string) {
-			switch providerValue {
-			case "openweathermap":
-				intervalSlider.Min = 120
-				intervalSlider.Max = 120
-				intervalSlider.SetValue(120)
-			case "easyweatherwidget":
-				intervalSlider.Min = 10
-				intervalSlider.Max = 120
-				if intervalSlider.Value < 30 {
-					intervalSlider.SetValue(30)
-				}
-			}
-			intervalLabel.SetText(u.tFmt("settings.interval.format", int(intervalSlider.Value)))
-		}
-
-		// Set initial constraints from current config.
-		if cfg.APIConfig != nil && cfg.APIConfig.Provider != "" {
-			applyProviderSliderConstraints(cfg.APIConfig.Provider)
-		} else {
-			applyProviderSliderConstraints("openweathermap")
-		}
-
-		// Track the initial provider so we can detect changes.
-		initialProvider := "openweathermap"
-		if cfg.APIConfig != nil && cfg.APIConfig.Provider != "" {
-			initialProvider = cfg.APIConfig.Provider
-		}
-
-		// Provider change handler is set below, after refreshCityList is defined,
-		// because switching providers clears the city list.
-		providerSelect.OnChanged = func(selected string) {
-			applyProviderSliderConstraints(providerDisplayToValue[selected])
-		}
-
 		// ── RIGHT PANEL ───────────────────────────────────────────────────────
 		// City list in a scroll area (top), add-form fixed below.
 
@@ -396,7 +401,7 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 		// to also clear cities when the provider switches.
 		providerSelect.OnChanged = func(selected string) {
 			newProvider := providerDisplayToValue[selected]
-			applyProviderSliderConstraints(newProvider)
+			applyProviderSliderConstraints(newProvider, true)
 
 			if newProvider == "openweathermap" {
 				getApiBtn.SetText(u.t("settings.provider.getFreeApi"))
@@ -718,9 +723,6 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 			),
 			sectionBlock(u.t("settings.temperature.title"), u.t("settings.temperature.subtitle"),
 				unitRadio,
-			),
-			sectionBlock(u.t("settings.interval.title"), u.t("settings.interval.subtitle"),
-				container.NewHBox(intervalSlider, intervalLabel),
 			),
 			sectionBlock(u.t("settings.startup.title"), u.t("settings.startup.subtitle"),
 				autoStartCheck,
