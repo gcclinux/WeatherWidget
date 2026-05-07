@@ -20,6 +20,10 @@ A compact weather widget for your desktop.
 
 ![Weather Widget Settings](images/weather-widget-sesstings-apperance.png)
 
+**Weather Widget Languages Settings**
+
+![Weather Widget Settings](images/weather-widget-sesstings-languages.png)
+
 ## Download
 
 You can download the latest pre-compiled binaries for Windows and Linux from the [GitHub Releases](https://github.com/gcclinux/WeatherWidget/releases) page.
@@ -38,7 +42,7 @@ You can download the latest pre-compiled binaries for Windows and Linux from the
 
 ### Windows MSI Package
 ```powershell
- .\installer\build-msi.ps1 -Version "0.0.5.1" -SkipSign
+ .\installer\build-msi.ps1 -Version "0.0.6.0" -SkipSign
  ```
 
 ### Linux
