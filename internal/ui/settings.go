@@ -115,6 +115,7 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 	// buildSettingsUI constructs the full settings UI content.
 	// It is called initially and again when the language changes to rebuild
 	// all labels with the new locale.
+	selectedTabIndex := 0 // tracks the active tab across rebuilds
 	var buildSettingsUI func()
 	buildSettingsUI = func() {
 		// ── API config ───────────────────────────────────────────────────────
@@ -671,36 +672,159 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 			}
 		}
 
-		// ── Language selector ────────────────────────────────────────────────
-		var langSelect *widget.Select
+		// ── Language card grid ───────────────────────────────────────────────
+		// Each locale gets a card with a coloured badge (2-letter code) and
+		// the full language name. Clicking a card switches the locale and
+		// rebuilds the UI. The active card is highlighted with an accent border.
+
+		// badgeColor returns a distinct accent colour per locale code.
+		badgeColor := func(code string) color.Color {
+			switch code {
+			case "en-GB":
+				return color.NRGBA{R: 0, G: 82, B: 165, A: 255} // blue
+			case "pt-BR":
+				return color.NRGBA{R: 0, G: 156, B: 59, A: 255} // green
+			case "de-DE":
+				return color.NRGBA{R: 60, G: 60, B: 60, A: 255} // dark grey
+			case "es-ES":
+				return color.NRGBA{R: 198, G: 146, B: 20, A: 255} // golden yellow
+			case "nl-NL":
+				return color.NRGBA{R: 255, G: 122, B: 0, A: 255} // Dutch orange
+			case "pl-PL":
+				return color.NRGBA{R: 227, G: 10, B: 23, A: 255} // Turkish red (swapped)
+			case "fr-FR":
+				return color.NRGBA{R: 0, G: 35, B: 149, A: 255} // French blue
+			case "it-IT":
+				return color.NRGBA{R: 180, G: 120, B: 60, A: 255} // warm light brown
+			case "tr-TR":
+				return color.NRGBA{R: 0, G: 158, B: 158, A: 255} // teal
+			default:
+				return color.NRGBA{R: 100, G: 100, B: 100, A: 255}
+			}
+		}
+
+		// badgeCode returns the 2-letter display code for a locale.
+		badgeCode := func(code string) string {
+			switch code {
+			case "en-GB":
+				return "EN"
+			case "pt-BR":
+				return "PT"
+			case "de-DE":
+				return "DE"
+			case "es-ES":
+				return "ES"
+			case "nl-NL":
+				return "NL"
+			case "pl-PL":
+				return "PL"
+			case "fr-FR":
+				return "FR"
+			case "it-IT":
+				return "IT"
+			case "tr-TR":
+				return "TR"
+			default:
+				if len(code) >= 2 {
+					return strings.ToUpper(code[:2])
+				}
+				return code
+			}
+		}
+
+		// langNativeName returns the language name without the country code suffix.
+		langNativeName := func(displayName string) string {
+			// Strip " (XX)" suffix if present — the badge already shows the code.
+			if idx := strings.Index(displayName, " ("); idx != -1 {
+				return displayName[:idx]
+			}
+			return displayName
+		}
+
 		var langLocales []i18n.LocaleInfo
 		if u.lm != nil {
 			langLocales = u.lm.AvailableLocales()
 		}
-		var langDisplayNames []string
-		langDisplayToCode := make(map[string]string)
-		langCodeToDisplay := make(map[string]string)
-		for _, loc := range langLocales {
-			langDisplayNames = append(langDisplayNames, loc.DisplayName)
-			langDisplayToCode[loc.DisplayName] = loc.Code
-			langCodeToDisplay[loc.Code] = loc.DisplayName
-		}
-		langSelect = widget.NewSelect(langDisplayNames, func(selected string) {
-			code := langDisplayToCode[selected]
-			if code == "" || code == state.selectedLang {
-				return
+
+		// buildLangCard creates a single language card. It is a function so it
+		// can be called again when the selection changes to refresh all cards.
+		var langCardObjects []fyne.CanvasObject
+		var rebuildLangCards func()
+		rebuildLangCards = func() {
+			langCardObjects = nil
+			for _, loc := range langLocales {
+				loc := loc // capture
+				isSelected := loc.Code == state.selectedLang
+				accent := badgeColor(loc.Code)
+
+				// Badge: coloured rounded rectangle with bold 2-letter code.
+				badgeRect := canvas.NewRectangle(accent)
+				badgeRect.CornerRadius = 6
+				badgeRect.SetMinSize(fyne.NewSize(52, 36))
+
+				badgeLabel := canvas.NewText(badgeCode(loc.Code), color.White)
+				badgeLabel.TextSize = 16
+				badgeLabel.TextStyle = fyne.TextStyle{Bold: true}
+				badgeLabel.Alignment = fyne.TextAlignCenter
+
+				badge := container.NewStack(badgeRect, container.NewCenter(badgeLabel))
+
+				// Language name label.
+				nameLabel := widget.NewLabel(langNativeName(loc.DisplayName))
+				nameLabel.Alignment = fyne.TextAlignCenter
+				nameLabel.TextStyle = fyne.TextStyle{Bold: isSelected}
+
+				// Card background: accent tint when selected, default otherwise.
+				var cardBg *canvas.Rectangle
+				if isSelected {
+					r, g, b, _ := accent.RGBA()
+					cardBg = canvas.NewRectangle(color.NRGBA{
+						R: uint8(r>>8) / 5,
+						G: uint8(g>>8) / 5,
+						B: uint8(b>>8) / 5,
+						A: 60,
+					})
+				} else {
+					cardBg = canvas.NewRectangle(color.NRGBA{R: 0, G: 0, B: 0, A: 0})
+				}
+				cardBg.CornerRadius = 8
+
+				// Border rectangle: accent colour when selected, muted otherwise.
+				var borderColor color.Color
+				if isSelected {
+					borderColor = accent
+				} else {
+					borderColor = color.NRGBA{R: 100, G: 100, B: 100, A: 80}
+				}
+				borderRect := canvas.NewRectangle(color.Transparent)
+				borderRect.StrokeColor = borderColor
+				borderRect.StrokeWidth = 2
+				borderRect.CornerRadius = 8
+
+				inner := container.NewVBox(
+					container.NewCenter(badge),
+					container.NewCenter(nameLabel),
+				)
+				padded := container.NewPadded(inner)
+				card := container.NewStack(cardBg, borderRect, padded)
+
+				// Wrap in a tappable object.
+				tappable := newTappableContainer(card, func() {
+					if loc.Code == state.selectedLang {
+						return
+					}
+					state.selectedLang = loc.Code
+					if u.lm != nil {
+						_ = u.lm.SetLocale(loc.Code)
+					}
+					selectedTabIndex = 3 // stay on the Language tab after rebuild
+					win.SetTitle(u.t("settings.title"))
+					buildSettingsUI()
+				})
+				langCardObjects = append(langCardObjects, tappable)
 			}
-			state.selectedLang = code
-			if u.lm != nil {
-				_ = u.lm.SetLocale(code)
-			}
-			// Rebuild the settings UI with the new locale.
-			win.SetTitle(u.t("settings.title"))
-			buildSettingsUI()
-		})
-		if display, ok := langCodeToDisplay[state.selectedLang]; ok {
-			langSelect.SetSelected(display)
 		}
+		rebuildLangCards()
 
 		// ── Tabs Assembly ─────────────────────────────────────────────────────
 
@@ -731,9 +855,10 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 		appearanceTab := container.NewTabItemWithIcon(u.t("settings.tab.appearance"), theme.ColorPaletteIcon(), appearanceContent)
 
 		// ── Language tab ──────────────────────────────────────────────────────
+		langGrid := container.NewGridWithColumns(3, langCardObjects...)
 		languageContent := container.NewPadded(container.NewVScroll(container.NewVBox(
 			sectionBlock(u.t("settings.language.title"), u.t("settings.language.subtitle"),
-				langSelect,
+				langGrid,
 			),
 		)))
 		languageTab := container.NewTabItemWithIcon(u.t("settings.tab.language"), theme.ComputerIcon(), languageContent)
@@ -780,6 +905,9 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 
 		tabs := container.NewAppTabs(appearanceTab, providerTab, locationsTab, languageTab, aboutTab)
 		tabs.SetTabLocation(container.TabLocationLeading)
+		if selectedTabIndex > 0 && selectedTabIndex < len(tabs.Items) {
+			tabs.SelectIndex(selectedTabIndex)
+		}
 
 		// ── SAVE BAR (full width, pinned at bottom) ───────────────────────────
 		saveBtn := widget.NewButton(u.t("settings.save"), func() {
@@ -901,3 +1029,29 @@ func parseURL(rawURL string) *url.URL {
 	u, _ := url.Parse(rawURL)
 	return u
 }
+
+// tappableContainer wraps a fyne.CanvasObject and fires a callback on tap.
+// Used to make the language selection cards clickable.
+type tappableContainer struct {
+	widget.BaseWidget
+	content fyne.CanvasObject
+	onTap   func()
+}
+
+func newTappableContainer(content fyne.CanvasObject, onTap func()) *tappableContainer {
+	t := &tappableContainer{content: content, onTap: onTap}
+	t.ExtendBaseWidget(t)
+	return t
+}
+
+func (t *tappableContainer) CreateRenderer() fyne.WidgetRenderer {
+	return widget.NewSimpleRenderer(t.content)
+}
+
+func (t *tappableContainer) Tapped(_ *fyne.PointEvent) {
+	if t.onTap != nil {
+		t.onTap()
+	}
+}
+
+func (t *tappableContainer) TappedSecondary(_ *fyne.PointEvent) {}
