@@ -14,6 +14,7 @@ import (
 	"fyne.io/fyne/v2/widget"
 
 	"weatherwidget/assets"
+	"weatherwidget/internal/config"
 	"weatherwidget/internal/i18n"
 	"weatherwidget/internal/weather"
 )
@@ -29,6 +30,7 @@ type CityPanel struct {
 	timeText   *canvas.Text
 	dateLabel  *widget.Label
 	errorIcon  *canvas.Image
+	lastData   *weather.WeatherData // cached for re-render on unit change
 
 	mu         sync.Mutex
 	timeTicker *time.Ticker
@@ -118,11 +120,12 @@ func (p *CityPanel) Container() *fyne.Container {
 	return p.container
 }
 
-// Update sets the panel content from the given weather data.
-func (p *CityPanel) Update(data *weather.WeatherData) {
+// Update sets the panel content from the given weather data using the specified unit.
+func (p *CityPanel) Update(data *weather.WeatherData, unit config.TemperatureUnit) {
 	if data == nil {
 		return
 	}
+	p.lastData = data // cache for re-render
 
 	// Update icon from embedded assets.
 	iconCode := weather.MapConditionToIcon(data.IconCode, data.LocalTime)
@@ -133,7 +136,7 @@ func (p *CityPanel) Update(data *weather.WeatherData) {
 	}
 
 	// Update labels.
-	p.tempText.Text = weather.FormatTemperature(data.Temperature, p.lm)
+	p.tempText.Text = weather.FormatTemperature(data.Temperature, unit)
 	p.tempText.Refresh()
 
 	p.descLabel.SetText(weather.FormatDescription(data.Description))
@@ -143,6 +146,15 @@ func (p *CityPanel) Update(data *weather.WeatherData) {
 
 	// Hide error indicator on successful update.
 	p.errorIcon.Hide()
+}
+
+// Rerender re-applies the last cached WeatherData with a new unit.
+// If no data has been cached yet, this is a no-op.
+func (p *CityPanel) Rerender(unit config.TemperatureUnit) {
+	if p.lastData == nil {
+		return
+	}
+	p.Update(p.lastData, unit)
 }
 
 // ShowError displays an error indicator on the panel.

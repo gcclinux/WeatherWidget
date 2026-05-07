@@ -55,6 +55,9 @@ func (s *ConfigService) Load() (*Config, error) {
 		cfg.Locale = "en-GB"
 	}
 
+	// Normalize temperature unit: invalid or missing values default to celsius.
+	cfg.TemperatureUnit = NormalizeTemperatureUnit(cfg.TemperatureUnit)
+
 	return &cfg, nil
 }
 

@@ -2,16 +2,62 @@ package weather
 
 import (
 	"fmt"
+	"math"
 	"regexp"
 	"strconv"
 	"strings"
 	"testing"
 	"time"
 
+	"weatherwidget/internal/config"
 	"weatherwidget/internal/i18n"
 
 	"pgregory.net/rapid"
 )
+
+// **Feature: temperature-unit-toggle, Property 3: Celsius conversion is identity**
+// **Validates: Requirements 3.2, 4.1, 5.2**
+
+func TestProperty3_CelsiusConversionIsIdentity(t *testing.T) {
+	rapid.Check(t, func(t *rapid.T) {
+		c := rapid.Int().Draw(t, "celsius")
+		out := FormatTemperature(c, config.TemperatureUnitCelsius)
+		expected := fmt.Sprintf("%d°C", c)
+		if out != expected {
+			t.Fatalf("got %q, want %q", out, expected)
+		}
+	})
+}
+
+// **Feature: temperature-unit-toggle, Property 5: Fahrenheit conversion is approximately invertible**
+// **Validates: Requirements 3.4**
+
+func TestProperty5_FahrenheitNearInverse(t *testing.T) {
+	rapid.Check(t, func(t *rapid.T) {
+		c := rapid.IntRange(-273, 60).Draw(t, "celsius")
+		f := ConvertToFahrenheit(c)
+		back := int(math.Round((float64(f) - 32) / 1.8))
+		diff := back - c
+		if diff < -1 || diff > 1 {
+			t.Fatalf("inverse out of range: C=%d F=%d back=%d diff=%d", c, f, back, diff)
+		}
+	})
+}
+
+// **Feature: temperature-unit-toggle, Property 4: Fahrenheit conversion formula correctness**
+// **Validates: Requirements 3.1, 3.3, 4.2, 5.3**
+
+func TestProperty4_FahrenheitFormulaCorrectness(t *testing.T) {
+	rapid.Check(t, func(t *rapid.T) {
+		c := rapid.IntRange(-273, 60).Draw(t, "celsius")
+		expected := int(math.Round(float64(c)*1.8 + 32))
+		out := FormatTemperature(c, config.TemperatureUnitFahrenheit)
+		expectedStr := fmt.Sprintf("%d°F", expected)
+		if out != expectedStr {
+			t.Fatalf("got %q, want %q", out, expectedStr)
+		}
+	})
+}
 
 // **Feature: windows-weather-widget, Property 9: Display string formatting**
 // **Validates: Requirements 2.2, 2.4**
@@ -20,7 +66,7 @@ func TestProperty9_FormatTemperature(t *testing.T) {
 	rapid.Check(t, func(t *rapid.T) {
 		temp := rapid.Int().Draw(t, "temperature")
 
-		result := FormatTemperature(temp, nil)
+		result := FormatTemperature(temp, config.TemperatureUnitCelsius)
 
 		expected := fmt.Sprintf("%d°C", temp)
 		if result != expected {
@@ -146,6 +192,34 @@ func TestProperty10_FormatDateTime(t *testing.T) {
 	})
 }
 
+// **Feature: temperature-unit-toggle, Property 6: FormatTemperature Celsius output matches pattern**
+// **Validates: Requirements 4.1, 5.2, 5.4**
+
+func TestProperty6_CelsiusOutputMatchesPattern(t *testing.T) {
+	celsiusRe := regexp.MustCompile(`^-?\d+°C$`)
+	rapid.Check(t, func(t *rapid.T) {
+		c := rapid.Int().Draw(t, "celsius")
+		out := FormatTemperature(c, config.TemperatureUnitCelsius)
+		if !celsiusRe.MatchString(out) {
+			t.Fatalf("%q does not match ^-?\\d+°C$", out)
+		}
+	})
+}
+
+// **Feature: temperature-unit-toggle, Property 7: FormatTemperature Fahrenheit output matches pattern**
+// **Validates: Requirements 4.2, 5.3, 5.5**
+
+func TestProperty7_FahrenheitOutputMatchesPattern(t *testing.T) {
+	fahrenheitRe := regexp.MustCompile(`^-?\d+°F$`)
+	rapid.Check(t, func(t *rapid.T) {
+		c := rapid.Int().Draw(t, "celsius")
+		out := FormatTemperature(c, config.TemperatureUnitFahrenheit)
+		if !fahrenheitRe.MatchString(out) {
+			t.Fatalf("%q does not match ^-?\\d+°F$", out)
+		}
+	})
+}
+
 // **Feature: i18n-localization, Property 4: Locale-aware formatting preserves structure**
 // **Validates: Requirements 6.1, 6.2, 6.3**
 
@@ -176,30 +250,17 @@ func TestProperty4_LocaleAwareFormattingPreservesStructure(t *testing.T) {
 			rt.Fatalf("SetLocale(%q) error = %v", locale, err)
 		}
 
-		// Get the locale's expected suffix and formats.
-		tempSuffix := mgr.T("weather.tempSuffix")
+		// Get the locale's expected formats.
 		dateFormat := mgr.T("weather.dateFormat")
 		timeFormat := mgr.T("weather.timeFormat")
 
 		// --- FormatTemperature ---
 		temp := rapid.IntRange(-100, 100).Draw(rt, "temperature")
-		tempResult := FormatTemperature(temp, mgr)
+		tempResult := FormatTemperature(temp, config.TemperatureUnitCelsius)
 
-		if !strings.HasSuffix(tempResult, tempSuffix) {
-			rt.Fatalf("FormatTemperature(%d, %q) = %q does not end with locale suffix %q",
-				temp, locale, tempResult, tempSuffix)
-		}
-
-		// Verify the numeric prefix is a valid integer.
-		prefix := strings.TrimSuffix(tempResult, tempSuffix)
-		parsedTemp, err := strconv.Atoi(prefix)
-		if err != nil {
-			rt.Fatalf("FormatTemperature(%d, %q) prefix %q is not a valid integer: %v",
-				temp, locale, prefix, err)
-		}
-		if parsedTemp != temp {
-			rt.Fatalf("FormatTemperature(%d, %q) parsed temp = %d, want %d",
-				temp, locale, parsedTemp, temp)
+		expected := fmt.Sprintf("%d°C", temp)
+		if tempResult != expected {
+			rt.Fatalf("FormatTemperature(%d, celsius) = %q, want %q", temp, tempResult, expected)
 		}
 
 		// --- FormatDate ---

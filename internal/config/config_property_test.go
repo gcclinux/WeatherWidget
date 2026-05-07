@@ -1,6 +1,7 @@
 package config
 
 import (
+	"encoding/json"
 	"fmt"
 	"path/filepath"
 	"reflect"
@@ -115,6 +116,7 @@ func genConfig(t *rapid.T) *Config {
 		RefreshInterval: refreshInterval,
 		CornerPosition:  cornerPos,
 		Locale:          validLocales[rapid.IntRange(0, len(validLocales)-1).Draw(t, "localeIdx")],
+		TemperatureUnit: rapid.SampledFrom([]TemperatureUnit{TemperatureUnitCelsius, TemperatureUnitFahrenheit}).Draw(t, "temperatureUnit"),
 		APIConfig:       apiCfg,
 		DatabaseConfig:  dbCfg,
 	}
@@ -137,6 +139,22 @@ func genConfig(t *rapid.T) *Config {
 	}
 
 	return cfg
+}
+
+// **Feature: temperature-unit-toggle, Property 2: Invalid TemperatureUnit normalizes to Celsius**
+// **Validates: Requirements 1.4, 4.5, 5.6**
+func TestProperty2_InvalidUnitNormalizesToCelsius(t *testing.T) {
+	rapid.Check(t, func(t *rapid.T) {
+		s := rapid.StringMatching(`[^cf].*`).Draw(t, "invalidUnit") // rough filter
+		unit := TemperatureUnit(s)
+		if unit == TemperatureUnitCelsius || unit == TemperatureUnitFahrenheit {
+			t.Skip()
+		}
+		result := NormalizeTemperatureUnit(unit)
+		if result != TemperatureUnitCelsius {
+			t.Fatalf("expected celsius, got %q", result)
+		}
+	})
 }
 
 func TestProperty1_ConfigSerializationRoundTrip(t *testing.T) {
@@ -167,6 +185,26 @@ func TestProperty1_ConfigSerializationRoundTrip(t *testing.T) {
 		// Assert deep equality
 		if !reflect.DeepEqual(original, loaded) {
 			rt.Fatalf("Round-trip mismatch.\nOriginal: %+v\nLoaded:   %+v", original, loaded)
+		}
+	})
+}
+
+// **Feature: temperature-unit-toggle, Property 1: Config round-trip preserves TemperatureUnit**
+// **Validates: Requirements 1.3**
+
+func TestTemperatureUnitToggle_Property1_ConfigRoundTrip(t *testing.T) {
+	rapid.Check(t, func(t *rapid.T) {
+		unit := rapid.SampledFrom([]TemperatureUnit{
+			TemperatureUnitCelsius,
+			TemperatureUnitFahrenheit,
+		}).Draw(t, "unit")
+		cfg := DefaultConfig()
+		cfg.TemperatureUnit = unit
+		data, _ := json.Marshal(cfg)
+		var out Config
+		json.Unmarshal(data, &out)
+		if out.TemperatureUnit != unit {
+			t.Fatalf("round-trip failed: got %q, want %q", out.TemperatureUnit, unit)
 		}
 	})
 }

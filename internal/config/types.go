@@ -1,5 +1,24 @@
 package config
 
+// TemperatureUnit represents the display unit for temperature values.
+type TemperatureUnit string
+
+const (
+	TemperatureUnitCelsius    TemperatureUnit = "celsius"
+	TemperatureUnitFahrenheit TemperatureUnit = "fahrenheit"
+)
+
+// NormalizeTemperatureUnit returns the unit unchanged if it is a known value,
+// otherwise returns TemperatureUnitCelsius as the safe default.
+func NormalizeTemperatureUnit(u TemperatureUnit) TemperatureUnit {
+	switch u {
+	case TemperatureUnitCelsius, TemperatureUnitFahrenheit:
+		return u
+	default:
+		return TemperatureUnitCelsius
+	}
+}
+
 // DataSourceType represents the type of weather data source.
 type DataSourceType string
 
@@ -19,6 +38,7 @@ type Config struct {
 	CustomY         *int            `json:"customY,omitempty"`
 	Opacity         int             `json:"opacity"` // 25, 50, 75, or 100 (percent)
 	Locale          string          `json:"locale"`
+	TemperatureUnit TemperatureUnit `json:"temperatureUnit,omitempty"`
 	APIConfig       *APIConfig      `json:"apiConfig,omitempty"`
 	DatabaseConfig  *DatabaseConfig `json:"databaseConfig,omitempty"`
 }
@@ -76,6 +96,7 @@ func DefaultConfig() *Config {
 		CornerPosition:  "bottom-right",
 		Opacity:         100,
 		Locale:          "en-GB",
+		TemperatureUnit: TemperatureUnitCelsius,
 		APIConfig: &APIConfig{
 			Provider: "openweathermap",
 		},

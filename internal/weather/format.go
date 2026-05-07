@@ -2,20 +2,35 @@ package weather
 
 import (
 	"fmt"
+	"math"
 	"strings"
 	"time"
 
+	"weatherwidget/internal/config"
 	"weatherwidget/internal/i18n"
 )
 
-// FormatTemperature returns a temperature string using the locale's temperature format.
-// If lm is nil, falls back to the default "%d°C" format.
-func FormatTemperature(temp int, lm *i18n.LocaleManager) string {
-	format := "%d°C"
-	if lm != nil {
-		format = lm.T("weather.tempFormat")
+// FormatTemperature returns a temperature string for the given Celsius value
+// formatted according to unit. Invalid unit values default to Celsius.
+func FormatTemperature(temp int, unit config.TemperatureUnit) string {
+	switch config.NormalizeTemperatureUnit(unit) {
+	case config.TemperatureUnitFahrenheit:
+		f := convertToFahrenheit(temp)
+		return fmt.Sprintf("%d°F", f)
+	default: // celsius and any invalid value
+		return fmt.Sprintf("%d°C", temp)
 	}
-	return fmt.Sprintf(format, temp)
+}
+
+// convertToFahrenheit converts an integer Celsius value to Fahrenheit
+// using the formula F = round(C × 1.8 + 32).
+func convertToFahrenheit(celsius int) int {
+	return int(math.Round(float64(celsius)*1.8 + 32))
+}
+
+// ConvertToFahrenheit is the exported wrapper for property-based testing.
+func ConvertToFahrenheit(celsius int) int {
+	return convertToFahrenheit(celsius)
 }
 
 // FormatCityRegion returns a location string in the pattern "{name}, {region}".

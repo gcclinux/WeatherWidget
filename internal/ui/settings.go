@@ -60,7 +60,8 @@ var providerValueToDisplay = map[string]string{
 type settingsState struct {
 	cities       []config.CityConfig
 	window       fyne.Window
-	selectedLang string // locale code selected in the language dropdown
+	selectedLang string                 // locale code selected in the language dropdown
+	selectedUnit config.TemperatureUnit // temperature unit selected in the appearance tab
 }
 
 // t is a helper that returns the translated string for the given key.
@@ -105,6 +106,7 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 		cities:       copyCities(cfg.Cities),
 		window:       win,
 		selectedLang: cfg.Locale,
+		selectedUnit: config.NormalizeTemperatureUnit(cfg.TemperatureUnit),
 	}
 	if state.selectedLang == "" {
 		state.selectedLang = "en-GB"
@@ -267,6 +269,35 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 			opacityRadio.SetSelected(label)
 		} else {
 			opacityRadio.SetSelected("100%")
+		}
+
+		// ── Temperature unit ─────────────────────────────────────────────────
+		unitCelsiusLabel := "°C (Celsius)"
+		unitFahrenheitLabel := "°F (Fahrenheit)"
+
+		unitValueMap := map[string]config.TemperatureUnit{
+			unitCelsiusLabel:    config.TemperatureUnitCelsius,
+			unitFahrenheitLabel: config.TemperatureUnitFahrenheit,
+		}
+		unitLabelMap := map[config.TemperatureUnit]string{
+			config.TemperatureUnitCelsius:    unitCelsiusLabel,
+			config.TemperatureUnitFahrenheit: unitFahrenheitLabel,
+		}
+
+		unitRadio := widget.NewRadioGroup(
+			[]string{unitCelsiusLabel, unitFahrenheitLabel},
+			func(selected string) {
+				state.selectedUnit = unitValueMap[selected]
+			},
+		)
+		unitRadio.Horizontal = true
+
+		// Pre-select from current config, defaulting to Celsius.
+		normalizedUnit := config.NormalizeTemperatureUnit(cfg.TemperatureUnit)
+		if label, ok := unitLabelMap[normalizedUnit]; ok {
+			unitRadio.SetSelected(label)
+		} else {
+			unitRadio.SetSelected(unitCelsiusLabel)
 		}
 
 		// ── Refresh interval ─────────────────────────────────────────────────
@@ -685,6 +716,9 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 			sectionBlock(u.t("settings.transparency.title"), u.t("settings.transparency.subtitle"),
 				opacityRadio,
 			),
+			sectionBlock(u.t("settings.temperature.title"), u.t("settings.temperature.subtitle"),
+				unitRadio,
+			),
 			sectionBlock(u.t("settings.interval.title"), u.t("settings.interval.subtitle"),
 				container.NewHBox(intervalSlider, intervalLabel),
 			),
@@ -841,6 +875,7 @@ func buildConfigFromUI(
 		Opacity:         opacity,
 		Locale:          locale,
 	}
+	cfg.TemperatureUnit = config.NormalizeTemperatureUnit(state.selectedUnit)
 	provider := providerDisplayToValue[providerSelect.Selected]
 	if provider == "" {
 		provider = "openweathermap"

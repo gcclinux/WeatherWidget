@@ -3,23 +3,50 @@ package weather
 import (
 	"testing"
 	"time"
+
+	"weatherwidget/internal/config"
 )
 
 func TestFormatTemperature(t *testing.T) {
 	tests := []struct {
 		input    int
+		unit     config.TemperatureUnit
 		expected string
 	}{
-		{24, "24°C"},
-		{0, "0°C"},
-		{-5, "-5°C"},
-		{100, "100°C"},
-		{-40, "-40°C"},
+		{24, config.TemperatureUnitCelsius, "24°C"},
+		{0, config.TemperatureUnitCelsius, "0°C"},
+		{-5, config.TemperatureUnitCelsius, "-5°C"},
+		{100, config.TemperatureUnitCelsius, "100°C"},
+		{-40, config.TemperatureUnitCelsius, "-40°C"},
+		// Fahrenheit spot-checks
+		{0, config.TemperatureUnitFahrenheit, "32°F"},
+		{100, config.TemperatureUnitFahrenheit, "212°F"},
+		{-40, config.TemperatureUnitFahrenheit, "-40°F"},
+		// Invalid unit defaults to Celsius
+		{20, config.TemperatureUnit("invalid"), "20°C"},
 	}
 	for _, tc := range tests {
-		got := FormatTemperature(tc.input, nil)
+		got := FormatTemperature(tc.input, tc.unit)
 		if got != tc.expected {
-			t.Errorf("FormatTemperature(%d) = %q, want %q", tc.input, got, tc.expected)
+			t.Errorf("FormatTemperature(%d, %q) = %q, want %q", tc.input, tc.unit, got, tc.expected)
+		}
+	}
+}
+
+func TestConvertToFahrenheit(t *testing.T) {
+	tests := []struct {
+		celsius  int
+		expected int
+	}{
+		{0, 32},
+		{100, 212},
+		{-40, -40},
+		{37, 99},
+	}
+	for _, tc := range tests {
+		got := ConvertToFahrenheit(tc.celsius)
+		if got != tc.expected {
+			t.Errorf("ConvertToFahrenheit(%d) = %d, want %d", tc.celsius, got, tc.expected)
 		}
 	}
 }

@@ -78,6 +78,7 @@ func TestSaveAndLoad_RoundTrip(t *testing.T) {
 		RefreshInterval: 30,
 		CornerPosition:  "top-left",
 		Locale:          "en-GB",
+		TemperatureUnit: TemperatureUnitCelsius,
 		DatabaseConfig: &DatabaseConfig{
 			Host:     "localhost",
 			Port:     5432,
@@ -154,6 +155,7 @@ func TestSave_AtomicWrite_NoPartialFile(t *testing.T) {
 		RefreshInterval: 120,
 		CornerPosition:  "top-right",
 		Locale:          "en-GB",
+		TemperatureUnit: TemperatureUnitCelsius,
 		APIConfig: &APIConfig{
 			Provider: "easyweatherwidget",
 			APIKey:   "test-key-123",

@@ -202,3 +202,92 @@ func TestBuildConfigFromUI_DefaultLocale(t *testing.T) {
 		t.Errorf("buildConfigFromUI Locale = %q, want %q", cfg.Locale, "en-GB")
 	}
 }
+
+// buildConfigFromUIHelper is a test helper that calls buildConfigFromUI with
+// sensible defaults, overriding only the settingsState so tests can focus on
+// the selectedUnit field.
+func buildConfigFromUIHelper(t *testing.T, state *settingsState) *config.Config {
+	t.Helper()
+	test.NewApp()
+
+	providerSelect := widget.NewSelect([]string{"OpenWeatherMap (Free)"}, nil)
+	providerSelect.SetSelected("OpenWeatherMap (Free)")
+
+	apiKeyEntry := widget.NewEntry()
+	apiKeyEntry.SetText("test-key")
+
+	intervalSlider := widget.NewSlider(10, 120)
+	intervalSlider.SetValue(120)
+
+	positionValueMap := map[string]string{
+		"Bottom-Right": "bottom-right",
+	}
+	positionRadio := widget.NewRadioGroup([]string{"Bottom-Right"}, nil)
+	positionRadio.SetSelected("Bottom-Right")
+
+	monitorSelect := widget.NewSelect([]string{"Monitor 1"}, nil)
+	monitorSelect.SetSelected("Monitor 1")
+
+	opacityRadio := widget.NewRadioGroup([]string{"100%"}, nil)
+	opacityRadio.SetSelected("100%")
+	opacityMap := map[string]int{"100%": 100}
+
+	current := config.DefaultConfig()
+
+	return buildConfigFromUI(
+		providerSelect, apiKeyEntry, intervalSlider,
+		state, positionValueMap, positionRadio, monitorSelect,
+		opacityRadio, opacityMap, current,
+	)
+}
+
+// TestBuildConfigFromUI_TemperatureUnit_Celsius verifies that selecting Celsius
+// writes TemperatureUnitCelsius to the returned Config.
+// Validates: Requirements 2.3
+func TestBuildConfigFromUI_TemperatureUnit_Celsius(t *testing.T) {
+	state := &settingsState{
+		cities:       []config.CityConfig{{Name: "London", Region: "UK"}},
+		selectedLang: "en-GB",
+		selectedUnit: config.TemperatureUnitCelsius,
+	}
+
+	cfg := buildConfigFromUIHelper(t, state)
+
+	if cfg.TemperatureUnit != config.TemperatureUnitCelsius {
+		t.Errorf("TemperatureUnit = %q, want %q", cfg.TemperatureUnit, config.TemperatureUnitCelsius)
+	}
+}
+
+// TestBuildConfigFromUI_TemperatureUnit_Fahrenheit verifies that selecting
+// Fahrenheit writes TemperatureUnitFahrenheit to the returned Config.
+// Validates: Requirements 2.3
+func TestBuildConfigFromUI_TemperatureUnit_Fahrenheit(t *testing.T) {
+	state := &settingsState{
+		cities:       []config.CityConfig{{Name: "New York", Region: "US"}},
+		selectedLang: "en-GB",
+		selectedUnit: config.TemperatureUnitFahrenheit,
+	}
+
+	cfg := buildConfigFromUIHelper(t, state)
+
+	if cfg.TemperatureUnit != config.TemperatureUnitFahrenheit {
+		t.Errorf("TemperatureUnit = %q, want %q", cfg.TemperatureUnit, config.TemperatureUnitFahrenheit)
+	}
+}
+
+// TestBuildConfigFromUI_TemperatureUnit_InvalidNormalizesToCelsius verifies
+// that an invalid/empty selectedUnit is normalized to Celsius in the returned Config.
+// Validates: Requirements 2.3
+func TestBuildConfigFromUI_TemperatureUnit_InvalidNormalizesToCelsius(t *testing.T) {
+	state := &settingsState{
+		cities:       []config.CityConfig{{Name: "Paris", Region: "FR"}},
+		selectedLang: "en-GB",
+		selectedUnit: config.TemperatureUnit(""), // empty / invalid
+	}
+
+	cfg := buildConfigFromUIHelper(t, state)
+
+	if cfg.TemperatureUnit != config.TemperatureUnitCelsius {
+		t.Errorf("TemperatureUnit = %q, want %q (empty should normalize to celsius)", cfg.TemperatureUnit, config.TemperatureUnitCelsius)
+	}
+}

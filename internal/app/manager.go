@@ -235,8 +235,18 @@ func (a *AppManager) onSettingsSave(newCfg *config.Config) error {
 	// Always reposition the widget window (position may have changed independently).
 	a.applyPosition(newCfg)
 
-	// Immediately fetch new generic data to refresh the UI and eliminate blank tiles!
-	a.scheduler.FetchNow()
+	// Re-render panels. If only the temperature unit changed (no city/provider
+	// change and no new fetch needed), use cached data to avoid a network round-trip.
+	switch determineSettingsSaveAction(oldCfg, newCfg, providerChanged) {
+	case settingsSaveActionRerender:
+		// Fast path: re-render from cache, no fetch.
+		fyne.Do(func() {
+			a.ui.RerenderPanels(newCfg.TemperatureUnit)
+		})
+	default:
+		// Normal path: fetch fresh data (covers city changes, provider changes, etc.).
+		a.scheduler.FetchNow()
+	}
 
 	return nil
 }
@@ -312,7 +322,7 @@ func (a *AppManager) handleWeatherUpdate(results []weather.WeatherResult) {
 	}
 	log.Printf("dispatching %d data updates to UI panels", len(data))
 	fyne.Do(func() {
-		a.ui.UpdatePanels(data)
+		a.ui.UpdatePanels(data, a.cfg.TemperatureUnit)
 	})
 }
 
@@ -384,4 +394,30 @@ func sameCities(a, b []config.CityConfig) bool {
 		}
 	}
 	return true
+}
+
+// settingsSaveActionType describes which rendering action onSettingsSave should take.
+type settingsSaveActionType int
+
+const (
+	// settingsSaveActionRerender means only the temperature unit changed:
+	// panels should be re-rendered from cache without a new network fetch.
+	settingsSaveActionRerender settingsSaveActionType = iota
+	// settingsSaveActionFetch means a full weather fetch is required
+	// (city list, provider, or credentials changed).
+	settingsSaveActionFetch
+)
+
+// determineSettingsSaveAction returns the rendering action that onSettingsSave
+// should take based on what changed between oldCfg and newCfg.
+// providerChanged must be pre-computed by the caller (it requires access to
+// the current provider state which is not available here).
+func determineSettingsSaveAction(oldCfg, newCfg *config.Config, providerChanged bool) settingsSaveActionType {
+	unitChanged := oldCfg.TemperatureUnit != newCfg.TemperatureUnit
+	citiesChanged := len(oldCfg.Cities) != len(newCfg.Cities) || !sameCities(oldCfg.Cities, newCfg.Cities)
+
+	if unitChanged && !citiesChanged && !providerChanged {
+		return settingsSaveActionRerender
+	}
+	return settingsSaveActionFetch
 }
