@@ -101,9 +101,40 @@ You can download the latest pre-compiled binaries for Windows and Linux from the
 
 #### Windows
 ```powershell
-type "$env:APPDATA\WeatherWidget\WeatherWidget\config.json"
+type $env:APPDATA\WeatherWidget\WeatherWidget\config.json
 ```
 #### Linux
 ```bash
 cat $HOME/.config/WeatherWidget/WeatherWidget/config.json
 ```
+
+## Troubleshooting
+
+### "Nothing happens" when clicking Settings or Weather Panel
+If the app appears in your system tray (or is running in the background) but clicking **Settings** or **Show Weather** does nothing, it usually means the application failed to create the UI window.
+
+You can verify this by running the application from the command line with the `-debug` flag to enable logging to a file:
+```powershell
+.\weatherwidget.exe -debug
+```
+Then, check the log file at:
+```powershell
+type $env:APPDATA\WeatherWidget\debug.log
+```
+
+If you see the following error:
+`Cause: APIUnavailable: WGL: The driver does not appear to support OpenGL`
+
+**The Fix:**
+This happens on "clean" Windows installations (using the Microsoft Basic Display Adapter) or in Virtual Machines because the system lacks proper graphics drivers to support the required OpenGL 2.0+ context.
+
+There are two ways to fix this:
+1. **Install Graphics Drivers:** Install the proper Intel/AMD/NVIDIA graphics drivers for your system.
+2. **Use Mesa3D Software Renderer (Portable Fix):** If installing drivers is not an option:
+   * Download a pre-compiled **Mesa3D for Windows** package (e.g., from [fdossena.com](https://fdossena.com/?p=mesa/index.frag)).
+   * Extract the **64-bit `opengl32.dll`** file.
+   * Place that `opengl32.dll` file directly in the same folder as your `weatherwidget.exe`. 
+   
+   Windows will automatically use this DLL to translate OpenGL hardware calls into software rendering, allowing the app to work flawlessly on any PC regardless of graphics drivers.
+
+*Note: A `-software` flag is also available (`.\weatherwidget.exe -software`) which instructs the Fyne framework to prefer software rendering, but this still requires basic OpenGL driver availability at the OS level.*

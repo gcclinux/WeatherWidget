@@ -2,6 +2,7 @@
 package main
 
 import (
+	"flag"
 	"log"
 	"os"
 	"path/filepath"
@@ -18,10 +19,33 @@ import (
 var version = "dev"
 
 func main() {
-	fyneApp := app.NewWithID("com.weatherwidget")
-	fyneApp.Settings().SetTheme(ui.NewWidgetTheme(theme.DefaultTheme()))
+	debugFlag := flag.Bool("debug", false, "Enable debug logging to a file")
+	softwareFlag := flag.Bool("software", false, "Use software rendering (fixes OpenGL driver issues)")
+	flag.Parse()
+
+	if *softwareFlag {
+		os.Setenv("FYNE_RENDER", "software")
+	}
 
 	appDataDir := appDataDirectory()
+
+	if err := os.MkdirAll(appDataDir, 0755); err != nil {
+		log.Printf("failed to create app data directory: %v", err)
+	}
+
+	if *debugFlag {
+		logPath := filepath.Join(appDataDir, "debug.log")
+		logFile, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
+		if err == nil {
+			log.SetOutput(logFile)
+			log.Printf("--- Debug logging enabled (version: %s) ---", version)
+		} else {
+			log.Printf("failed to open debug log file: %v", err)
+		}
+	}
+
+	fyneApp := app.NewWithID("com.weatherwidget")
+	fyneApp.Settings().SetTheme(ui.NewWidgetTheme(theme.DefaultTheme()))
 
 	manager := appmanager.NewAppManager(fyneApp, appDataDir)
 	if err := manager.Run(); err != nil {
