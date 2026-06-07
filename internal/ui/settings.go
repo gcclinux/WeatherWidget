@@ -524,7 +524,7 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 					})
 
 					query := searchName + "," + searchRegion
-					uStr := fmt.Sprintf("https://easyweatherwidget.org:8043/api/v1/weather/key=%s/%s",
+					uStr := fmt.Sprintf("https://weather-gateway-ricardo.web.app/api/v1/weather/key=%s/%s",
 						url.PathEscape(searchKey), url.PathEscape(query))
 					resp, err := http.Get(uStr)
 					if err != nil {

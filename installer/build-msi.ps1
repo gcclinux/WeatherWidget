@@ -3,13 +3,13 @@
 # ============================================================================
 # Usage:
 #   # Sign with certificate from Windows certificate store (by thumbprint):
-#   .\installer\build-msi.ps1 -Version "0.0.5.0" -CertThumbprint "A9D97675327F7BF344BA308A357E91141A1DDE50"
+#   .\installer\build-msi.ps1 -Version "0.0.6.1" -CertThumbprint "A9D97675327F7BF344BA308A357E91141A1DDE50"
 #
 #   # Sign with a .pfx file:
-#   .\installer\build-msi.ps1 -Version "0.0.5.0" -CertPath "cert.pfx" -CertPassword "pass"
+#   .\installer\build-msi.ps1 -Version "0.0.6.1" -CertPath "cert.pfx" -CertPassword "pass"
 #
 #   # Build without signing (for testing only):
-#   .\installer\build-msi.ps1 -Version "0.0.5.0" -SkipSign
+#   .\installer\build-msi.ps1 -Version "0.0.6.1" -SkipSign
 #
 # Prerequisites:
 #   - Go 1.25+ with CGO enabled (for Fyne)

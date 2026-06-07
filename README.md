@@ -42,7 +42,7 @@ You can download the latest pre-compiled binaries for Windows and Linux from the
 
 ### Windows MSI Package
 ```powershell
- .\installer\build-msi.ps1 -Version "0.0.6.0" -SkipSign
+ .\installer\build-msi.ps1 -Version "0.0.6.1" -SkipSign
  ```
 
 ### Linux

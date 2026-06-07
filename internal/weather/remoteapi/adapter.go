@@ -20,7 +20,7 @@ import (
 const (
 	defaultOWMBaseURL = "https://api.openweathermap.org"
 	defaultWUBaseURL  = "https://api.weather.com"
-	defaultEWWBaseURL = "https://easyweatherwidget.org:8043"
+	defaultEWWBaseURL = "https://weather-gateway-ricardo.web.app"
 )
 
 // RemoteAPIAdapter implements weather.WeatherProvider for remote weather APIs.
