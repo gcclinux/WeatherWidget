@@ -66,6 +66,16 @@ static void getScreenBounds(int index, int* outX, int* outY, int* outW, int* out
 	*outW = (int)visible.size.width;
 	*outH = (int)visible.size.height;
 }
+
+// setNSWindowAlpha sets the window alpha (opacity) value.
+// opacityPercent: 25, 50, 75, or 100.
+static void setNSWindowAlpha(uintptr_t winHandle, int opacityPercent) {
+	dispatch_async(dispatch_get_main_queue(), ^{
+		NSWindow *w = (__bridge NSWindow*)(void*)winHandle;
+		CGFloat alpha = (CGFloat)opacityPercent / 100.0;
+		[w setAlphaValue:alpha];
+	});
+}
 */
 import "C"
 
@@ -153,8 +163,20 @@ func getWindowPosition() (int, int) {
 	return int(x), int(y)
 }
 
-// setWindowOpacity is a no-op on macOS for now.
-func setWindowOpacity(_ int) {}
+// setWindowOpacity applies transparency to the widget window on macOS.
+// Uses NSWindow.setAlphaValue() for true window-level transparency,
+// and also adjusts the theme background shade for visual consistency.
+func setWindowOpacity(opacityPercent int) {
+	SetDarwinBackgroundShade(opacityPercent)
+
+	handle := getNSWindowHandle()
+	if handle == 0 {
+		log.Println("macOS: setWindowOpacity — could not get NSWindow handle")
+		return
+	}
+	C.setNSWindowAlpha(handle, C.int(opacityPercent))
+	log.Printf("macOS: setWindowOpacity %d%%", opacityPercent)
+}
 
 // getMonitorCount returns the number of display monitors on macOS.
 func getMonitorCount() int {

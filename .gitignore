@@ -12,3 +12,6 @@ build/
 *.msi
 *.msix
 *.fail
+nohup.out
+*.app
+*.dmg

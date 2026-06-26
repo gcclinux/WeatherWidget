@@ -1,74 +1,141 @@
-# Weather Widget - Windows Installer Packaging
+# Weather Widget - Installer Packaging
 
-This directory contains everything needed to build production-ready Windows
-installers for the Weather Widget application.
+This directory contains everything needed to build production-ready installers
+for the Weather Widget application.
 
-## Two Packaging Options
+## Packaging Options
 
-| Format | Use Case | Script |
-|--------|----------|--------|
-| **MSI** | Traditional Windows installer, sideloading | `build-msi.ps1` |
-| **MSIX** | Microsoft Store submission (recommended) | `build-msix.ps1` |
+| Format | Platform | Use Case | Script |
+|--------|----------|----------|--------|
+| **PKG** | macOS | Standard macOS installer wizard | `build-pkg.sh` |
+| **MSI** | Windows | Traditional Windows installer | `build-msi.ps1` |
+| **MSIX** | Windows | Microsoft Store submission | `build-msix.ps1` |
 
-## Prerequisites
+---
 
-### Required for both
+## macOS PKG Installer
+
+The `.pkg` installer runs the standard macOS installer wizard (the same UI
+you see when installing most apps). It places `WeatherWidget.app` into
+`/Applications` and launches it automatically when done.
+
+### Prerequisites
+
+All tools are built into macOS — no extra installs needed:
+- `pkgbuild`, `productbuild` — package builders (part of Xcode CLT)
+- `codesign` — code signing (part of Xcode CLT)
+- `xcrun notarytool` — notarization (part of Xcode CLT, macOS 12+)
+
+For **signed/notarized** builds you need an Apple Developer account with:
+- **Developer ID Application** certificate (signs the `.app`)
+- **Developer ID Installer** certificate (signs the `.pkg`)
+
+### Quick Start
+
+```bash
+# Build unsigned installer (for testing):
+make build-darwin-pkg VERSION=1.2.0
+
+# Or call the script directly:
+./installer/build-pkg.sh --version 1.2.0 --skip-sign
+```
+
+```bash
+# Build signed installer (for distribution):
+make build-darwin-pkg VERSION=1.2.0 \
+    SIGN_APP="Developer ID Application: Your Name (TEAMID)" \
+    SIGN_PKG="Developer ID Installer: Your Name (TEAMID)"
+```
+
+```bash
+# Build signed + notarized installer (required for Gatekeeper on macOS 10.15+):
+make build-darwin-pkg VERSION=1.2.0 \
+    SIGN_APP="Developer ID Application: Your Name (TEAMID)" \
+    SIGN_PKG="Developer ID Installer: Your Name (TEAMID)" \
+    NOTARIZE=1 \
+    APPLE_ID=you@example.com \
+    TEAM_ID=YOURTEAMID \
+    APP_PWD=xxxx-xxxx-xxxx-xxxx
+```
+
+Output goes to `build/WeatherWidget-<version>.pkg`.
+
+### Signing Identities
+
+To find your certificate names, run:
+```bash
+security find-identity -v -p codesigning
+```
+
+Look for entries like:
+- `Developer ID Application: Your Name (XXXXXXXXXX)`
+- `Developer ID Installer: Your Name (XXXXXXXXXX)`
+
+### Notarization
+
+Notarization is required for Gatekeeper to allow users to open your app
+without warnings on macOS 10.15+. You need an **app-specific password**:
+
+1. Go to [appleid.apple.com](https://appleid.apple.com) → Security → App-Specific Passwords
+2. Generate a new password for "WeatherWidget notarization"
+3. Pass it as `APP_PWD=xxxx-xxxx-xxxx-xxxx`
+
+### Entitlements
+
+`installer/entitlements.plist` is generated automatically on first run. Edit
+it to match the actual capabilities your app uses before signing for
+distribution. The defaults allow outbound network access (for weather API
+calls).
+
+---
+
+## Windows MSI Installer
+
+### Prerequisites
 
 1. **Go 1.25+** with CGO enabled (Fyne requires CGO)
 2. **go-winres** — embeds icon, manifest, and version info into the exe:
    ```powershell
    go install github.com/tc-hib/go-winres@latest
    ```
-3. **A code signing certificate** — required for production/Store builds.
-   For Store apps, you get one through Microsoft Partner Center.
-
-### For MSI builds
-
-4. **WiX Toolset v4+**:
+3. **WiX Toolset v4+**:
    ```powershell
    dotnet tool install --global wix
    ```
+4. **A code signing certificate**
 
-### For MSIX builds (Microsoft Store)
-
-4. **Windows 10/11 SDK** — provides `MakeAppx.exe` and `SignTool.exe`.
-   Install via Visual Studio Installer or the standalone SDK installer.
-
-## Quick Start
-
-### Build an unsigned MSI (for testing)
+### Build
 
 ```powershell
+# Unsigned (for testing only):
 .\installer\build-msi.ps1 -Version "1.0.0.0" -SkipSign
+
+# Signed with certificate from Windows certificate store:
+.\installer\build-msi.ps1 -Version "1.0.0.0" -CertThumbprint "THUMBPRINT"
+
+# Signed with a .pfx file:
+.\installer\build-msi.ps1 -Version "1.0.0.0" -CertPath "cert.pfx" -CertPassword "pass"
 ```
 
-### Build a signed MSI
+---
+
+## Windows MSIX (Microsoft Store)
+
+### Build
 
 ```powershell
-.\installer\build-msi.ps1 -Version "1.0.0.0" -CertPath ".\cert.pfx" -CertPassword "yourpassword"
-```
-
-### Build an MSIX for Microsoft Store (recommended)
-
-```powershell
-# For Store submission — no certificate needed, Microsoft signs it:
+# For Store submission (Microsoft signs it for you):
 .\installer\build-msix.ps1 -Version "1.0.0.0" -StoreUpload
 
-# For local sideload testing with your own cert:
-.\installer\build-msix.ps1 -Version "1.0.0.0" -CertPath ".\cert.pfx" -CertPassword "yourpassword"
+# For local sideload testing:
+.\installer\build-msix.ps1 -Version "1.0.0.0" -CertPath "cert.pfx" -CertPassword "pass"
 ```
 
-The `-StoreUpload` flag produces an unsigned `.msixupload` file that you
-upload directly to Partner Center. Microsoft signs the package during
-certification — you do not need your own code signing certificate for Store
-submissions.
+The `-StoreUpload` flag produces an unsigned `.msixupload` for Partner Center.
 
-Output goes to `.\build\`.
+### Store Assets
 
-## Store Assets (MSIX only)
-
-Before submitting to the Microsoft Store, place properly sized PNG images in
-`installer/store-assets/`:
+Place properly sized PNG images in `installer/store-assets/`:
 
 | File | Size | Purpose |
 |------|------|---------|
@@ -78,58 +145,26 @@ Before submitting to the Microsoft Store, place properly sized PNG images in
 | `Wide310x150Logo.png` | 310x150 | Wide Start tile |
 | `Square310x310Logo.png` | 310x310 | Large Start tile |
 
-If these are missing, the build script creates 1x1 placeholders so the
-package builds, but you must replace them before Store submission.
+### AppxManifest.xml
 
-## Icon File
+Verify `Identity Name` and `Identity Publisher` match your Partner Center
+**Product Identity** page exactly before uploading.
 
-Place your application icon as `winres/icon.ico`. This gets embedded into the
-exe and is used for the taskbar, window title, and Explorer file icon.
-
-To convert a PNG to ICO, use ImageMagick:
-```bash
-magick convert icon.png -define icon:auto-resize=256,128,64,48,32,16 icon.ico
-```
-
-## AppxManifest.xml Configuration
-
-Before submitting to the Store, verify these fields in `AppxManifest.xml`
-match your Partner Center **Product Identity** page exactly:
-
-- `Identity Name` — from Partner Center > Product Identity > "Package/Identity/Name"
-- `Identity Publisher` — from Partner Center > Product Identity > "Package/Identity/Publisher"
-- `PublisherDisplayName` — your publisher display name from Partner Center
-
-The manifest is currently configured with the Partner Center App ID
-(`47955afa-afc7-46ee-abc1-02ab2632b4ad`) as a placeholder. You **must**
-replace the Name and Publisher with the exact values from your Product
-Identity page before uploading, or Partner Center will reject the package.
-
-### How to find your Product Identity values
-
-1. Go to [Partner Center](https://partner.microsoft.com/dashboard)
-2. Select your app (Weather Widget)
-3. Go to **Product management** > **Product Identity**
-4. Copy the **Package/Identity/Name** and **Package/Identity/Publisher** values
-5. Update `installer/AppxManifest.xml` with those values
+---
 
 ## File Structure
 
 ```
 installer/
-├── AppxManifest.xml      # MSIX package manifest
-├── Package.wxs           # WiX MSI definition
-├── build-msi.ps1         # MSI build script
-├── build-msix.ps1        # MSIX build script
-├── store-assets/         # Store tile images (you provide these)
-│   ├── StoreLogo.png
-│   ├── Square44x44Logo.png
-│   ├── Square150x150Logo.png
-│   ├── Wide310x150Logo.png
-│   └── Square310x310Logo.png
+├── build-pkg.sh          # macOS PKG installer script
+├── entitlements.plist    # macOS app entitlements (auto-generated, then edit)
+├── AppxManifest.xml      # MSIX package manifest (Windows)
+├── Package.wxs           # WiX MSI definition (Windows)
+├── build-msi.ps1         # MSI build script (Windows)
+├── build-msix.ps1        # MSIX build script (Windows)
+├── store-assets/         # Windows Store tile images
 └── README.md             # This file
 
-winres/
-├── winres.json           # Windows resource definitions
-└── icon.ico              # Application icon (you provide this)
+build/                    # Build output (git-ignored)
+└── WeatherWidget-*.pkg   # macOS installer output
 ```

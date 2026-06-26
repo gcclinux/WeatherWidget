@@ -21,8 +21,12 @@ var transparencyActive atomic.Int32
 // Controlled by the opacity setting: 100% = fully dark (30), 25% = lighter (90).
 var linuxBgShade atomic.Int32
 
+// darwinBgShade stores the background RGB value for macOS.
+var darwinBgShade atomic.Int32
+
 func init() {
-	linuxBgShade.Store(30) // default: dark background
+	linuxBgShade.Store(30)  // default: dark background
+	darwinBgShade.Store(30) // default: dark background
 }
 
 // SetTransparencyActive switches the background color key on or off.
@@ -54,6 +58,23 @@ func SetLinuxBackgroundShade(opacityPercent int) {
 		shade = 90
 	}
 	linuxBgShade.Store(int32(shade))
+}
+
+// SetDarwinBackgroundShade sets the macOS background darkness level.
+// opacityPercent maps to background shade (same scale as Linux).
+func SetDarwinBackgroundShade(opacityPercent int) {
+	var shade int
+	switch {
+	case opacityPercent >= 100:
+		shade = 30
+	case opacityPercent >= 75:
+		shade = 50
+	case opacityPercent >= 50:
+		shade = 70
+	default:
+		shade = 90
+	}
+	darwinBgShade.Store(int32(shade))
 }
 
 // widgetTheme is a Fyne theme that:
@@ -94,6 +115,23 @@ func (t *widgetTheme) Color(name fyne.ThemeColorName, variant fyne.ThemeVariant)
 			return color.NRGBA{R: 80, G: 80, B: 80, A: 255}
 		}
 		// For all other colors, force dark variant.
+		return t.base.Color(name, theme.VariantDark)
+	}
+
+	// macOS: use dark background with shade controlled by opacity setting.
+	// NSWindow.setAlphaValue() handles the actual window transparency.
+	if runtime.GOOS == "darwin" {
+		switch name {
+		case theme.ColorNameBackground, theme.ColorNameOverlayBackground:
+			shade := uint8(darwinBgShade.Load())
+			return color.NRGBA{R: shade, G: shade, B: shade, A: 255}
+		case theme.ColorNameForeground:
+			return color.NRGBA{R: 255, G: 255, B: 255, A: 255}
+		case theme.ColorNameDisabled:
+			return color.NRGBA{R: 180, G: 180, B: 180, A: 255}
+		case theme.ColorNameSeparator:
+			return color.NRGBA{R: 80, G: 80, B: 80, A: 255}
+		}
 		return t.base.Color(name, theme.VariantDark)
 	}
 
