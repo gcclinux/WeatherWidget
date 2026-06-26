@@ -16,6 +16,7 @@ const (
 	IconCloudy       = "cloudy"
 	IconCloudyMoon   = "cloudy_moon"
 	IconRain         = "rain"
+	IconHeavyRain    = "heavy_rain"
 	IconSnow         = "snow"
 	IconStorm        = "storm"
 	IconFog          = "fog"
@@ -29,6 +30,7 @@ var AllIconCodes = []string{
 	IconCloudy,
 	IconCloudyMoon,
 	IconRain,
+	IconHeavyRain,
 	IconSnow,
 	IconStorm,
 	IconFog,

@@ -13,6 +13,7 @@ import (
 	"weatherwidget/internal/config"
 	"weatherwidget/internal/guard"
 	"weatherwidget/internal/i18n"
+	"weatherwidget/internal/power"
 	"weatherwidget/internal/scheduler"
 	"weatherwidget/internal/ui"
 	"weatherwidget/internal/weather"
@@ -125,6 +126,16 @@ func (a *AppManager) Run() error {
 		log.Printf("weather fetch error for %s: %v", city, err)
 	})
 	a.scheduler.Start()
+
+	// 10. Listen for system resume (wake from sleep/hibernate) and trigger
+	// an immediate weather refresh so the widget doesn't stay stale.
+	go func() {
+		resumeCh := power.ResumeNotifier()
+		for range resumeCh {
+			log.Printf("system resumed from sleep — triggering immediate weather refresh")
+			a.scheduler.FetchNow()
+		}
+	}()
 
 	return nil
 }

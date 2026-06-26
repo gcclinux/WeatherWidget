@@ -206,6 +206,8 @@ func mapOWMConditionToIcon(id int) string {
 		return weather.IconStorm
 	case id >= 300 && id <= 399:
 		return weather.IconRain
+	case id == 502 || id == 503 || id == 504:
+		return weather.IconHeavyRain
 	case id >= 500 && id <= 599:
 		return weather.IconRain
 	case id >= 600 && id <= 699:
@@ -354,7 +356,7 @@ func (r *RemoteAPIAdapter) testWU(ctx context.Context) error {
 func deriveWUCondition(obs wuObservation) (icon, description string) {
 	switch {
 	case obs.Metric.PrecipRate > 5:
-		return weather.IconStorm, "Heavy Rain"
+		return weather.IconHeavyRain, "Heavy Rain"
 	case obs.Metric.PrecipRate > 0:
 		return weather.IconRain, "Rain"
 	case obs.Metric.WindSpeed > 50:
@@ -510,6 +512,8 @@ func mapEWWFreeTextToIcon(freeText string) string {
 		return weather.IconStorm
 	case strings.Contains(lower, "snow"):
 		return weather.IconSnow
+	case strings.Contains(lower, "heavy") && strings.Contains(lower, "rain"):
+		return weather.IconHeavyRain
 	case strings.Contains(lower, "rain"), strings.Contains(lower, "drizzle"):
 		return weather.IconRain
 	case strings.Contains(lower, "fog"), strings.Contains(lower, "mist"), strings.Contains(lower, "haze"):

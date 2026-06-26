@@ -23,19 +23,19 @@
     "#1": {
       "0409": {
         "fixed": {
-          "file_version": "0.0.6.1",
-          "product_version": "0.0.6.1"
+          "file_version": "0.0.6.3",
+          "product_version": "0.0.6.3"
         },
         "info": {
           "0409": {
             "CompanyName": "Ricardo Wagemaker",
             "FileDescription": "Weather Widget Desktop Application",
-            "FileVersion": "0.0.6.1",
+            "FileVersion": "0.0.6.3",
             "InternalName": "weatherwidget",
             "LegalCopyright": "© 2026 Ricardo Wagemaker",
             "OriginalFilename": "weatherwidget.exe",
             "ProductName": "Weather Widget",
-            "ProductVersion": "0.0.6.1"
+            "ProductVersion": "0.0.6.3"
           }
         }
       }

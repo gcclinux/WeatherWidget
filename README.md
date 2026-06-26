@@ -138,3 +138,10 @@ There are two ways to fix this:
    Windows will automatically use this DLL to translate OpenGL hardware calls into software rendering, allowing the app to work flawlessly on any PC regardless of graphics drivers.
 
 *Note: A `-software` flag is also available (`.\weatherwidget.exe -software`) which instructs the Fyne framework to prefer software rendering, but this still requires basic OpenGL driver availability at the OS level.*
+
+## Changelog
+
+### v0.0.6.3 — 2025-06-26
+
+- Added new "heavy rain" weather icon (`heavy_rain.png`) for heavy intensity rain conditions across all providers (OWM, WU, EWW)
+- Fixed weather and time display staying frozen after PC wakes from sleep/hibernation — the widget now detects system resume and triggers an immediate refresh
