@@ -358,6 +358,7 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 		var refreshCityList func()
 		refreshCityList = func() {
 			cityListBox.RemoveAll()
+			hasLicense := cfg.HasLicense()
 			for i := range state.cities {
 				idx := i
 				c := state.cities[i]
@@ -391,6 +392,12 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 				}
 				if len(state.cities) <= 1 {
 					removeBtn.Disable()
+				}
+				// In free mode, disable remove/reorder — default cities are locked.
+				if !hasLicense {
+					removeBtn.Disable()
+					upBtn.Disable()
+					downBtn.Disable()
 				}
 				cityListBox.Add(container.NewHBox(lbl, layout.NewSpacer(), upBtn, downBtn, removeBtn))
 			}
@@ -448,6 +455,11 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 		addTimezoneEntry.SetPlaceHolder(u.t("settings.locations.tzPlaceholder"))
 
 		addBtn := widget.NewButton(u.t("settings.locations.addBtn"), func() {
+			// Block adding cities in free mode (no license).
+			if !cfg.HasLicense() {
+				dialog.ShowError(fmt.Errorf("%s", u.t("error.settings.licenseRequired")), win)
+				return
+			}
 			name := strings.TrimSpace(addNameEntry.Text)
 			if name == "" {
 				dialog.ShowError(fmt.Errorf("%s", u.t("error.settings.cityNameRequired")), win)
@@ -490,6 +502,11 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 
 		var searchBtn *widget.Button
 		searchBtn = widget.NewButton(u.t("settings.locations.searchBtn"), func() {
+			// Block searching for cities in free mode (no license).
+			if !cfg.HasLicense() {
+				dialog.ShowError(fmt.Errorf("%s", u.t("error.settings.licenseRequired")), win)
+				return
+			}
 			name := strings.TrimSpace(addNameEntry.Text)
 			if name == "" {
 				dialog.ShowError(fmt.Errorf("%s", u.t("error.settings.cityNameRequiredSearch")), win)
@@ -649,6 +666,17 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 		addBtnSizer := canvas.NewRectangle(color.Transparent)
 		addBtnSizer.SetMinSize(fyne.NewSize(160, 0))
 		addBtnContainer := container.NewMax(addBtnSizer, addBtn)
+
+		// In free mode, disable the add-city form entirely.
+		if !cfg.HasLicense() {
+			addNameEntry.Disable()
+			addRegionEntry.Disable()
+			addLatEntry.Disable()
+			addLonEntry.Disable()
+			addTimezoneEntry.Disable()
+			addBtn.Disable()
+			searchBtn.Disable()
+		}
 
 		addForm := container.NewVBox(
 			widget.NewForm(

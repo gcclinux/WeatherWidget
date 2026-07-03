@@ -58,6 +58,11 @@ func (s *ConfigService) Load() (*Config, error) {
 	// Normalize temperature unit: invalid or missing values default to celsius.
 	cfg.TemperatureUnit = NormalizeTemperatureUnit(cfg.TemperatureUnit)
 
+	// Enforce free mode: without a license, only default cities are allowed.
+	if !cfg.HasLicense() {
+		cfg.Cities = DefaultCities()
+	}
+
 	return &cfg, nil
 }
 

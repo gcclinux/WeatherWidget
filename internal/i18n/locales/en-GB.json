@@ -108,5 +108,6 @@
   "error.settings.noCityFound": "no city found matching '%s'",
   "error.settings.connectionFailed": "connection test failed: %v",
   "error.settings.saveFailed": "failed to save config: %v",
-  "error.settings.autoStartFailed": "failed to update auto-start: %v"
+  "error.settings.autoStartFailed": "failed to update auto-start: %v",
+  "error.settings.licenseRequired": "A license key is required to add or remove cities. The default cities are available for free."
 }

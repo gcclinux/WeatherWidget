@@ -85,9 +85,12 @@ func (a *AppManager) Run() error {
 		func() { a.Shutdown() },
 	)
 
-	// 5. If config is default (no API key / no DB config), open settings.
+	// 5. If config is default (no API key / no DB config), show the widget
+	// with default cities. The app will work in free mode using the built-in
+	// cities. Only open settings if the user explicitly requests it.
+	// We still log that we're running in free mode.
 	if a.isDefaultConfig(cfg) {
-		a.openSettings()
+		log.Printf("running in free mode — no license key configured, using default cities")
 	}
 
 	// 6. Create weather provider and service.
@@ -193,19 +196,30 @@ func (a *AppManager) applyPosition(cfg *config.Config) {
 // changed (running a connection test first), resets the scheduler interval,
 // and rebuilds city panels if the city list changed.
 func (a *AppManager) onSettingsSave(newCfg *config.Config) error {
+	// Enforce free mode restrictions: without a license, only default cities are allowed.
+	if !newCfg.HasLicense() {
+		defaultCities := config.DefaultCities()
+		newCfg.Cities = defaultCities
+	}
+
 	oldCfg := a.cfg
 	providerChanged := oldCfg.DataSource != newCfg.DataSource || a.providerConfigChanged(oldCfg, newCfg)
 
 	// Only hit the network when the data source or credentials actually changed.
 	// Skipping this for position / interval / city-order changes avoids blocking
 	// the save on a network round-trip that cannot affect those fields.
+	// Also skip the connection test when running in free mode (no API key).
 	var provider weather.WeatherProvider
 	if providerChanged {
 		provider = a.createProvider(newCfg)
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
-		if err := provider.TestConnection(ctx); err != nil {
-			return fmt.Errorf("connection test failed: %w", err)
+		// Only test the connection if an API key is configured.
+		// In free mode (no key), the app uses default cities without validation.
+		if newCfg.HasLicense() {
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			if err := provider.TestConnection(ctx); err != nil {
+				return fmt.Errorf("connection test failed: %w", err)
+			}
 		}
 	}
 
@@ -291,11 +305,18 @@ func (a *AppManager) createProvider(cfg *config.Config) weather.WeatherProvider 
 		return adapter
 
 	default: // DataSourceRemoteAPI
-		provider := "openweathermap"
+		provider := "easyweatherwidget"
 		apiKey := ""
 		if cfg.APIConfig != nil {
-			provider = cfg.APIConfig.Provider
+			if cfg.APIConfig.Provider != "" {
+				provider = cfg.APIConfig.Provider
+			}
 			apiKey = cfg.APIConfig.APIKey
+		}
+		// If no API key is configured, use easyweatherwidget in free mode
+		// (only default cities will work).
+		if apiKey == "" {
+			provider = "easyweatherwidget"
 		}
 		return remoteapi.NewRemoteAPIAdapter(provider, apiKey)
 	}

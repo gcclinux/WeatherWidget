@@ -423,7 +423,18 @@ type ewwResponse struct {
 }
 
 func (r *RemoteAPIAdapter) fetchEWW(ctx context.Context, city config.CityConfig) (*weather.WeatherData, error) {
-	reqURL := fmt.Sprintf("%s/api/v1/weather/key=%s/%s,%s", r.BaseURL, r.apiKey, city.Name, city.Region)
+	// When no API key is set, only default cities are allowed.
+	if r.apiKey == "" {
+		if !config.IsDefaultCity(city) {
+			return nil, fmt.Errorf("no API key configured — only default cities are available without a license")
+		}
+	}
+
+	key := r.apiKey
+	if key == "" {
+		key = "free"
+	}
+	reqURL := fmt.Sprintf("%s/api/v1/weather/key=%s/%s,%s", r.BaseURL, key, city.Name, city.Region)
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, reqURL, nil)
 	if err != nil {
@@ -478,7 +489,12 @@ func (r *RemoteAPIAdapter) fetchEWW(ctx context.Context, city config.CityConfig)
 }
 
 func (r *RemoteAPIAdapter) testEWW(ctx context.Context) error {
-	reqURL := fmt.Sprintf("%s/api/v1/weather/key=%s/London,GB", r.BaseURL, r.apiKey)
+	key := r.apiKey
+	if key == "" {
+		// In free mode (no key), use "free" as the key and test with a default city.
+		key = "free"
+	}
+	reqURL := fmt.Sprintf("%s/api/v1/weather/key=%s/London,GB", r.BaseURL, key)
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, reqURL, nil)
 	if err != nil {

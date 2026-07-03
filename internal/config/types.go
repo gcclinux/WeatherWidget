@@ -68,6 +68,14 @@ type DatabaseConfig struct {
 	Query    string `json:"query"`
 }
 
+// HasLicense returns true if the config has a valid API key or database config.
+// When false, only the default cities will work.
+func (c *Config) HasLicense() bool {
+	hasAPIKey := c.APIConfig != nil && c.APIConfig.APIKey != ""
+	hasDBConfig := c.DatabaseConfig != nil && c.DatabaseConfig.Host != ""
+	return hasAPIKey || hasDBConfig
+}
+
 // ValidationError represents a single validation failure for a config field.
 type ValidationError struct {
 	Field   string `json:"field"`
@@ -79,26 +87,59 @@ func (v ValidationError) Error() string {
 	return v.Field + ": " + v.Message
 }
 
+// DefaultCities returns the built-in cities that work without a license key.
+// These cities are always available for free, even without an API key configured.
+func DefaultCities() []CityConfig {
+	return []CityConfig{
+		{
+			Name:      "Broxburn",
+			Region:    "GB",
+			Latitude:  55.934392,
+			Longitude: -3.469387,
+			Timezone:  "Europe/London",
+		},
+		{
+			Name:      "Holambra",
+			Region:    "BR",
+			Latitude:  -22.633203,
+			Longitude: -47.05453,
+			Timezone:  "America/Sao_Paulo",
+		},
+		{
+			Name:      "Ryjewo",
+			Region:    "PL",
+			Latitude:  53.843497,
+			Longitude: 18.96275,
+			Timezone:  "Europe/Warsaw",
+		},
+	}
+}
+
+// IsDefaultCity checks whether a city matches one of the built-in default cities.
+func IsDefaultCity(city CityConfig) bool {
+	for _, dc := range DefaultCities() {
+		if dc.Name == city.Name && dc.Region == city.Region {
+			return true
+		}
+	}
+	return false
+}
+
 // DefaultConfig returns a Config with sensible defaults:
-// one city (Holambra, SP), 120-minute refresh, bottom-right corner, remote_api data source,
-// and OpenWeatherMap as the default provider.
+// three default cities (Broxburn, Holambra, Ryjewo), 120-minute refresh,
+// bottom-right corner, remote_api data source, and EasyWeatherWidget as the
+// default provider (works without a key for the default cities).
 func DefaultConfig() *Config {
 	return &Config{
-		DataSource: DataSourceRemoteAPI,
-		Cities: []CityConfig{
-			{
-				Name:     "Holambra",
-				Region:   "SP",
-				Timezone: "America/Sao_Paulo",
-			},
-		},
+		DataSource:      DataSourceRemoteAPI,
+		Cities:          DefaultCities(),
 		RefreshInterval: 120,
 		CornerPosition:  "bottom-right",
 		Opacity:         100,
 		Locale:          "en-GB",
 		TemperatureUnit: TemperatureUnitCelsius,
 		APIConfig: &APIConfig{
-			Provider: "openweathermap",
+			Provider: "easyweatherwidget",
 		},
 	}
 }
