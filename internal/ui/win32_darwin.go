@@ -67,9 +67,47 @@ static void getScreenBounds(int index, int* outX, int* outY, int* outW, int* out
 	*outH = (int)visible.size.height;
 }
 
-// setNSWindowAlpha sets the window alpha (opacity) value.
-// opacityPercent: 25, 50, 75, or 100.
-static void setNSWindowAlpha(uintptr_t winHandle, int opacityPercent) {
+// setupDarwinWindow configures the NSWindow for rounded corners.
+//
+// Rounded corners: the NSWindow must be non-opaque with a clear background
+// so that the corner regions become transparent. The contentView layer clips
+// all subviews (including Fyne's GL canvas) to the rounded rect.
+//
+// Transparency: handled by setDarwinBackgroundAlpha via NSWindow.alphaValue.
+// Since Fyne renders all content into a single opaque OpenGL framebuffer,
+// NSWindow.alphaValue is the only mechanism that achieves see-through effect.
+//
+// IMPORTANT: This function dispatches to the main queue because all
+// NSView/NSWindow operations must happen on the main thread.
+static void setupDarwinWindow(uintptr_t winHandle) {
+	dispatch_async(dispatch_get_main_queue(), ^{
+		NSWindow *w = (__bridge NSWindow*)(void*)winHandle;
+		// Non-opaque + clear background lets the corners show through to desktop.
+		[w setOpaque:NO];
+		[w setBackgroundColor:[NSColor clearColor]];
+		[w setHasShadow:NO];
+
+		NSView *contentView = [w contentView];
+		contentView.wantsLayer = YES;
+		contentView.layer.cornerRadius = 12.0;
+		contentView.layer.masksToBounds = YES;
+
+		// Also clip all child subviews (the Fyne GL NSOpenGLView) to the
+		// rounded corner mask by ensuring each subview's layer respects bounds.
+		for (NSView *sub in [contentView subviews]) {
+			sub.wantsLayer = YES;
+			sub.layer.cornerRadius = 12.0;
+			sub.layer.masksToBounds = YES;
+		}
+	});
+}
+
+// setDarwinBackgroundAlpha applies window-level transparency.
+// opacityPercent is in [1, 100]. Uses NSWindow.alphaValue because Fyne's
+// OpenGL framebuffer is fully opaque — there is no way to make just the
+// background transparent while keeping text at full opacity with a single
+// GL surface. The entire window (including content) fades together.
+static void setDarwinBackgroundAlpha(uintptr_t winHandle, int opacityPercent) {
 	dispatch_async(dispatch_get_main_queue(), ^{
 		NSWindow *w = (__bridge NSWindow*)(void*)winHandle;
 		CGFloat alpha = (CGFloat)opacityPercent / 100.0;
@@ -163,18 +201,40 @@ func getWindowPosition() (int, int) {
 	return int(x), int(y)
 }
 
-// setWindowOpacity applies transparency to the widget window on macOS.
-// Uses NSWindow.setAlphaValue() for true window-level transparency,
-// and also adjusts the theme background shade for visual consistency.
-func setWindowOpacity(opacityPercent int) {
-	SetDarwinBackgroundShade(opacityPercent)
+// applyDarwinWindowSetup calls setupDarwinWindow on the widget window's
+// NSWindow handle.  Because the handle may not be available immediately after
+// Show(), it uses the same retry-after-delay pattern as moveWindow
+// (150 ms, 400 ms, 900 ms).
+func applyDarwinWindowSetup() {
+	handle := getNSWindowHandle()
+	if handle != 0 {
+		C.setupDarwinWindow(handle)
+		return
+	}
+	// Handle not yet available — retry in a background goroutine.
+	go func() {
+		for _, delay := range []int{150, 400, 900} {
+			time.Sleep(time.Duration(delay) * time.Millisecond)
+			h := getNSWindowHandle()
+			if h != 0 {
+				C.setupDarwinWindow(h)
+				return
+			}
+		}
+		log.Println("macOS: applyDarwinWindowSetup — could not get NSWindow handle after retries")
+	}()
+}
 
+// setWindowOpacity applies transparency to the widget window on macOS.
+// Transparency is applied only to the WWidgetBackgroundView CALayer so that
+// text labels and weather icons remain at full opacity.
+func setWindowOpacity(opacityPercent int) {
 	handle := getNSWindowHandle()
 	if handle == 0 {
 		log.Println("macOS: setWindowOpacity — could not get NSWindow handle")
 		return
 	}
-	C.setNSWindowAlpha(handle, C.int(opacityPercent))
+	C.setDarwinBackgroundAlpha(handle, C.int(opacityPercent))
 	log.Printf("macOS: setWindowOpacity %d%%", opacityPercent)
 }
 

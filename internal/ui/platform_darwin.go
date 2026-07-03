@@ -9,4 +9,5 @@ import "fyne.io/fyne/v2"
 // retrieved later for positioning.
 func initPlatformWindow(w fyne.Window) {
 	registerDarwinWindow(w)
+	applyDarwinWindowSetup()
 }
