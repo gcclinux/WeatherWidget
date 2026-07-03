@@ -107,10 +107,27 @@ static void setupDarwinWindow(uintptr_t winHandle) {
 // OpenGL framebuffer is fully opaque — there is no way to make just the
 // background transparent while keeping text at full opacity with a single
 // GL surface. The entire window (including content) fades together.
+//
+// To keep content readable, we remap the user-facing opacity values to a
+// narrower alphaValue range:
+//   25% → 0.55 (semi-transparent but text still legible)
+//   50% → 0.70
+//   75% → 0.85
+//  100% → 1.00
 static void setDarwinBackgroundAlpha(uintptr_t winHandle, int opacityPercent) {
 	dispatch_async(dispatch_get_main_queue(), ^{
 		NSWindow *w = (__bridge NSWindow*)(void*)winHandle;
-		CGFloat alpha = (CGFloat)opacityPercent / 100.0;
+		// Map [25, 100] → [0.55, 1.0] linearly.
+		// For values below 25, clamp to 0.55.
+		CGFloat alpha;
+		if (opacityPercent >= 100) {
+			alpha = 1.0;
+		} else if (opacityPercent <= 25) {
+			alpha = 0.55;
+		} else {
+			// Linear interpolation: 25→0.55, 100→1.0
+			alpha = 0.55 + (CGFloat)(opacityPercent - 25) * (0.45 / 75.0);
+		}
 		[w setAlphaValue:alpha];
 	});
 }

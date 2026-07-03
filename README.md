@@ -145,3 +145,10 @@ There are two ways to fix this:
 
 - Added new "heavy rain" weather icon (`heavy_rain.png`) for heavy intensity rain conditions across all providers (OWM, WU, EWW)
 - Fixed weather and time display staying frozen after PC wakes from sleep/hibernation — the widget now detects system resume and triggers an immediate refresh
+
+### v0.0.7 — 2025-07-03
+
+- **macOS: Rounded corners** — Widget window now renders with 12pt rounded corners matching macOS design conventions
+- **macOS: Window transparency** — Background transparency slider (25%/50%/75%/100%) now works on macOS using `NSWindow.alphaValue` with remapped values to keep content readable
+- **macOS: Auto-start at login** — Added LaunchAgent support so the "Launch WeatherWidget when starts" setting works on macOS (creates `~/Library/LaunchAgents/com.weatherwidget.app.plist`)
+- **macOS: Build script** — Added `build-darwin.sh` for one-command universal .app + .dmg creation
