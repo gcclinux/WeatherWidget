@@ -9,7 +9,11 @@ BINARY_NAME="weatherwidget"
 BUNDLE_ID="com.weatherwidget"
 CMD_PATH="./cmd/weatherwidget/"
 APP_ICON="assets/icons/clear.png"
-VERSION="${1:-dev}"
+VERSION=$(cat release 2>/dev/null | tr -d '[:space:]')
+if [ -z "$VERSION" ]; then
+    echo "Error: could not read version from 'release' file"
+    exit 1
+fi
 
 echo "==> Building WeatherWidget $VERSION for macOS..."
 
