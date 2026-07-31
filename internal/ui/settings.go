@@ -920,7 +920,9 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 		demoResource := fyne.NewStaticResource("demo.png", assets.DemoPNG)
 		demoImage := canvas.NewImageFromResource(demoResource)
 		demoImage.FillMode = canvas.ImageFillContain
-		demoImage.SetMinSize(fyne.NewSize(400, 250))
+		demoImage.SetMinSize(fyne.NewSize(480, 300))
+
+		previewLabel := widget.NewRichTextFromMarkdown("**" + u.t("settings.about.previewLabel") + "**")
 
 		aboutContent := container.NewPadded(container.NewVScroll(container.NewVBox(
 			widget.NewCard(u.t("settings.about.appName"), "", container.NewVBox(
@@ -929,7 +931,8 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 				container.NewHBox(widget.NewLabel(u.t("settings.about.manualLabel")), manualLink),
 				aboutVersion,
 			)),
-			widget.NewCard(u.t("settings.about.previewLabel"), "", container.NewCenter(demoImage)),
+			previewLabel,
+			container.NewCenter(demoImage),
 		)))
 		aboutTab := container.NewTabItemWithIcon(u.t("settings.tab.about"), theme.InfoIcon(), aboutContent)
 

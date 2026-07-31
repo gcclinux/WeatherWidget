@@ -116,3 +116,27 @@ func isNight(t time.Time) bool {
 	h := t.Hour()
 	return h < 6 || h >= 18
 }
+
+// compassDirections maps 16 cardinal/intercardinal compass points.
+var compassDirections = []string{
+	"N", "NNE", "NE", "ENE",
+	"E", "ESE", "SE", "SSE",
+	"S", "SSW", "SW", "WSW",
+	"W", "WNW", "NW", "NNW",
+}
+
+// DegreesToCompass converts a wind direction in degrees (0–360) to a
+// compass label (e.g. 0 → "N", 90 → "E", 225 → "SW").
+func DegreesToCompass(degrees int) string {
+	// Normalize to 0–359 range.
+	deg := ((degrees % 360) + 360) % 360
+	index := int(math.Round(float64(deg)/22.5)) % 16
+	return compassDirections[index]
+}
+
+// FormatHumidityWind returns a compact string like "💧 45%   💨 4.5 NW"
+// suitable for display in a single panel row.
+func FormatHumidityWind(humidity int, windSpeed float64, windDirection int) string {
+	compass := DegreesToCompass(windDirection)
+	return fmt.Sprintf("💧 %d%%   💨 %.1f %s", humidity, windSpeed, compass)
+}

@@ -50,7 +50,8 @@ type DatabaseAdapter struct {
 // NewDatabaseAdapter creates a new DatabaseAdapter by establishing a connection pool
 // to the PostgreSQL database specified by connString. The query parameter is the SQL
 // query that will be executed to fetch weather data, with $1 as the city name placeholder.
-// Expected result columns: temperature (int), description (string), icon_code (string).
+// Expected result columns: temperature (int), description (string), icon_code (string),
+// humidity (int), windspeed (float64), winddir (int).
 func NewDatabaseAdapter(connString, query string) (*DatabaseAdapter, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -77,13 +78,18 @@ func NewDatabaseAdapterWithPool(pool Pool, query string) *DatabaseAdapter {
 
 // FetchWeather executes the configured SQL query with the city name as parameter
 // and scans the result into a WeatherData struct.
+// Expected result columns: temperature (int), description (string), icon_code (string),
+// humidity (int), windspeed (float64), winddir (int).
 func (d *DatabaseAdapter) FetchWeather(ctx context.Context, city config.CityConfig) (*weather.WeatherData, error) {
 	var temperature int
 	var description string
 	var iconCode string
+	var humidity int
+	var windSpeed float64
+	var windDirection int
 
 	row := d.pool.QueryRow(ctx, d.query, city.Name)
-	if err := row.Scan(&temperature, &description, &iconCode); err != nil {
+	if err := row.Scan(&temperature, &description, &iconCode, &humidity, &windSpeed, &windDirection); err != nil {
 		return nil, fmt.Errorf("database: failed to fetch weather for %q: %w", city.Name, err)
 	}
 
@@ -94,13 +100,16 @@ func (d *DatabaseAdapter) FetchWeather(ctx context.Context, city config.CityConf
 
 	now := time.Now()
 	return &weather.WeatherData{
-		CityName:    city.Name,
-		Region:      city.Region,
-		Temperature: temperature,
-		Description: description,
-		IconCode:    iconCode,
-		LocalTime:   now.In(loc),
-		FetchedAt:   now,
+		CityName:      city.Name,
+		Region:        city.Region,
+		Temperature:   temperature,
+		Description:   description,
+		IconCode:      iconCode,
+		LocalTime:     now.In(loc),
+		FetchedAt:     now,
+		Humidity:      humidity,
+		WindSpeed:     windSpeed,
+		WindDirection: windDirection,
 	}, nil
 }
 

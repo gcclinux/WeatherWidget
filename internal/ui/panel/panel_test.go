@@ -25,8 +25,8 @@ func TestNewCityPanel(t *testing.T) {
 	if p.tempText == nil {
 		t.Error("tempText is nil")
 	}
-	if p.descLabel == nil {
-		t.Error("descLabel is nil")
+	if p.descText == nil {
+		t.Error("descText is nil")
 	}
 	if p.cityText == nil {
 		t.Error("cityText is nil")
@@ -81,8 +81,8 @@ func TestCityPanel_Update(t *testing.T) {
 	if p.tempText.Text != "24°C" {
 		t.Errorf("tempText = %q, want %q", p.tempText.Text, "24°C")
 	}
-	if p.descLabel.Text != "Partial Sunny" {
-		t.Errorf("descLabel = %q, want %q", p.descLabel.Text, "Partial Sunny")
+	if p.descText.Text != "Partial Sunny" {
+		t.Errorf("descText = %q, want %q", p.descText.Text, "Partial Sunny")
 	}
 	if p.cityText.Text != "Holambra, SP" {
 		t.Errorf("cityText = %q, want %q", p.cityText.Text, "Holambra, SP")
@@ -117,8 +117,8 @@ func TestCityPanel_ShowError(t *testing.T) {
 	if !p.errorIcon.Visible() {
 		t.Error("errorIcon should be visible after ShowError(true)")
 	}
-	if p.descLabel.Text != "Data may be stale" {
-		t.Errorf("descLabel = %q, want %q", p.descLabel.Text, "Data may be stale")
+	if p.descText.Text != "Data may be stale" {
+		t.Errorf("descText = %q, want %q", p.descText.Text, "Data may be stale")
 	}
 }
 

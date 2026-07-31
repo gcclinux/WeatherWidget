@@ -87,8 +87,13 @@ type owmResponse struct {
 	Name     string `json:"name"`
 	Timezone int    `json:"timezone"` // offset in seconds from UTC
 	Main     struct {
-		Temp float64 `json:"temp"`
+		Temp     float64 `json:"temp"`
+		Humidity int     `json:"humidity"`
 	} `json:"main"`
+	Wind struct {
+		Speed float64 `json:"speed"` // m/s
+		Deg   int     `json:"deg"`   // degrees
+	} `json:"wind"`
 	Weather []struct {
 		ID          int    `json:"id"`
 		Description string `json:"description"`
@@ -152,14 +157,20 @@ func (r *RemoteAPIAdapter) fetchOWM(ctx context.Context, city config.CityConfig)
 	temp := int(math.Round(owm.Main.Temp))
 	log.Printf("successfully fetched weather for %s from OWM: %d°C, %s", city.Name, temp, owm.Weather[0].Description)
 
+	// OWM returns wind speed in m/s; convert to km/h.
+	windSpeedKmh := owm.Wind.Speed * 3.6
+
 	return &weather.WeatherData{
-		CityName:    city.Name,
-		Region:      city.Region,
-		Temperature: temp,
-		Description: owm.Weather[0].Description,
-		IconCode:    mapOWMConditionToIcon(owm.Weather[0].ID),
-		LocalTime:   localTime,
-		FetchedAt:   now,
+		CityName:      city.Name,
+		Region:        city.Region,
+		Temperature:   temp,
+		Description:   owm.Weather[0].Description,
+		IconCode:      mapOWMConditionToIcon(owm.Weather[0].ID),
+		LocalTime:     localTime,
+		FetchedAt:     now,
+		Humidity:      owm.Main.Humidity,
+		WindSpeed:     windSpeedKmh,
+		WindDirection: owm.Wind.Deg,
 	}, nil
 }
 
@@ -236,6 +247,7 @@ type wuObservation struct {
 	StationID    string   `json:"stationID"`
 	Neighborhood string   `json:"neighborhood"`
 	Humidity     float64  `json:"humidity"`
+	WindDir      int      `json:"winddir"`
 	Metric       wuMetric `json:"metric"`
 }
 
@@ -305,13 +317,16 @@ func (r *RemoteAPIAdapter) fetchWU(ctx context.Context, city config.CityConfig) 
 	temp := int(math.Round(obs.Metric.Temp))
 	icon, description := deriveWUCondition(obs)
 	return &weather.WeatherData{
-		CityName:    city.Name,
-		Region:      city.Region,
-		Temperature: temp,
-		Description: description,
-		IconCode:    icon,
-		LocalTime:   now.In(loc),
-		FetchedAt:   now,
+		CityName:      city.Name,
+		Region:        city.Region,
+		Temperature:   temp,
+		Description:   description,
+		IconCode:      icon,
+		LocalTime:     now.In(loc),
+		FetchedAt:     now,
+		Humidity:      int(obs.Humidity),
+		WindSpeed:     obs.Metric.WindSpeed,
+		WindDirection: obs.WindDir,
 	}, nil
 }
 
@@ -420,6 +435,9 @@ type ewwResponse struct {
 	Country      string  `json:"Country"`
 	FreeText     string  `json:"FreeText"`
 	ObsTimeLocal string  `json:"ObsTimeLocal"`
+	Humidity     int     `json:"Humidity"`
+	WindSpeed    float64 `json:"WindSpeed"`
+	WindDir      int     `json:"WindDir"`
 }
 
 func (r *RemoteAPIAdapter) fetchEWW(ctx context.Context, city config.CityConfig) (*weather.WeatherData, error) {
@@ -478,13 +496,16 @@ func (r *RemoteAPIAdapter) fetchEWW(ctx context.Context, city config.CityConfig)
 	log.Printf("successfully fetched weather for %s from EWW: %d°C, %s", city.Name, temp, eww.FreeText)
 
 	return &weather.WeatherData{
-		CityName:    city.Name,
-		Region:      city.Region,
-		Temperature: temp,
-		Description: eww.FreeText,
-		IconCode:    mapEWWFreeTextToIcon(eww.FreeText),
-		LocalTime:   localTime,
-		FetchedAt:   now,
+		CityName:      city.Name,
+		Region:        city.Region,
+		Temperature:   temp,
+		Description:   eww.FreeText,
+		IconCode:      mapEWWFreeTextToIcon(eww.FreeText),
+		LocalTime:     localTime,
+		FetchedAt:     now,
+		Humidity:      eww.Humidity,
+		WindSpeed:     eww.WindSpeed,
+		WindDirection: eww.WindDir,
 	}, nil
 }
 
