@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/json"
 	"fmt"
@@ -10,6 +11,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"time"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/canvas"
@@ -20,9 +22,10 @@ import (
 	"fyne.io/fyne/v2/widget"
 	"github.com/bradfitz/latlong"
 
-	"weatherwidget/assets"
 	"weatherwidget/internal/config"
 	"weatherwidget/internal/i18n"
+	"weatherwidget/internal/ui/panel"
+	"weatherwidget/internal/weather/remoteapi"
 )
 
 // ewwAPIKeyLen is the expected length of an EasyWeatherWidget API key (UUID v4).
@@ -58,10 +61,12 @@ var providerValueToDisplay = map[string]string{
 
 // settingsState holds mutable UI state for the settings dialog.
 type settingsState struct {
-	cities       []config.CityConfig
-	window       fyne.Window
-	selectedLang string                 // locale code selected in the language dropdown
-	selectedUnit config.TemperatureUnit // temperature unit selected in the appearance tab
+	cities        []config.CityConfig
+	window        fyne.Window
+	selectedLang  string                 // locale code selected in the language dropdown
+	selectedUnit  config.TemperatureUnit // temperature unit selected in the appearance tab
+	saved         bool                   // true if Save was clicked (suppresses revert on close)
+	previewPanels []*panel.CityPanel     // live preview panels in the About tab
 }
 
 // t is a helper that returns the translated string for the given key.
@@ -111,6 +116,17 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 	if state.selectedLang == "" {
 		state.selectedLang = "en-GB"
 	}
+
+	// Capture original values for live preview revert on close without save.
+	origOpacity := cfg.Opacity
+	if origOpacity == 0 {
+		origOpacity = 100
+	}
+	origPosition := cfg.CornerPosition
+	origMonitor := cfg.MonitorIndex
+	origUnit := config.NormalizeTemperatureUnit(cfg.TemperatureUnit)
+	origCustomX := cfg.CustomX
+	origCustomY := cfg.CustomY
 
 	// buildSettingsUI constructs the full settings UI content.
 	// It is called initially and again when the language changes to rebuild
@@ -298,6 +314,24 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 		} else {
 			monitorSelect.SetSelected(u.tFmt("settings.monitor.format", 1))
 		}
+
+		// Live preview: move widget when position or monitor changes.
+		applyPositionPreview := func() {
+			pos := positionValueMap[positionRadio.Selected]
+			if pos == "" {
+				pos = "bottom-right"
+			}
+			monIdx := 0
+			for i := 0; i < monitorCount; i++ {
+				if monitorSelect.Selected == u.tFmt("settings.monitor.format", i+1) {
+					monIdx = i
+					break
+				}
+			}
+			u.SetCorner(pos, monIdx)
+		}
+		positionRadio.OnChanged = func(_ string) { applyPositionPreview() }
+		monitorSelect.OnChanged = func(_ string) { applyPositionPreview() }
 		// Build the position card contents — include monitor selector only
 		// when multiple monitors are detected.
 		positionItems := []fyne.CanvasObject{positionRadio}
@@ -322,6 +356,13 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 			opacityRadio.SetSelected("100%")
 		}
 
+		// Live preview: apply opacity change immediately to the widget.
+		opacityRadio.OnChanged = func(selected string) {
+			if val, ok := opacityMap[selected]; ok {
+				u.SetOpacity(val)
+			}
+		}
+
 		// ── Temperature unit ─────────────────────────────────────────────────
 		unitCelsiusLabel := "°C (Celsius)"
 		unitFahrenheitLabel := "°F (Fahrenheit)"
@@ -339,6 +380,8 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 			[]string{unitCelsiusLabel, unitFahrenheitLabel},
 			func(selected string) {
 				state.selectedUnit = unitValueMap[selected]
+				// Live preview: re-render panels with the new unit immediately.
+				u.RerenderPanels(state.selectedUnit)
 			},
 		)
 		unitRadio.Horizontal = true
@@ -917,10 +960,36 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 		websiteLink := widget.NewHyperlink("easysmartapps.co.uk/weatherwidget", parseURL("https://easysmartapps.co.uk/weatherwidget"))
 		manualLink := widget.NewHyperlink("easysmartapps.co.uk/weatherwidget-manual", parseURL("https://easysmartapps.co.uk/weatherwidget-manual"))
 
-		demoResource := fyne.NewStaticResource("demo.png", assets.DemoPNG)
-		demoImage := canvas.NewImageFromResource(demoResource)
-		demoImage.FillMode = canvas.ImageFillContain
-		demoImage.SetMinSize(fyne.NewSize(480, 300))
+		// Live preview: create 3 CityPanel instances for the default cities.
+		defaultCities := config.DefaultCities()
+		previewPanels := make([]*panel.CityPanel, len(defaultCities))
+		previewObjects := make([]fyne.CanvasObject, len(defaultCities))
+		for i := range defaultCities {
+			p := panel.NewCityPanel(u.lm)
+			previewPanels[i] = p
+			previewObjects[i] = p.Container()
+		}
+		state.previewPanels = previewPanels
+		previewGrid := container.NewGridWithColumns(len(defaultCities), previewObjects...)
+
+		// Fetch live weather data for preview panels in the background.
+		go func(cities []config.CityConfig, panels []*panel.CityPanel, unit config.TemperatureUnit) {
+			adapter := remoteapi.NewRemoteAPIAdapter("easyweatherwidget", "free")
+			ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+			defer cancel()
+			for i, city := range cities {
+				data, err := adapter.FetchWeather(ctx, city)
+				if err != nil {
+					continue
+				}
+				idx := i
+				d := data
+				fyne.Do(func() {
+					panels[idx].Update(d, unit)
+					panels[idx].StartClock(cities[idx].Timezone)
+				})
+			}
+		}(defaultCities, previewPanels, state.selectedUnit)
 
 		previewLabel := widget.NewRichTextFromMarkdown("**" + u.t("settings.about.previewLabel") + "**")
 
@@ -932,7 +1001,7 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 				aboutVersion,
 			)),
 			previewLabel,
-			container.NewCenter(demoImage),
+			previewGrid,
 		)))
 		aboutTab := container.NewTabItemWithIcon(u.t("settings.tab.about"), theme.InfoIcon(), aboutContent)
 
@@ -961,6 +1030,7 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 				dialog.ShowError(err, win)
 				return
 			}
+			state.saved = true
 			dialog.ShowInformation(u.t("settings.dialog.saved"), u.t("settings.dialog.savedMsg"), win)
 		})
 
@@ -978,7 +1048,23 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 
 	buildSettingsUI()
 
-	win.SetOnClosed(func() { u.settings = nil })
+	win.SetOnClosed(func() {
+		// Stop preview panel clocks.
+		for _, p := range state.previewPanels {
+			p.StopClock()
+		}
+		// Revert live preview changes if the user closed without saving.
+		if !state.saved {
+			u.SetOpacity(origOpacity)
+			u.RerenderPanels(origUnit)
+			if origCustomX != nil && origCustomY != nil {
+				u.SetPosition(*origCustomX, *origCustomY)
+			} else {
+				u.SetCorner(origPosition, origMonitor)
+			}
+		}
+		u.settings = nil
+	})
 	win.Show()
 }
 

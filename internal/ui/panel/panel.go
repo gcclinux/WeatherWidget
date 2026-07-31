@@ -106,10 +106,11 @@ func NewCityPanel(lm *i18n.LocaleManager) *CityPanel {
 	// Icon row: weather icon + error icon overlay.
 	iconRow := container.NewHBox(layout.NewSpacer(), p.iconWidget, p.errorIcon, layout.NewSpacer())
 
-	// Separator line — use a thin colored rectangle instead of the default
-	// theme separator which is invisible on dark backgrounds.
+	// Separator line — use a thin colored rectangle at 70% panel width,
+	// centered between humidity/wind and time sections.
 	separator := canvas.NewRectangle(color.NRGBA{R: 255, G: 255, B: 255, A: 100})
-	separator.SetMinSize(fyne.NewSize(0, 1))
+	separator.SetMinSize(fyne.NewSize(112, 1)) // ~70% of 160 panel width
+	separatorRow := container.NewCenter(separator)
 
 	// Vertical stack — compact layout with minimal spacing
 	p.container = container.NewPadded(container.NewVBox(
@@ -120,9 +121,8 @@ func NewCityPanel(lm *i18n.LocaleManager) *CityPanel {
 		container.NewCenter(p.descText),
 		container.NewCenter(p.humidWindText),
 		layout.NewSpacer(),
-		separator,
-		container.NewCenter(p.timeText),
-		container.NewCenter(p.dateText),
+		separatorRow,
+		container.New(&tightVBoxLayout{}, container.NewCenter(p.timeText), container.NewCenter(p.dateText)),
 	))
 
 	return p
@@ -249,5 +249,36 @@ func (p *CityPanel) StopClock() {
 		close(p.stopCh)
 		p.timeTicker = nil
 		p.stopCh = nil
+	}
+}
+
+// tightVBoxLayout arranges objects vertically with zero spacing between them.
+type tightVBoxLayout struct{}
+
+func (t *tightVBoxLayout) MinSize(objects []fyne.CanvasObject) fyne.Size {
+	var w, h float32
+	for _, o := range objects {
+		if !o.Visible() {
+			continue
+		}
+		s := o.MinSize()
+		if s.Width > w {
+			w = s.Width
+		}
+		h += s.Height
+	}
+	return fyne.NewSize(w, h)
+}
+
+func (t *tightVBoxLayout) Layout(objects []fyne.CanvasObject, containerSize fyne.Size) {
+	var y float32
+	for _, o := range objects {
+		if !o.Visible() {
+			continue
+		}
+		s := o.MinSize()
+		o.Resize(fyne.NewSize(containerSize.Width, s.Height))
+		o.Move(fyne.NewPos(0, y))
+		y += s.Height
 	}
 }

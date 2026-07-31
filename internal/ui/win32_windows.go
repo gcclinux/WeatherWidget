@@ -120,9 +120,16 @@ func getWindowPosition() (int, int) {
 	return int(r.Left), int(r.Top)
 }
 
-// setWindowOpacity applies background-only transparency using LWA_COLORKEY.
-// When opacityPercent < 100 the window background color (#010101) is made
-// invisible by Windows; all other pixels (text, icons) remain fully opaque.
+// setWindowOpacity applies background-only transparency using LWA_COLORKEY
+// combined with per-window alpha (LWA_ALPHA) for variable transparency levels.
+// The background color (#010101) is always made invisible via color key, and
+// the overall window alpha controls how see-through the content appears:
+//
+//	100% → no layered style (fully opaque)
+//	 75% → alpha 230 (mostly opaque, subtle transparency)
+//	 50% → alpha 180 (noticeably transparent)
+//	 25% → alpha 130 (very transparent)
+//
 // At 100% the layered style is removed and the window is fully opaque.
 func setWindowOpacity(opacityPercent int) {
 	hwnd := findHWND(widgetTitle)
@@ -141,13 +148,24 @@ func setWindowOpacity(opacityPercent int) {
 		return
 	}
 
-	// Enable layered window and set the color key transparent.
+	// Enable layered window.
 	procSetWindowLongW.Call(hwnd, gwlExStyle, exStyle|wsExLayered)
 	SetTransparencyActive(true)
 
+	// Map opacity percent to alpha byte (0-255).
+	var alpha uintptr
+	switch {
+	case opacityPercent <= 25:
+		alpha = 130
+	case opacityPercent <= 50:
+		alpha = 180
+	default: // 75%
+		alpha = 230
+	}
+
 	// Color key: R=1, G=1, B=1 as a COLORREF (0x00BBGGRR).
 	colorKey := uintptr(0x00010101)
-	procSetLayeredWindowAttributes.Call(hwnd, colorKey, 0, lwaColorKey)
+	procSetLayeredWindowAttributes.Call(hwnd, colorKey, alpha, lwaColorKey|lwaAlpha)
 }
 
 // MonitorRect describes the bounding rectangle of a display monitor.

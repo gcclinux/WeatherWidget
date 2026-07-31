@@ -61,6 +61,8 @@
   "settings.about.appName": "WeatherWidget",
   "settings.language.title": "Idioma",
   "settings.language.subtitle": "Escolha seu idioma preferido.",
+  "settings.temperature.title": "Unidade de Temperatura",
+  "settings.temperature.subtitle": "Escolha sua unidade de temperatura preferida.",
   "tray.showWidget": "Mostrar Widget",
   "tray.hideWidget": "Ocultar Widget",
   "tray.settings": "Configurações",
