@@ -176,6 +176,11 @@ func (a *AppManager) openSettings() {
 	a.ui.ShowSettings(a.cfg, a.onSettingsSave)
 }
 
+// OpenSettings is the exported version for external callers (e.g. --settings flag).
+func (a *AppManager) OpenSettings() {
+	a.openSettings()
+}
+
 // applyPosition moves the widget to custom coordinates if set, otherwise
 // falls back to the configured corner position.
 func (a *AppManager) applyPosition(cfg *config.Config) {

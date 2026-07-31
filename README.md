@@ -42,7 +42,7 @@ You can download the latest pre-compiled binaries for Windows and Linux from the
 
 ### Windows MSI Package
 ```powershell
- .\installer\build-msi.ps1 -Version "0.0.7" -SkipSign
+ .\installer\build-msi.ps1 -Version "1.0.0" -SkipSign
  ```
 
 ### Linux
@@ -141,7 +141,7 @@ There are two ways to fix this:
 
 ## Changelog
 
-### v0.0.6.3 — 2025-06-26
+### v0.6.3 — 2025-06-26
 
 - Added new "heavy rain" weather icon (`heavy_rain.png`) for heavy intensity rain conditions across all providers (OWM, WU, EWW)
 - Fixed weather and time display staying frozen after PC wakes from sleep/hibernation — the widget now detects system resume and triggers an immediate refresh
@@ -152,3 +152,15 @@ There are two ways to fix this:
 - **macOS: Window transparency** — Background transparency slider (25%/50%/75%/100%) now works on macOS using `NSWindow.alphaValue` with remapped values to keep content readable
 - **macOS: Auto-start at login** — Added LaunchAgent support so the "Launch WeatherWidget when starts" setting works on macOS (creates `~/Library/LaunchAgents/com.weatherwidget.app.plist`)
 - **macOS: Build script** — Added `build-darwin.sh` for one-command universal .app + .dmg creation
+
+### v1.0.0 — 2026-07-31
+
+- **Humidity & wind display** — Each city panel now shows humidity percentage and wind speed with compass direction (e.g. "💧 45% 💨 4.5 NW") below the weather description
+- **Live settings preview** — Opacity, position, and temperature unit changes are applied to the widget in real-time as you adjust them in settings; reverts automatically if you close without saving
+- **Panel Display customization** — New Widget tab in settings with checkboxes to toggle visibility of each panel element (City, Icon, Temperature, Description, Humidity & Wind, Time, Date) with a live 3-city preview
+- **Dynamic panel height** — Widget window automatically resizes to fit only the visible elements when display fields are toggled
+- **Live About preview** — The About tab now shows live weather data for 3 default cities with ticking clocks instead of a static screenshot
+- **Windows opacity fix** — All transparency levels (25%/50%/75%/100%) now produce distinct visual results using combined LWA_COLORKEY + LWA_ALPHA
+- **Settings tab reorganization** — Appearance tab renamed to Display; new Widget tab houses Panel Display and Temperature Unit with live preview
+- **Modernized Locations tab** — City rows use icon buttons (move up/down/delete), bold city names, separators between entries, and coordinates grouped on a single row
+- **Compact panel layout** — Reduced spacing between time/date and description/humidity rows using zero-padding layout; separator line shortened to 70% width and centered

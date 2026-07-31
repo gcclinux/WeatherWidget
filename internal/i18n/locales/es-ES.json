@@ -53,7 +53,7 @@
   "settings.save": "Guardar",
   "settings.dialog.saved": "Guardado",
   "settings.dialog.savedMsg": "¡Configuración guardada correctamente!",
-  "settings.about.version": "**Versión:** 0.0.7",
+  "settings.about.version": "**Versión:** 1.0.0",
   "settings.about.description": "Un widget compacto y transparente de hora y clima en tu escritorio.\nMonitoriza hasta 5 ciudades a la vez con una superposición siempre visible.",
   "settings.about.websiteLabel": "Sitio web:",
   "settings.about.manualLabel": "Manual:",

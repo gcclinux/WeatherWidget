@@ -22,6 +22,7 @@ import (
 	"fyne.io/fyne/v2/widget"
 	"github.com/bradfitz/latlong"
 
+	"weatherwidget/assets"
 	"weatherwidget/internal/config"
 	"weatherwidget/internal/i18n"
 	"weatherwidget/internal/ui/panel"
@@ -383,8 +384,12 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 			[]string{unitCelsiusLabel, unitFahrenheitLabel},
 			func(selected string) {
 				state.selectedUnit = unitValueMap[selected]
-				// Live preview: re-render panels with the new unit immediately.
+				// Live preview: re-render main widget panels with the new unit immediately.
 				u.RerenderPanels(state.selectedUnit)
+				// Also re-render the Widget tab preview panels.
+				for _, p := range state.appearancePanels {
+					p.Rerender(state.selectedUnit)
+				}
 			},
 		)
 		unitRadio.Horizontal = true
@@ -408,20 +413,37 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 			for i := range state.cities {
 				idx := i
 				c := state.cities[i]
-				lbl := widget.NewLabel(fmt.Sprintf("#%d  %s, %s", idx+1, c.Name, c.Region))
-				upBtn := widget.NewButton("↑", func() {
+
+				// City name styled as bold text.
+				cityName := widget.NewRichTextFromMarkdown(fmt.Sprintf("**%s, %s**", c.Name, c.Region))
+
+				// Small weather icon instead of position number.
+				iconCodes := []string{"clear", "partly_cloudy", "cloudy", "rain", "snow"}
+				iconCode := iconCodes[idx%len(iconCodes)]
+				iconData, _ := assets.Icons.ReadFile(fmt.Sprintf("icons/%s.png", iconCode))
+				var cityIcon *canvas.Image
+				if iconData != nil {
+					res := fyne.NewStaticResource(iconCode+".png", iconData)
+					cityIcon = canvas.NewImageFromResource(res)
+				} else {
+					cityIcon = canvas.NewImageFromResource(theme.HomeIcon())
+				}
+				cityIcon.FillMode = canvas.ImageFillContain
+				cityIcon.SetMinSize(fyne.NewSize(24, 24))
+
+				upBtn := widget.NewButtonWithIcon("", theme.MoveUpIcon(), func() {
 					if idx > 0 {
 						state.cities[idx], state.cities[idx-1] = state.cities[idx-1], state.cities[idx]
 						refreshCityList()
 					}
 				})
-				downBtn := widget.NewButton("↓", func() {
+				downBtn := widget.NewButtonWithIcon("", theme.MoveDownIcon(), func() {
 					if idx < len(state.cities)-1 {
 						state.cities[idx], state.cities[idx+1] = state.cities[idx+1], state.cities[idx]
 						refreshCityList()
 					}
 				})
-				removeBtn := widget.NewButton(u.t("settings.locations.removeBtn"), func() {
+				removeBtn := widget.NewButtonWithIcon("", theme.DeleteIcon(), func() {
 					result, err := config.RemoveCity(state.cities, idx, nil)
 					if err != nil {
 						dialog.ShowError(err, win)
@@ -430,6 +452,7 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 					state.cities = result
 					refreshCityList()
 				})
+
 				if idx == 0 {
 					upBtn.Disable()
 				}
@@ -445,7 +468,13 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 					upBtn.Disable()
 					downBtn.Disable()
 				}
-				cityListBox.Add(container.NewHBox(lbl, layout.NewSpacer(), upBtn, downBtn, removeBtn))
+
+				// Build a card-like row for each city.
+				leftContent := container.NewHBox(cityIcon, cityName)
+				buttons := container.NewHBox(upBtn, downBtn, removeBtn)
+				row := container.NewBorder(nil, nil, leftContent, buttons)
+				cityListBox.Add(row)
+				cityListBox.Add(widget.NewSeparator())
 			}
 			cityListBox.Refresh()
 		}
@@ -724,12 +753,14 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 			searchBtn.Disable()
 		}
 
+		// Coordinates on one row (side by side).
+		coordRow := container.NewGridWithColumns(2, addLatEntry, addLonEntry)
+
 		addForm := container.NewVBox(
 			widget.NewForm(
 				widget.NewFormItem(u.t("settings.locations.nameLabel"), nameItemContent),
 				widget.NewFormItem(u.t("settings.locations.regionLabel"), addRegionEntry),
-				widget.NewFormItem(u.t("settings.locations.latLabel"), addLatEntry),
-				widget.NewFormItem(u.t("settings.locations.lonLabel"), addLonEntry),
+				widget.NewFormItem(u.t("settings.locations.coordLabel"), coordRow),
 				widget.NewFormItem(u.t("settings.locations.tzLabel"), addTimezoneEntry),
 			),
 			container.NewHBox(layout.NewSpacer(), addBtnContainer),
@@ -998,17 +1029,23 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 			sectionBlock(u.t("settings.transparency.title"), u.t("settings.transparency.subtitle"),
 				opacityRadio,
 			),
-			sectionBlock(u.t("settings.temperature.title"), u.t("settings.temperature.subtitle"),
-				unitRadio,
-			),
 			sectionBlock(u.t("settings.startup.title"), u.t("settings.startup.subtitle"),
 				autoStartCheck,
 			),
-			sectionBlock(u.t("settings.display.title"), u.t("settings.display.subtitle"),
-				container.NewVBox(displayChecks, appearancePreviewGrid),
-			),
 		)))
 		appearanceTab := container.NewTabItemWithIcon(u.t("settings.tab.appearance"), theme.ColorPaletteIcon(), appearanceContent)
+
+		// ── Widget tab ────────────────────────────────────────────────────────
+		widgetContent := container.NewPadded(container.NewVScroll(container.NewVBox(
+			sectionBlock(u.t("settings.display.title"), u.t("settings.display.subtitle"),
+				displayChecks,
+			),
+			sectionBlock(u.t("settings.temperature.title"), u.t("settings.temperature.subtitle"),
+				unitRadio,
+			),
+			appearancePreviewGrid,
+		)))
+		widgetTab := container.NewTabItemWithIcon(u.t("settings.tab.widget"), theme.ComputerIcon(), widgetContent)
 
 		// ── Language tab ──────────────────────────────────────────────────────
 		langGrid := container.NewGridWithColumns(3, langCardObjects...)
@@ -1017,7 +1054,7 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 				langGrid,
 			),
 		)))
-		languageTab := container.NewTabItemWithIcon(u.t("settings.tab.language"), theme.ComputerIcon(), languageContent)
+		languageTab := container.NewTabItemWithIcon(u.t("settings.tab.language"), theme.MailComposeIcon(), languageContent)
 
 		providerContent := container.NewPadded(container.NewVScroll(container.NewVBox(
 			widget.NewCard(u.t("settings.provider.title"), u.t("settings.provider.subtitle"),
@@ -1090,7 +1127,7 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 		)))
 		aboutTab := container.NewTabItemWithIcon(u.t("settings.tab.about"), theme.InfoIcon(), aboutContent)
 
-		tabs := container.NewAppTabs(appearanceTab, providerTab, locationsTab, languageTab, aboutTab)
+		tabs := container.NewAppTabs(appearanceTab, widgetTab, providerTab, locationsTab, languageTab, aboutTab)
 		tabs.SetTabLocation(container.TabLocationLeading)
 		if selectedTabIndex > 0 && selectedTabIndex < len(tabs.Items) {
 			tabs.SelectIndex(selectedTabIndex)

@@ -21,6 +21,7 @@ var version = "dev"
 func main() {
 	debugFlag := flag.Bool("debug", false, "Enable debug logging to a file")
 	softwareFlag := flag.Bool("software", false, "Use software rendering (fixes OpenGL driver issues)")
+	settingsFlag := flag.Bool("settings", false, "Open the settings window on launch")
 	flag.Parse()
 
 	if *softwareFlag {
@@ -50,6 +51,10 @@ func main() {
 	manager := appmanager.NewAppManager(fyneApp, appDataDir)
 	if err := manager.Run(); err != nil {
 		log.Fatalf("failed to start WeatherWidget: %v", err)
+	}
+
+	if *settingsFlag {
+		manager.OpenSettings()
 	}
 
 	fyneApp.Run()

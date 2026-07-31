@@ -70,10 +70,14 @@
       <ComponentRef Id="ApplicationShortcut" />
     </Feature>
 
-    <!-- Optional: Launch after install -->
+    <!-- Launch application after install completes (opens settings for first-time setup) -->
     <CustomAction Id="LaunchApplication"
                   FileRef="WeatherWidgetExe"
-                  ExeCommand=""
+                  ExeCommand="--settings"
                   Return="asyncNoWait" />
+
+    <InstallExecuteSequence>
+      <Custom Action="LaunchApplication" After="InstallFinalize" Condition="NOT Installed OR NOT REMOVE" />
+    </InstallExecuteSequence>
   </Package>
 </Wix>
