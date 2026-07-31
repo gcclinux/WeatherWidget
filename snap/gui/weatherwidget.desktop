@@ -1,0 +1,11 @@
+[Desktop Entry]
+Name=WeatherWidget
+GenericName=Weather Widget
+Comment=Compact desktop weather widget
+Exec=weatherwidget
+Icon=${SNAP}/meta/gui/weatherwidget.png
+Terminal=false
+Type=Application
+Categories=Utility;Clock;Weather;
+StartupWMClass=weatherwidget
+X-GNOME-Autostart-enabled=true

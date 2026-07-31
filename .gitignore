@@ -16,3 +16,8 @@ nohup.out
 *.app
 *.dmg
 graphify-out
+parts/
+prime/
+stage/
+overlay/
+*.snap

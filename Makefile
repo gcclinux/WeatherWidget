@@ -26,13 +26,16 @@ endif
 # Detect host OS for build target selection
 UNAME_S := $(shell uname -s)
 
-.PHONY: build build-linux build-darwin build-darwin-app build-darwin-dmg build-darwin-pkg test clean vet
+.PHONY: build build-linux build-snap build-darwin build-darwin-app build-darwin-dmg build-darwin-pkg test clean vet
 
 ifeq ($(UNAME_S),Darwin)
 build: build-darwin
 else
 build: build-linux
 endif
+
+build-snap:
+	./build-snap.sh
 
 build-linux:
 	CGO_ENABLED=1 GOOS=linux GOARCH=amd64 $(GO_CMD) build -v -ldflags="-s -w" -o $(BINARY_NAME)-linux-amd64 $(CMD_PATH)

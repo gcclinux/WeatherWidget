@@ -55,6 +55,13 @@ You can download the latest pre-compiled binaries for Windows and Linux from the
    make build
    ```
 
+3. **Build Snap Package**:
+   ```bash
+   ./build-snap.sh
+   # or
+   make build-snap
+   ```
+
 > **Note**: The first build may take several minutes as it compiles graphical dependencies (CGO). My updated Makefile includes the `-v` flag so you can monitor progress.
 
 ## Config example

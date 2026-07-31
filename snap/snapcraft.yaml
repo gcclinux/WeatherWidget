@@ -1,0 +1,62 @@
+name: weatherwidget
+title: WeatherWidget
+summary: Compact desktop weather widget
+description: |
+  WeatherWidget is a compact, customizable weather widget for your desktop system tray and screen.
+  Supports multiple city locations, opacity/transparency options, and customizable weather providers.
+
+confinement: strict
+base: core22
+adopt-info: weatherwidget
+
+license: AGPL-3.0-only
+source-code: https://github.com/gcclinux/weatherwidget
+website: https://easysmartapps.co.uk/weatherwidget
+contact: https://easysmartapps.co.uk/contact
+issues: https://github.com/gcclinux/weatherwidget/issues
+donation: https://buy.stripe.com/bJe3cvaJOa650fQ8cPdZ603
+
+apps:
+  weatherwidget:
+    command: bin/weatherwidget
+    desktop: snap/gui/weatherwidget.desktop
+    autostart: weatherwidget.desktop
+    extensions: [gnome]
+    plugs:
+      - network
+      - network-bind
+      - desktop
+      - desktop-legacy
+      - x11
+      - wayland
+      - unity7
+      - opengl
+      - gsettings
+
+parts:
+  weatherwidget:
+    plugin: nil
+    source: .
+    source-type: local
+    build-packages:
+      - gcc
+      - g++
+      - pkg-config
+      - libgl1-mesa-dev
+      - xorg-dev
+      - libx11-dev
+      - libxrandr-dev
+      - libxinerama-dev
+      - libxi-dev
+      - libxcursor-dev
+      - libxxf86vm-dev
+    override-build: |
+      VERSION=$(cat release 2>/dev/null | tr -d '[:space:]')
+      if [ -z "$VERSION" ]; then
+        VERSION="dev"
+      fi
+      craftctl set-version "$VERSION" 2>/dev/null || snapcraftctl set-version "$VERSION"
+      GO_BIN=$(command -v go || echo "/usr/local/go/bin/go")
+      DEST_DIR="${CRAFT_PART_INSTALL:-$SNAPCRAFT_PART_INSTALL}"
+      mkdir -p "$DEST_DIR/bin"
+      $GO_BIN build -v -ldflags="-s -w -X main.version=$VERSION" -o "$DEST_DIR/bin/weatherwidget" ./cmd/weatherwidget/

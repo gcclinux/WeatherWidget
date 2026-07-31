@@ -10,6 +10,8 @@ LDFLAGS="-s -w"
 # Detect Go binary
 if [ -x "/usr/local/go/bin/go" ]; then
     GO_CMD="/usr/local/go/bin/go"
+elif [ -x "/snap/bin/go" ]; then
+    GO_CMD="/snap/bin/go"
 else
     GO_CMD="/usr/bin/go"
 fi
