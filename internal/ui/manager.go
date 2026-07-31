@@ -90,6 +90,21 @@ func (u *UIManager) UpdatePanels(data []weather.WeatherData, unit config.Tempera
 	}
 }
 
+// ApplyDisplayFields applies the given display field configuration to all panels
+// and resizes the widget window to fit the visible content.
+func (u *UIManager) ApplyDisplayFields(df *config.DisplayFields) {
+	for _, p := range u.panels {
+		p.ApplyDisplayFields(df)
+	}
+	// Resize widget to match the dynamic height.
+	count := len(u.panels)
+	if count == 0 {
+		count = 1
+	}
+	w, h, _ := CalculateLayoutWithFields(count, df)
+	u.widget.Resize(fyne.NewSize(float32(w), float32(h)))
+}
+
 // RerenderPanels re-renders all panels using their cached data with a new unit.
 // Used when only the temperature unit changes, avoiding a new weather fetch.
 func (u *UIManager) RerenderPanels(unit config.TemperatureUnit) {

@@ -39,8 +39,42 @@ type Config struct {
 	Opacity         int             `json:"opacity"` // 25, 50, 75, or 100 (percent)
 	Locale          string          `json:"locale"`
 	TemperatureUnit TemperatureUnit `json:"temperatureUnit,omitempty"`
+	DisplayFields   *DisplayFields  `json:"displayFields,omitempty"`
 	APIConfig       *APIConfig      `json:"apiConfig,omitempty"`
 	DatabaseConfig  *DatabaseConfig `json:"databaseConfig,omitempty"`
+}
+
+// DisplayFields controls which elements are visible on each city panel.
+// All fields default to true (show everything).
+type DisplayFields struct {
+	ShowCity      bool `json:"showCity"`
+	ShowIcon      bool `json:"showIcon"`
+	ShowTemp      bool `json:"showTemp"`
+	ShowDesc      bool `json:"showDesc"`
+	ShowHumidWind bool `json:"showHumidWind"`
+	ShowTime      bool `json:"showTime"`
+	ShowDate      bool `json:"showDate"`
+}
+
+// DefaultDisplayFields returns a DisplayFields with all elements visible.
+func DefaultDisplayFields() *DisplayFields {
+	return &DisplayFields{
+		ShowCity:      true,
+		ShowIcon:      true,
+		ShowTemp:      true,
+		ShowDesc:      true,
+		ShowHumidWind: true,
+		ShowTime:      true,
+		ShowDate:      true,
+	}
+}
+
+// GetDisplayFields returns the config's DisplayFields, or defaults if nil.
+func (c *Config) GetDisplayFields() *DisplayFields {
+	if c.DisplayFields != nil {
+		return c.DisplayFields
+	}
+	return DefaultDisplayFields()
 }
 
 // CityConfig holds the configuration for a single city.

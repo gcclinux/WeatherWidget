@@ -24,14 +24,17 @@ type CityPanel struct {
 	lm            *i18n.LocaleManager
 	container     *fyne.Container
 	iconWidget    *canvas.Image
+	iconRow       *fyne.Container
 	tempText      *canvas.Text
 	descText      *canvas.Text
 	humidWindText *canvas.Text
 	cityText      *canvas.Text
 	timeText      *canvas.Text
 	dateText      *canvas.Text
+	separatorRow  *fyne.Container
 	errorIcon     *canvas.Image
-	lastData      *weather.WeatherData // cached for re-render on unit change
+	lastData      *weather.WeatherData  // cached for re-render on unit change
+	displayFields *config.DisplayFields // current visibility config
 
 	mu         sync.Mutex
 	timeTicker *time.Ticker
@@ -60,7 +63,10 @@ func loadIconFromAssets(iconCode string) fyne.Resource {
 // NewCityPanel creates a new CityPanel with placeholder content.
 // If lm is nil, hardcoded English defaults are used for placeholder text.
 func NewCityPanel(lm *i18n.LocaleManager) *CityPanel {
-	p := &CityPanel{lm: lm}
+	p := &CityPanel{
+		lm:            lm,
+		displayFields: config.DefaultDisplayFields(),
+	}
 
 	// Weather icon — start with the default cloudy icon.
 	res := loadIconFromAssets(weather.IconCloudy)
@@ -104,28 +110,71 @@ func NewCityPanel(lm *i18n.LocaleManager) *CityPanel {
 	p.dateText.Alignment = fyne.TextAlignCenter
 
 	// Icon row: weather icon + error icon overlay.
-	iconRow := container.NewHBox(layout.NewSpacer(), p.iconWidget, p.errorIcon, layout.NewSpacer())
+	p.iconRow = container.NewHBox(layout.NewSpacer(), p.iconWidget, p.errorIcon, layout.NewSpacer())
 
 	// Separator line — use a thin colored rectangle at 70% panel width,
 	// centered between humidity/wind and time sections.
 	separator := canvas.NewRectangle(color.NRGBA{R: 255, G: 255, B: 255, A: 100})
 	separator.SetMinSize(fyne.NewSize(112, 1)) // ~70% of 160 panel width
-	separatorRow := container.NewCenter(separator)
+	p.separatorRow = container.NewCenter(separator)
 
-	// Vertical stack — compact layout with minimal spacing
-	p.container = container.NewPadded(container.NewVBox(
-		container.NewCenter(p.cityText),
-		layout.NewSpacer(),
-		iconRow,
-		container.NewCenter(p.tempText),
-		container.NewCenter(p.descText),
-		container.NewCenter(p.humidWindText),
-		layout.NewSpacer(),
-		separatorRow,
-		container.New(&tightVBoxLayout{}, container.NewCenter(p.timeText), container.NewCenter(p.dateText)),
-	))
+	// Build the initial layout with all fields visible.
+	p.container = container.NewPadded(p.buildLayout())
 
 	return p
+}
+
+// buildLayout constructs the VBox layout based on current displayFields.
+func (p *CityPanel) buildLayout() *fyne.Container {
+	var objects []fyne.CanvasObject
+
+	if p.displayFields.ShowCity {
+		objects = append(objects, container.NewCenter(p.cityText))
+	}
+
+	objects = append(objects, layout.NewSpacer())
+
+	if p.displayFields.ShowIcon {
+		objects = append(objects, p.iconRow)
+	}
+	if p.displayFields.ShowTemp {
+		objects = append(objects, container.NewCenter(p.tempText))
+	}
+	if p.displayFields.ShowDesc {
+		objects = append(objects, container.NewCenter(p.descText))
+	}
+	if p.displayFields.ShowHumidWind {
+		objects = append(objects, container.NewCenter(p.humidWindText))
+	}
+
+	objects = append(objects, layout.NewSpacer())
+
+	// Show separator only if time or date is visible.
+	if p.displayFields.ShowTime || p.displayFields.ShowDate {
+		objects = append(objects, p.separatorRow)
+
+		var timeObjects []fyne.CanvasObject
+		if p.displayFields.ShowTime {
+			timeObjects = append(timeObjects, container.NewCenter(p.timeText))
+		}
+		if p.displayFields.ShowDate {
+			timeObjects = append(timeObjects, container.NewCenter(p.dateText))
+		}
+		objects = append(objects, container.New(&tightVBoxLayout{}, timeObjects...))
+	}
+
+	return container.NewVBox(objects...)
+}
+
+// ApplyDisplayFields updates the panel's visibility configuration and rebuilds the layout.
+func (p *CityPanel) ApplyDisplayFields(df *config.DisplayFields) {
+	if df == nil {
+		df = config.DefaultDisplayFields()
+	}
+	p.displayFields = df
+	p.container.RemoveAll()
+	p.container.Add(p.buildLayout())
+	p.container.Refresh()
 }
 
 // Container returns the Fyne container for embedding in a parent layout.

@@ -61,12 +61,14 @@ var providerValueToDisplay = map[string]string{
 
 // settingsState holds mutable UI state for the settings dialog.
 type settingsState struct {
-	cities        []config.CityConfig
-	window        fyne.Window
-	selectedLang  string                 // locale code selected in the language dropdown
-	selectedUnit  config.TemperatureUnit // temperature unit selected in the appearance tab
-	saved         bool                   // true if Save was clicked (suppresses revert on close)
-	previewPanels []*panel.CityPanel     // live preview panels in the About tab
+	cities           []config.CityConfig
+	window           fyne.Window
+	selectedLang     string                 // locale code selected in the language dropdown
+	selectedUnit     config.TemperatureUnit // temperature unit selected in the appearance tab
+	saved            bool                   // true if Save was clicked (suppresses revert on close)
+	previewPanels    []*panel.CityPanel     // live preview panels in the About tab
+	appearancePanels []*panel.CityPanel     // live preview panels in the Appearance tab
+	displayFields    *config.DisplayFields  // current display field checkbox state
 }
 
 // t is a helper that returns the translated string for the given key.
@@ -108,10 +110,11 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 	win.Resize(fyne.NewSize(winW, winH))
 
 	state := &settingsState{
-		cities:       copyCities(cfg.Cities),
-		window:       win,
-		selectedLang: cfg.Locale,
-		selectedUnit: config.NormalizeTemperatureUnit(cfg.TemperatureUnit),
+		cities:        copyCities(cfg.Cities),
+		window:        win,
+		selectedLang:  cfg.Locale,
+		selectedUnit:  config.NormalizeTemperatureUnit(cfg.TemperatureUnit),
+		displayFields: cfg.GetDisplayFields(),
 	}
 	if state.selectedLang == "" {
 		state.selectedLang = "en-GB"
@@ -909,6 +912,85 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 			return container.NewVBox(titleLabel, subtitleLabel, content, widget.NewSeparator())
 		}
 
+		// ── Panel Display checkboxes ─────────────────────────────────────────
+		df := cfg.GetDisplayFields()
+		chkCity := widget.NewCheck(u.t("settings.display.city"), nil)
+		chkCity.Checked = df.ShowCity
+		chkIcon := widget.NewCheck(u.t("settings.display.icon"), nil)
+		chkIcon.Checked = df.ShowIcon
+		chkTemp := widget.NewCheck(u.t("settings.display.temp"), nil)
+		chkTemp.Checked = df.ShowTemp
+		chkDesc := widget.NewCheck(u.t("settings.display.desc"), nil)
+		chkDesc.Checked = df.ShowDesc
+		chkHumidWind := widget.NewCheck(u.t("settings.display.humidWind"), nil)
+		chkHumidWind.Checked = df.ShowHumidWind
+		chkTime := widget.NewCheck(u.t("settings.display.time"), nil)
+		chkTime.Checked = df.ShowTime
+		chkDate := widget.NewCheck(u.t("settings.display.date"), nil)
+		chkDate.Checked = df.ShowDate
+
+		displayChecks := container.NewGridWithColumns(4,
+			chkCity, chkIcon, chkTemp, chkDesc,
+			chkHumidWind, chkTime, chkDate,
+		)
+
+		// Live preview panels for the Appearance tab.
+		defaultCitiesAppearance := config.DefaultCities()
+		appearancePreviewPanels := make([]*panel.CityPanel, len(defaultCitiesAppearance))
+		appearancePreviewObjects := make([]fyne.CanvasObject, len(defaultCitiesAppearance))
+		for i := range defaultCitiesAppearance {
+			p := panel.NewCityPanel(u.lm)
+			appearancePreviewPanels[i] = p
+			appearancePreviewObjects[i] = p.Container()
+		}
+		appearancePreviewGrid := container.NewGridWithColumns(len(defaultCitiesAppearance), appearancePreviewObjects...)
+		state.appearancePanels = appearancePreviewPanels
+
+		// Helper: read current checkbox state and apply to all preview panels.
+		applyDisplayPreview := func() {
+			fields := &config.DisplayFields{
+				ShowCity:      chkCity.Checked,
+				ShowIcon:      chkIcon.Checked,
+				ShowTemp:      chkTemp.Checked,
+				ShowDesc:      chkDesc.Checked,
+				ShowHumidWind: chkHumidWind.Checked,
+				ShowTime:      chkTime.Checked,
+				ShowDate:      chkDate.Checked,
+			}
+			state.displayFields = fields
+			for _, p := range appearancePreviewPanels {
+				p.ApplyDisplayFields(fields)
+			}
+		}
+
+		// Wire up OnChanged for all checkboxes.
+		chkCity.OnChanged = func(_ bool) { applyDisplayPreview() }
+		chkIcon.OnChanged = func(_ bool) { applyDisplayPreview() }
+		chkTemp.OnChanged = func(_ bool) { applyDisplayPreview() }
+		chkDesc.OnChanged = func(_ bool) { applyDisplayPreview() }
+		chkHumidWind.OnChanged = func(_ bool) { applyDisplayPreview() }
+		chkTime.OnChanged = func(_ bool) { applyDisplayPreview() }
+		chkDate.OnChanged = func(_ bool) { applyDisplayPreview() }
+
+		// Fetch live weather data for appearance preview panels.
+		go func(cities []config.CityConfig, panels []*panel.CityPanel, unit config.TemperatureUnit) {
+			adapter := remoteapi.NewRemoteAPIAdapter("easyweatherwidget", "free")
+			ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+			defer cancel()
+			for i, city := range cities {
+				data, err := adapter.FetchWeather(ctx, city)
+				if err != nil {
+					continue
+				}
+				idx := i
+				d := data
+				fyne.Do(func() {
+					panels[idx].Update(d, unit)
+					panels[idx].StartClock(cities[idx].Timezone)
+				})
+			}
+		}(defaultCitiesAppearance, appearancePreviewPanels, state.selectedUnit)
+
 		appearanceContent := container.NewPadded(container.NewVScroll(container.NewVBox(
 			sectionBlock(u.t("settings.position.title"), u.t("settings.position.subtitle"),
 				container.NewVBox(positionItems...),
@@ -921,6 +1003,9 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 			),
 			sectionBlock(u.t("settings.startup.title"), u.t("settings.startup.subtitle"),
 				autoStartCheck,
+			),
+			sectionBlock(u.t("settings.display.title"), u.t("settings.display.subtitle"),
+				container.NewVBox(displayChecks, appearancePreviewGrid),
 			),
 		)))
 		appearanceTab := container.NewTabItemWithIcon(u.t("settings.tab.appearance"), theme.ColorPaletteIcon(), appearanceContent)
@@ -1053,6 +1138,9 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 		for _, p := range state.previewPanels {
 			p.StopClock()
 		}
+		for _, p := range state.appearancePanels {
+			p.StopClock()
+		}
 		// Revert live preview changes if the user closed without saving.
 		if !state.saved {
 			u.SetOpacity(origOpacity)
@@ -1125,6 +1213,7 @@ func buildConfigFromUI(
 		Locale:          locale,
 	}
 	cfg.TemperatureUnit = config.NormalizeTemperatureUnit(state.selectedUnit)
+	cfg.DisplayFields = state.displayFields
 	provider := providerDisplayToValue[providerSelect.Selected]
 	if provider == "" {
 		provider = "openweathermap"
