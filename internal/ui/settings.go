@@ -914,7 +914,8 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 		aboutDesc := widget.NewLabel(u.t("settings.about.description"))
 		aboutDesc.Wrapping = fyne.TextWrapWord
 
-		websiteLink := widget.NewHyperlink("gcclinux.github.io/WeatherWidget", parseURL("https://gcclinux.github.io/WeatherWidget/"))
+		websiteLink := widget.NewHyperlink("easysmartapps.co.uk/weatherwidget", parseURL("https://easysmartapps.co.uk/weatherwidget"))
+		manualLink := widget.NewHyperlink("easysmartapps.co.uk/weatherwidget-manual", parseURL("https://easysmartapps.co.uk/weatherwidget-manual"))
 
 		demoResource := fyne.NewStaticResource("demo.png", assets.DemoPNG)
 		demoImage := canvas.NewImageFromResource(demoResource)
@@ -925,6 +926,7 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 			widget.NewCard(u.t("settings.about.appName"), "", container.NewVBox(
 				aboutDesc,
 				container.NewHBox(widget.NewLabel(u.t("settings.about.websiteLabel")), websiteLink),
+				container.NewHBox(widget.NewLabel(u.t("settings.about.manualLabel")), manualLink),
 				aboutVersion,
 			)),
 			widget.NewCard(u.t("settings.about.previewLabel"), "", container.NewCenter(demoImage)),

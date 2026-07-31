@@ -17,6 +17,14 @@ fi
 
 echo "==> Building WeatherWidget $VERSION for macOS..."
 
+# Update version in all locale JSON files so the About tab matches.
+LOCALE_DIR="internal/i18n/locales"
+if [ -d "$LOCALE_DIR" ]; then
+    for f in "$LOCALE_DIR"/*.json; do
+        sed -i '' -E "s/\"settings\.about\.version\": \"(\*\*[^:*]+:\*\*) [^\"]*\"/\"settings.about.version\": \"\1 $VERSION\"/" "$f"
+    done
+fi
+
 # Build both architectures
 echo "    Compiling darwin/amd64..."
 CGO_ENABLED=1 GOOS=darwin GOARCH=amd64 go build -v -ldflags="-s -w -X main.version=$VERSION" -o "$BINARY_NAME-darwin-amd64" "$CMD_PATH"
