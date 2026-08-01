@@ -25,7 +25,7 @@ func TestFetchWeather_OWM_Success(t *testing.T) {
 		Name:     "Holambra",
 		Timezone: -10800, // UTC-3
 	}
-	resp.Main.Temp = 25.7
+	resp.Main.Temp = 25.4
 	resp.Weather = []struct {
 		ID          int    `json:"id"`
 		Description string `json:"description"`

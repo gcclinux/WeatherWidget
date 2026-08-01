@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -103,11 +104,17 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 	win.SetFixedSize(false)
 
 	screenW, screenH := getScreenSize()
-	winW := float32(900)
+	winW := float32(945)
 	if float32(screenW) < winW {
 		winW = float32(screenW) * 0.9
 	}
-	winH := float32(screenH) * 0.46
+	winH := float32(screenH) * 0.55
+	if winH < 560 {
+		winH = 560
+	}
+	if winH > float32(screenH)*0.9 {
+		winH = float32(screenH) * 0.9
+	}
 	win.Resize(fyne.NewSize(winW, winH))
 
 	state := &settingsState{
@@ -283,66 +290,76 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 		)
 
 		// ── Position ─────────────────────────────────────────────────────────
-		topLeftLabel := u.t("settings.position.topLeft")
-		topRightLabel := u.t("settings.position.topRight")
-		bottomLeftLabel := u.t("settings.position.bottomLeft")
-		bottomRightLabel := u.t("settings.position.bottomRight")
+		var positionValueMap map[string]string
+		var positionRadio *widget.RadioGroup
+		var monitorSelect *widget.Select
+		var positionItems []fyne.CanvasObject
 
-		positionValueMap := map[string]string{
-			topLeftLabel: "top-left", topRightLabel: "top-right",
-			bottomLeftLabel: "bottom-left", bottomRightLabel: "bottom-right",
-		}
-		positionLabelMap := map[string]string{
-			"top-left": topLeftLabel, "top-right": topRightLabel,
-			"bottom-left": bottomLeftLabel, "bottom-right": bottomRightLabel,
-		}
-		positionRadio := widget.NewRadioGroup(
-			[]string{topLeftLabel, topRightLabel, bottomLeftLabel, bottomRightLabel}, nil,
-		)
-		positionRadio.Horizontal = true
-		if label, ok := positionLabelMap[cfg.CornerPosition]; ok {
-			positionRadio.SetSelected(label)
+		if runtime.GOOS == "linux" {
+			noticeLabel := widget.NewLabel(u.t("settings.position.linuxNotice"))
+			noticeLabel.Wrapping = fyne.TextWrapWord
+			positionItems = []fyne.CanvasObject{noticeLabel}
 		} else {
-			positionRadio.SetSelected(bottomRightLabel)
-		}
+			topLeftLabel := u.t("settings.position.topLeft")
+			topRightLabel := u.t("settings.position.topRight")
+			bottomLeftLabel := u.t("settings.position.bottomLeft")
+			bottomRightLabel := u.t("settings.position.bottomRight")
 
-		// ── Monitor selector ─────────────────────────────────────────────────
-		monitorCount := u.GetMonitorCount()
-		var monitorOptions []string
-		for i := 0; i < monitorCount; i++ {
-			monitorOptions = append(monitorOptions, u.tFmt("settings.monitor.format", i+1))
-		}
-		monitorSelect := widget.NewSelect(monitorOptions, nil)
-		if cfg.MonitorIndex >= 0 && cfg.MonitorIndex < monitorCount {
-			monitorSelect.SetSelected(u.tFmt("settings.monitor.format", cfg.MonitorIndex+1))
-		} else {
-			monitorSelect.SetSelected(u.tFmt("settings.monitor.format", 1))
-		}
-
-		// Live preview: move widget when position or monitor changes.
-		applyPositionPreview := func() {
-			pos := positionValueMap[positionRadio.Selected]
-			if pos == "" {
-				pos = "bottom-right"
+			positionValueMap = map[string]string{
+				topLeftLabel: "top-left", topRightLabel: "top-right",
+				bottomLeftLabel: "bottom-left", bottomRightLabel: "bottom-right",
 			}
-			monIdx := 0
+			positionLabelMap := map[string]string{
+				"top-left": topLeftLabel, "top-right": topRightLabel,
+				"bottom-left": bottomLeftLabel, "bottom-right": bottomRightLabel,
+			}
+			positionRadio = widget.NewRadioGroup(
+				[]string{topLeftLabel, topRightLabel, bottomLeftLabel, bottomRightLabel}, nil,
+			)
+			positionRadio.Horizontal = true
+			if label, ok := positionLabelMap[cfg.CornerPosition]; ok {
+				positionRadio.SetSelected(label)
+			} else {
+				positionRadio.SetSelected(bottomRightLabel)
+			}
+
+			// ── Monitor selector ─────────────────────────────────────────────────
+			monitorCount := u.GetMonitorCount()
+			var monitorOptions []string
 			for i := 0; i < monitorCount; i++ {
-				if monitorSelect.Selected == u.tFmt("settings.monitor.format", i+1) {
-					monIdx = i
-					break
-				}
+				monitorOptions = append(monitorOptions, u.tFmt("settings.monitor.format", i+1))
 			}
-			u.SetCorner(pos, monIdx)
-		}
-		positionRadio.OnChanged = func(_ string) { applyPositionPreview() }
-		monitorSelect.OnChanged = func(_ string) { applyPositionPreview() }
-		// Build the position card contents — include monitor selector only
-		// when multiple monitors are detected.
-		positionItems := []fyne.CanvasObject{positionRadio}
-		if monitorCount > 1 {
-			monitorLabel := widget.NewLabel(u.t("settings.monitor.label"))
-			monitorLabel.TextStyle = fyne.TextStyle{Bold: true}
-			positionItems = append(positionItems, monitorLabel, monitorSelect)
+			monitorSelect = widget.NewSelect(monitorOptions, nil)
+			if cfg.MonitorIndex >= 0 && cfg.MonitorIndex < monitorCount {
+				monitorSelect.SetSelected(u.tFmt("settings.monitor.format", cfg.MonitorIndex+1))
+			} else {
+				monitorSelect.SetSelected(u.tFmt("settings.monitor.format", 1))
+			}
+
+			// Live preview: move widget when position or monitor changes.
+			applyPositionPreview := func() {
+				pos := positionValueMap[positionRadio.Selected]
+				if pos == "" {
+					pos = "bottom-right"
+				}
+				monIdx := 0
+				for i := 0; i < monitorCount; i++ {
+					if monitorSelect.Selected == u.tFmt("settings.monitor.format", i+1) {
+						monIdx = i
+						break
+					}
+				}
+				u.SetCorner(pos, monIdx)
+			}
+			positionRadio.OnChanged = func(_ string) { applyPositionPreview() }
+			monitorSelect.OnChanged = func(_ string) { applyPositionPreview() }
+
+			positionItems = []fyne.CanvasObject{positionRadio}
+			if monitorCount > 1 {
+				monitorLabel := widget.NewLabel(u.t("settings.monitor.label"))
+				monitorLabel.TextStyle = fyne.TextStyle{Bold: true}
+				positionItems = append(positionItems, monitorLabel, monitorSelect)
+			}
 		}
 
 		// ── Transparency ─────────────────────────────────────────────────────
@@ -1206,10 +1223,16 @@ func buildConfigFromUI(
 	opacityMap map[string]int,
 	current *config.Config,
 ) *config.Config {
-	cornerPosition := positionValueMap[positionRadio.Selected]
+	cornerPosition := current.CornerPosition
 	if cornerPosition == "" {
 		cornerPosition = "bottom-right"
 	}
+	if positionRadio != nil && positionRadio.Selected != "" {
+		if pos, ok := positionValueMap[positionRadio.Selected]; ok {
+			cornerPosition = pos
+		}
+	}
+
 	opacity := opacityMap[opacityRadio.Selected]
 	if opacity == 0 {
 		opacity = 100
@@ -1217,7 +1240,7 @@ func buildConfigFromUI(
 	// When the user picks a corner position, clear any previous custom
 	// drag coordinates so applyPosition uses SetCorner instead.
 	var customX, customY *int
-	if positionRadio.Selected == "" && current.CustomX != nil && current.CustomY != nil {
+	if (positionRadio == nil || positionRadio.Selected == "") && current.CustomX != nil && current.CustomY != nil {
 		// No corner selected — preserve existing custom coordinates.
 		customX = current.CustomX
 		customY = current.CustomY
@@ -1225,12 +1248,14 @@ func buildConfigFromUI(
 
 	// Parse monitor index from the "Monitor N" selection (0-based).
 	monitorIndex := 0
-	if monitorSelect.Selected != "" {
+	if monitorSelect != nil && monitorSelect.Selected != "" {
 		fmt.Sscanf(monitorSelect.Selected, "Monitor %d", &monitorIndex)
 		monitorIndex-- // convert 1-based display to 0-based index
 		if monitorIndex < 0 {
 			monitorIndex = 0
 		}
+	} else {
+		monitorIndex = current.MonitorIndex
 	}
 
 	locale := state.selectedLang

@@ -28,6 +28,11 @@ A compact weather widget for your desktop.
 
 You can download the latest pre-compiled binaries for Windows and Linux from the [GitHub Releases](https://github.com/gcclinux/WeatherWidget/releases) page.
 
+## Window Repositioning
+
+- **Corner Positioning & Dragging**: You can select a screen corner (Top-Left, Top-Right, Bottom-Left, Bottom-Right) in **Settings -> Display**, or drag the widget window directly on screen.
+- **Linux (Wayland & Snap)**: On Linux (including Wayland sessions and Snap packages), you can reposition the widget to any custom location by holding **`Super + Left Click Drag`**. WeatherWidget automatically detects the new coordinates and persists them for future app launches.
+
 ## Compilation
 
 ### Windows

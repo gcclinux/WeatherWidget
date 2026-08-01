@@ -16,15 +16,15 @@ func TestProperty7_WidgetLayoutDimensions(t *testing.T) {
 
 		width, height, slots := CalculateLayout(n)
 
-		// Assert total width = N × 300 dip
-		expectedWidth := n * 300
+		// Assert total width = N × 160 dip
+		expectedWidth := n * PanelWidth
 		if width != expectedWidth {
 			t.Fatalf("CalculateLayout(%d): width = %d, want %d", n, width, expectedWidth)
 		}
 
-		// Assert height = 120 dip
-		if height != 120 {
-			t.Fatalf("CalculateLayout(%d): height = %d, want 120", n, height)
+		// Assert height = 185 dip
+		if height != PanelHeight {
+			t.Fatalf("CalculateLayout(%d): height = %d, want 185", n, height)
 		}
 
 		// Assert panel slots = N

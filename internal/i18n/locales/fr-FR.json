@@ -13,6 +13,7 @@
   "settings.position.topRight": "Haut-droite",
   "settings.position.bottomLeft": "Bas-gauche",
   "settings.position.bottomRight": "Bas-droite",
+  "settings.position.linuxNotice": "Maintenez Super + Clic gauche et glissez pour déplacer le widget n'importe où sur votre écran. La position est enregistrée automatiquement.",
   "settings.transparency.title": "Transparence de l'arrière-plan",
   "settings.transparency.subtitle": "Ajustez la transparence du widget.",
   "settings.interval.title": "Intervalle de rafraîchissement",

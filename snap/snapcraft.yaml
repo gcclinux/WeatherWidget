@@ -50,6 +50,27 @@ parts:
       - libxi-dev
       - libxcursor-dev
       - libxxf86vm-dev
+    stage-packages:
+      - wmctrl
+      - xdotool
+      - x11-utils
+      - x11-xserver-utils
+      - libxmu6
+      - libxdo3
+    stage:
+      - bin/*
+      - usr/bin/wmctrl
+      - usr/bin/xdotool
+      - usr/bin/xprop
+      - usr/bin/xrandr
+      - usr/bin/xwininfo
+      - usr/lib/*/libXmu.so*
+      - usr/lib/*/libxdo.so*
+      - -usr/lib/*/libc.so*
+      - -usr/lib/*/libGL*
+      - -usr/lib/*/libX11.so*
+      - -usr/lib/*/libxcb.so*
+      - -usr/lib/*/libXdmcp.so*
     override-build: |
       VERSION=$(cat release 2>/dev/null | tr -d '[:space:]')
       if [ -z "$VERSION" ]; then

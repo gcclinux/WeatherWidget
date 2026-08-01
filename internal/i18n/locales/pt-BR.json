@@ -14,6 +14,7 @@
   "settings.position.topRight": "Superior-Direito",
   "settings.position.bottomLeft": "Inferior-Esquerdo",
   "settings.position.bottomRight": "Inferior-Direito",
+  "settings.position.linuxNotice": "Segure Super + Clique Esquerdo e Arraste no seu teclado e mouse para mover o widget para qualquer lugar da tela. A posição é salva automaticamente.",
   "settings.transparency.title": "Transparência do Fundo",
   "settings.transparency.subtitle": "Ajuste a transparência do widget.",
   "settings.interval.title": "Intervalo de Atualização",
@@ -122,5 +123,6 @@
   "error.settings.noCityFound": "nenhuma cidade encontrada correspondendo a '%s'",
   "error.settings.connectionFailed": "teste de conexão falhou: %v",
   "error.settings.saveFailed": "falha ao salvar configurações: %v",
-  "error.settings.autoStartFailed": "falha ao atualizar inicialização automática: %v"
+  "error.settings.autoStartFailed": "falha ao atualizar inicialização automática: %v",
+  "error.settings.licenseRequired": "É necessária uma chave de licença para adicionar ou remover cidades. As cidades padrão estão disponíveis gratuitamente."
 }

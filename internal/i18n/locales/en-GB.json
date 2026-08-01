@@ -14,6 +14,7 @@
   "settings.position.topRight": "Top-Right",
   "settings.position.bottomLeft": "Bottom-Left",
   "settings.position.bottomRight": "Bottom-Right",
+  "settings.position.linuxNotice": "Hold Super + Left Click Drag on your keyboard and mouse to move the widget anywhere on your screen. Position is saved automatically.",
   "settings.transparency.title": "Background Transparency",
   "settings.transparency.subtitle": "Adjust how see-through the widget is.",
   "settings.interval.title": "Refresh Interval",

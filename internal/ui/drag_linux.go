@@ -41,7 +41,7 @@ func enableWindowDrag(onDragEnd func()) {
 	go pollWindowPosition(linuxDragStop)
 
 	if isWayland() {
-		log.Println("Linux/Wayland: drag position poller started (use Super+drag or Alt+drag to reposition)")
+		log.Println("Linux/Wayland: drag position poller started (use Super+drag to reposition)")
 	} else {
 		log.Println("Linux/X11: drag position poller started")
 	}

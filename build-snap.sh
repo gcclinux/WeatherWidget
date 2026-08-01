@@ -108,7 +108,27 @@ parts:
       - libxinerama-dev
       - libxi-dev
       - libxcursor-dev
-      - libxxf86vm-dev
+    stage-packages:
+      - wmctrl
+      - xdotool
+      - x11-utils
+      - x11-xserver-utils
+      - libxmu6
+      - libxdo3
+    stage:
+      - bin/*
+      - usr/bin/wmctrl
+      - usr/bin/xdotool
+      - usr/bin/xprop
+      - usr/bin/xrandr
+      - usr/bin/xwininfo
+      - usr/lib/*/libXmu.so*
+      - usr/lib/*/libxdo.so*
+      - -usr/lib/*/libc.so*
+      - -usr/lib/*/libGL*
+      - -usr/lib/*/libX11.so*
+      - -usr/lib/*/libxcb.so*
+      - -usr/lib/*/libXdmcp.so*
     override-build: |
       VERSION=\$(cat release 2>/dev/null | tr -d '[:space:]')
       if [ -z "\$VERSION" ]; then
@@ -130,16 +150,24 @@ if command -v snapcraft >/dev/null 2>&1; then
         echo "==> Container VM builder (LXD/Multipass) failed."
         echo "    Cleaning stale build directories and retrying with --destructive-mode..."
         if [ "$EUID" -ne 0 ]; then
-            sudo rm -rf parts stage prime
+            sudo rm -rf parts stage prime overlay
             sudo snapcraft pack --destructive-mode "$@"
         else
-            rm -rf parts stage prime
+            rm -rf parts stage prime overlay
             snapcraft pack --destructive-mode "$@"
         fi
     fi
     echo ""
-    echo "==> Snap package build complete!"
-    echo "    Check current directory for ${BINARY_NAME}_${VERSION}_*.snap"
+    mkdir -p build
+    SNAP_FILE=$(find . -maxdepth 1 -name "${BINARY_NAME}_*.snap" | head -n 1)
+    if [ -n "$SNAP_FILE" ] && [ -f "$SNAP_FILE" ]; then
+        cp "$SNAP_FILE" build/
+        echo "==> Snap package build complete!"
+        echo "    Saved snap package: build/$(basename "$SNAP_FILE")"
+    else
+        echo "==> Snap package build complete!"
+        echo "    Check current directory for ${BINARY_NAME}_${VERSION}_*.snap"
+    fi
 else
     echo "==> Snapcraft metadata preparation complete."
     echo "    To build the snap package, install snapcraft and run:"

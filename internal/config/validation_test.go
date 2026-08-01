@@ -260,19 +260,19 @@ func TestValidate_RejectsEWWIntervalBelow30(t *testing.T) {
 	cfg := &Config{
 		DataSource:      DataSourceRemoteAPI,
 		Cities:          []CityConfig{{Name: "Berlin", Region: "BE", Timezone: "Europe/Berlin"}},
-		RefreshInterval: 29,
+		RefreshInterval: 9,
 		CornerPosition:  "bottom-right",
 		APIConfig:       &APIConfig{Provider: "easyweatherwidget", APIKey: "eww-key-123"},
 	}
 	errs := Validate(cfg, nil)
 	if !hasError(errs, "refreshInterval") {
-		t.Error("expected refreshInterval error for EWW with interval 29")
+		t.Error("expected refreshInterval error for EWW with interval 9")
 	}
 
-	cfg.RefreshInterval = 1
+	cfg.RefreshInterval = 9
 	errs = Validate(cfg, nil)
 	if !hasError(errs, "refreshInterval") {
-		t.Error("expected refreshInterval error for EWW with interval 1")
+		t.Error("expected refreshInterval error for EWW with interval 9")
 	}
 }
 

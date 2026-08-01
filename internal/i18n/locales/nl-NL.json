@@ -13,6 +13,7 @@
   "settings.position.topRight": "Rechtsboven",
   "settings.position.bottomLeft": "Linksonder",
   "settings.position.bottomRight": "Rechtsonder",
+  "settings.position.linuxNotice": "Houd Super + Linksklik ingedrukt en sleep om de widget naar elke gewenste plek op uw scherm te verplaatsen. De positie wordt automatisch opgeslagen.",
   "settings.transparency.title": "Achtergrondtransparantie",
   "settings.transparency.subtitle": "Pas de doorzichtigheid van de widget aan.",
   "settings.interval.title": "Verversingsinterval",

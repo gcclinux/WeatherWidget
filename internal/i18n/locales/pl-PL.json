@@ -13,6 +13,7 @@
   "settings.position.topRight": "Górny-prawy",
   "settings.position.bottomLeft": "Dolny-lewy",
   "settings.position.bottomRight": "Dolny-prawy",
+  "settings.position.linuxNotice": "Przytrzymaj Super + lewy przycisk myszy i przeciągnij, aby przenieść widżet w dowolne miejsce na ekranie. Pozycja jest zapisywana automatycznie.",
   "settings.transparency.title": "Przezroczystość tła",
   "settings.transparency.subtitle": "Dostosuj przezroczystość widżetu.",
   "settings.interval.title": "Interwał odświeżania",

@@ -13,6 +13,7 @@
   "settings.position.topRight": "Sağ Üst",
   "settings.position.bottomLeft": "Sol Alt",
   "settings.position.bottomRight": "Sağ Alt",
+  "settings.position.linuxNotice": "Widget'ı ekranınızda istediğiniz yere taşımak için Super + Sol Tıklayıp Sürükleyin. Konum otomatik olarak kaydedilir.",
   "settings.transparency.title": "Arka Plan Saydamlığı",
   "settings.transparency.subtitle": "Widgetin saydamlık düzeyini ayarlayın.",
   "settings.interval.title": "Yenileme Aralığı",

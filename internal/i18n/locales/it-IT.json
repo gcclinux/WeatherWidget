@@ -13,6 +13,7 @@
   "settings.position.topRight": "In alto a destra",
   "settings.position.bottomLeft": "In basso a sinistra",
   "settings.position.bottomRight": "In basso a destra",
+  "settings.position.linuxNotice": "Tieni premuto Super + Clic sinistro e trascina per spostare il widget in qualsiasi punto dello schermo. La posizione viene salvata automaticamente.",
   "settings.transparency.title": "Trasparenza dello sfondo",
   "settings.transparency.subtitle": "Regola la trasparenza del widget.",
   "settings.interval.title": "Intervallo di aggiornamento",

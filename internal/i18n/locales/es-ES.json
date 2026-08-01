@@ -13,6 +13,7 @@
   "settings.position.topRight": "Superior-derecha",
   "settings.position.bottomLeft": "Inferior-izquierda",
   "settings.position.bottomRight": "Inferior-derecha",
+  "settings.position.linuxNotice": "Mantenga presionado Super + Clic izquierdo y arrastre para mover el widget a cualquier lugar de la pantalla. La posición se guarda automáticamente.",
   "settings.transparency.title": "Transparencia del fondo",
   "settings.transparency.subtitle": "Ajusta la transparencia del widget.",
   "settings.interval.title": "Intervalo de actualización",

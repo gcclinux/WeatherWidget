@@ -69,24 +69,38 @@ func applyToolWindowStyle(_ string) {
 // applyWaylandWindowHints uses wmctrl to set skip_taskbar and below hints.
 // Returns true if at least one hint was applied successfully.
 func applyWaylandWindowHints() bool {
-	if _, err := exec.LookPath("wmctrl"); err != nil {
+	wmctrlPath, err := exec.LookPath("wmctrl")
+	if err != nil {
 		return false
 	}
 
+	wid := findWindowID()
 	success := false
 
-	cmd := exec.Command("wmctrl", "-r", widgetTitle, "-b", "add,skip_taskbar,skip_pager")
-	if err := cmd.Run(); err != nil {
-		log.Printf("Linux/Wayland: wmctrl skip_taskbar failed: %v", err)
-	} else {
+	if wid != "" {
+		cmd := exec.Command(wmctrlPath, "-i", "-r", wid, "-b", "add,skip_taskbar,skip_pager")
+		if err := cmd.Run(); err == nil {
+			log.Println("Linux/Wayland: set skip_taskbar,skip_pager via wmctrl -i")
+			success = true
+		}
+		cmd = exec.Command(wmctrlPath, "-i", "-r", wid, "-b", "add,below")
+		if err := cmd.Run(); err == nil {
+			log.Println("Linux/Wayland: set window to below via wmctrl -i")
+			success = true
+		}
+		if success {
+			return true
+		}
+	}
+
+	cmd := exec.Command(wmctrlPath, "-r", widgetTitle, "-b", "add,skip_taskbar,skip_pager")
+	if err := cmd.Run(); err == nil {
 		log.Println("Linux/Wayland: set skip_taskbar,skip_pager via wmctrl")
 		success = true
 	}
 
-	cmd = exec.Command("wmctrl", "-r", widgetTitle, "-b", "add,below")
-	if err := cmd.Run(); err != nil {
-		log.Printf("Linux/Wayland: wmctrl below failed: %v", err)
-	} else {
+	cmd = exec.Command(wmctrlPath, "-r", widgetTitle, "-b", "add,below")
+	if err := cmd.Run(); err == nil {
 		log.Println("Linux/Wayland: set window to below via wmctrl")
 		success = true
 	}
@@ -183,12 +197,49 @@ func getScreenSizeXdotool() (int, int, bool) {
 	return w, h, true
 }
 
+// findWindowID searches for the widget window ID using xdotool or wmctrl.
+// It checks class ("weatherwidget") and title ("WeatherWidget").
+func findWindowID() string {
+	if xdotoolPath, err := exec.LookPath("xdotool"); err == nil {
+		for _, arg := range [][]string{
+			{"search", "--class", "weatherwidget"},
+			{"search", "--name", widgetTitle},
+			{"search", "--class", widgetTitle},
+		} {
+			out, err := exec.Command(xdotoolPath, arg...).Output()
+			if err == nil {
+				lines := strings.Fields(strings.TrimSpace(string(out)))
+				if len(lines) > 0 {
+					return lines[0]
+				}
+			}
+		}
+	}
+
+	if wmctrlPath, err := exec.LookPath("wmctrl"); err == nil {
+		out, err := exec.Command(wmctrlPath, "-lx").Output()
+		if err == nil {
+			for _, line := range strings.Split(string(out), "\n") {
+				lower := strings.ToLower(line)
+				if strings.Contains(lower, "weatherwidget") {
+					fields := strings.Fields(line)
+					if len(fields) > 0 {
+						return fields[0]
+					}
+				}
+			}
+		}
+	}
+
+	return ""
+}
+
 // ---------------------------------------------------------------------------
 // Window positioning
 // ---------------------------------------------------------------------------
 
 // moveWindow repositions the widget window.
-// On Wayland, uses wmctrl with retry logic (window must be mapped first).
+// On Wayland, uses wmctrl/xdotool with retry logic.
 // On X11, uses xdotool or wmctrl.
 func moveWindow(_ fyne.Window, x, y int) {
 	notifyLinuxMoveByUs()
@@ -196,17 +247,18 @@ func moveWindow(_ fyne.Window, x, y int) {
 	go func() {
 		if isWayland() {
 			for _, delay := range []time.Duration{
-				300 * time.Millisecond,
-				700 * time.Millisecond,
-				1500 * time.Millisecond,
+				200 * time.Millisecond,
+				500 * time.Millisecond,
+				1000 * time.Millisecond,
+				2000 * time.Millisecond,
 			} {
 				time.Sleep(delay)
 				if moveWindowWmctrl(x, y) {
 					return
 				}
-			}
-			if moveWindowXdotool(x, y) {
-				return
+				if moveWindowXdotool(x, y) {
+					return
+				}
 			}
 			log.Printf("Linux/Wayland: window positioning failed after retries")
 		} else {
@@ -221,32 +273,53 @@ func moveWindow(_ fyne.Window, x, y int) {
 
 // moveWindowWmctrl uses wmctrl to position the window. Returns true if successful.
 func moveWindowWmctrl(x, y int) bool {
-	if _, err := exec.LookPath("wmctrl"); err != nil {
+	wmctrlPath, err := exec.LookPath("wmctrl")
+	if err != nil {
+		log.Printf("Linux: moveWindowWmctrl — wmctrl binary not found in PATH")
 		return false
 	}
-	cmd := exec.Command("wmctrl", "-r", widgetTitle, "-e",
-		fmt.Sprintf("0,%d,%d,-1,-1", x, y))
-	if err := cmd.Run(); err != nil {
-		return false
+
+	wid := findWindowID()
+	if wid != "" {
+		cmd := exec.Command(wmctrlPath, "-i", "-r", wid, "-e",
+			fmt.Sprintf("0,%d,%d,-1,-1", x, y))
+		if err := cmd.Run(); err == nil {
+			log.Printf("Linux: moved window %s to (%d, %d) via wmctrl -i", wid, x, y)
+			return true
+		}
 	}
-	log.Printf("Linux: moved window to (%d, %d) via wmctrl", x, y)
-	return true
+
+	for _, title := range []string{widgetTitle, strings.ToLower(widgetTitle)} {
+		cmd := exec.Command(wmctrlPath, "-r", title, "-e",
+			fmt.Sprintf("0,%d,%d,-1,-1", x, y))
+		if err := cmd.Run(); err == nil {
+			log.Printf("Linux: moved window to (%d, %d) via wmctrl -r %s", x, y, title)
+			return true
+		}
+	}
+
+	log.Printf("Linux: moveWindowWmctrl command failed")
+	return false
 }
 
 // moveWindowXdotool uses xdotool to position the window. Returns true if successful.
 func moveWindowXdotool(x, y int) bool {
-	if _, err := exec.LookPath("xdotool"); err != nil {
+	xdotoolPath, err := exec.LookPath("xdotool")
+	if err != nil {
+		log.Printf("Linux: moveWindowXdotool — xdotool binary not found in PATH")
 		return false
 	}
-	idOut, err := exec.Command("xdotool", "search", "--name", widgetTitle).Output()
-	if err != nil || len(strings.TrimSpace(string(idOut))) == 0 {
+
+	wid := findWindowID()
+	if wid == "" {
+		log.Printf("Linux: moveWindowXdotool — no window ID found for %q", widgetTitle)
 		return false
 	}
-	lines := strings.Fields(strings.TrimSpace(string(idOut)))
-	wid := lines[len(lines)-1]
-	cmd := exec.Command("xdotool", "windowmove", wid,
+
+	cmd := exec.Command(xdotoolPath, "windowmove", wid,
 		strconv.Itoa(x), strconv.Itoa(y))
 	if err := cmd.Run(); err != nil {
+		log.Printf("Linux: moveWindowXdotool windowmove failed for %s: %v", wid, err)
 		return false
 	}
 	log.Printf("Linux: moved window to (%d, %d) via xdotool (wid=%s)", x, y, wid)
@@ -267,15 +340,18 @@ func getWindowPosition() (int, int) {
 
 // getWindowPositionWmctrl uses wmctrl -lG to find the window position.
 func getWindowPositionWmctrl() (int, int, bool) {
-	if _, err := exec.LookPath("wmctrl"); err != nil {
+	wmctrlPath, err := exec.LookPath("wmctrl")
+	if err != nil {
 		return 0, 0, false
 	}
-	out, err := exec.Command("wmctrl", "-lG").Output()
+	wid := findWindowID()
+	out, err := exec.Command(wmctrlPath, "-lG").Output()
 	if err != nil {
 		return 0, 0, false
 	}
 	for _, line := range strings.Split(string(out), "\n") {
-		if strings.Contains(line, widgetTitle) {
+		lower := strings.ToLower(line)
+		if (wid != "" && strings.HasPrefix(line, wid)) || strings.Contains(lower, "weatherwidget") {
 			fields := strings.Fields(line)
 			if len(fields) >= 5 {
 				x, e1 := strconv.Atoi(fields[2])
@@ -291,17 +367,16 @@ func getWindowPositionWmctrl() (int, int, bool) {
 
 // getWindowPositionXdotool uses xdotool on X11 sessions.
 func getWindowPositionXdotool() (int, int) {
-	if _, err := exec.LookPath("xdotool"); err != nil {
+	xdotoolPath, err := exec.LookPath("xdotool")
+	if err != nil {
 		return 0, 0
 	}
-	idOut, err := exec.Command("xdotool", "search", "--name", widgetTitle).Output()
-	if err != nil || len(strings.TrimSpace(string(idOut))) == 0 {
+	wid := findWindowID()
+	if wid == "" {
 		return 0, 0
 	}
-	lines := strings.Fields(strings.TrimSpace(string(idOut)))
-	wid := lines[len(lines)-1]
 
-	posOut, err := exec.Command("xdotool", "getwindowgeometry", "--shell", wid).Output()
+	posOut, err := exec.Command(xdotoolPath, "getwindowgeometry", "--shell", wid).Output()
 	if err != nil {
 		return 0, 0
 	}

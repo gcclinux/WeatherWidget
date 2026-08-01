@@ -13,6 +13,7 @@
   "settings.position.topRight": "Oben-rechts",
   "settings.position.bottomLeft": "Unten-links",
   "settings.position.bottomRight": "Unten-rechts",
+  "settings.position.linuxNotice": "Halten Sie Super + Linksklick gedrückt und ziehen Sie, um das Widget an eine beliebige Stelle auf Ihrem Bildschirm zu verschieben. Die Position wird automatisch gespeichert.",
   "settings.transparency.title": "Hintergrundtransparenz",
   "settings.transparency.subtitle": "Passen Sie die Transparenz des Widgets an.",
   "settings.interval.title": "Aktualisierungsintervall",
