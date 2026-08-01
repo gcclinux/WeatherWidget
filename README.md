@@ -62,7 +62,7 @@ You can download the latest pre-compiled binaries for Windows and Linux from the
 
 3. **Build Snap Package**:
    ```bash
-   ./build-snap.sh
+   ./scripts/build-snap.sh
    # or
    make build-snap
    ```
@@ -163,7 +163,7 @@ There are two ways to fix this:
 - **macOS: Rounded corners** — Widget window now renders with 12pt rounded corners matching macOS design conventions
 - **macOS: Window transparency** — Background transparency slider (25%/50%/75%/100%) now works on macOS using `NSWindow.alphaValue` with remapped values to keep content readable
 - **macOS: Auto-start at login** — Added LaunchAgent support so the "Launch WeatherWidget when starts" setting works on macOS (creates `~/Library/LaunchAgents/com.weatherwidget.app.plist`)
-- **macOS: Build script** — Added `build-darwin.sh` for one-command universal .app + .dmg creation
+- **macOS: Build script** — Added `scripts/build-darwin.sh` for one-command universal .app + .dmg creation
 
 ### v1.0.0 — 2026-07-31
 

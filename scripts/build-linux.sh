@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 #
-# build-linux.sh — Build WeatherWidget binaries and packages for Linux (.bin, .deb, .rpm, .AppImage)
+# scripts/build-linux.sh — Build WeatherWidget binaries and packages for Linux (.bin, .deb, .rpm, .AppImage)
 #
 # Usage:
-#   ./build-linux.sh [bin|deb|rpm|appimage|all]
+#   ./scripts/build-linux.sh [bin|deb|rpm|appimage|all]
 #
 
 set -euo pipefail

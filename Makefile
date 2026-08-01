@@ -35,7 +35,7 @@ build: build-linux
 endif
 
 build-snap:
-	./build-snap.sh
+	./scripts/build-snap.sh
 
 build-linux:
 	CGO_ENABLED=1 GOOS=linux GOARCH=amd64 $(GO_CMD) build -v -ldflags="-s -w" -o $(BINARY_NAME)-linux-amd64 $(CMD_PATH)

@@ -1,5 +1,5 @@
 # Weather Widget Build Script for Windows
-# Usage: .\build.ps1 [build|test|clean|vet]
+# Usage: .\scripts\build.ps1 [build|test|clean|vet]
 
 param(
     [Parameter(Position=0)]
@@ -11,7 +11,8 @@ $BinaryName = "weatherwidget.exe"
 $CmdPath = "./cmd/weatherwidget/"
 
 # Read version from the release file.
-$ReleaseFile = Join-Path $PSScriptRoot "release"
+$ProjectRoot = Split-Path -Path $PSScriptRoot -Parent
+$ReleaseFile = Join-Path $ProjectRoot "release"
 if (-Not (Test-Path $ReleaseFile)) {
     Write-Host "Error: could not find 'release' file" -ForegroundColor Red
     exit 1
@@ -30,7 +31,7 @@ $env:GOARCH = "amd64"
 # Update version in all locale JSON files so the About tab matches.
 function Update-LocaleVersions {
     param([string]$Ver)
-    $localeDir = Join-Path $PSScriptRoot "internal" "i18n" "locales"
+    $localeDir = Join-Path $ProjectRoot "internal" "i18n" "locales"
     if (Test-Path $localeDir) {
         Get-ChildItem -Path $localeDir -Filter "*.json" | ForEach-Object {
             $content = Get-Content $_.FullName -Raw

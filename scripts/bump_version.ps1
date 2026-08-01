@@ -2,7 +2,7 @@
 # Updates the version across all project files.
 #
 # Usage:
-#   .\bump_version.ps1 0.1.0
+#   .\scripts\bump_version.ps1 0.1.0
 #
 # This updates:
 #   - release (source of truth)
@@ -19,11 +19,11 @@ param(
 # Validate version format (semver-like: digits separated by dots).
 if ($NewVersion -notmatch '^\d+\.\d+\.\d+(\.\d+)?$') {
     Write-Host "Error: Invalid version format '$NewVersion'. Expected format: X.Y.Z or X.Y.Z.W" -ForegroundColor Red
-    Write-Host "Example: .\bump_version.ps1 0.1.0"
+    Write-Host "Example: .\scripts\bump_version.ps1 0.1.0"
     exit 1
 }
 
-$ProjectRoot = $PSScriptRoot
+$ProjectRoot = Split-Path -Path $PSScriptRoot -Parent
 Write-Host "Bumping version to $NewVersion" -ForegroundColor Cyan
 Write-Host ""
 

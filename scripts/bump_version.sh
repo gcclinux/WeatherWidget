@@ -5,7 +5,7 @@ set -e
 # Updates the version across all project files.
 #
 # Usage:
-#   ./bump_version.sh 0.1.0
+#   ./scripts/bump_version.sh 0.1.0
 #
 # This updates:
 #   - release (source of truth)
@@ -18,18 +18,18 @@ NEW_VERSION="$1"
 
 if [ -z "$NEW_VERSION" ]; then
     echo "Error: No version specified."
-    echo "Usage: ./bump_version.sh 0.1.0"
+    echo "Usage: ./scripts/bump_version.sh 0.1.0"
     exit 1
 fi
 
 # Validate version format (digits separated by dots: X.Y.Z or X.Y.Z.W)
 if ! echo "$NEW_VERSION" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+(\.[0-9]+)?$'; then
     echo "Error: Invalid version format '$NEW_VERSION'. Expected format: X.Y.Z or X.Y.Z.W"
-    echo "Example: ./bump_version.sh 0.1.0"
+    echo "Example: ./scripts/bump_version.sh 0.1.0"
     exit 1
 fi
 
-PROJECT_ROOT="$(cd "$(dirname "$0")" && pwd)"
+PROJECT_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 UPDATED=0
 FAILED=0
 
