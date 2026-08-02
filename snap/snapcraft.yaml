@@ -1,15 +1,17 @@
 name: weatherwidget
 title: WeatherWidget
-summary: Compact desktop weather widget
+summary: Compact desktop weather widget (GTK3 native)
 description: |
-  WeatherWidget is a compact, customizable weather widget for your desktop system tray and screen.
-  Supports multiple city locations, opacity/transparency options, and customizable weather providers.
+  WeatherWidget is a compact, customizable weather widget for your Linux desktop.
+  Native GTK3 build with true transparency, system tray via appindicator3,
+  and first-class X11/XWayland support. Supports multiple city locations,
+  opacity/transparency, and customizable weather providers.
 
 confinement: strict
-base: core22
+base: core24
 adopt-info: weatherwidget
 
-license: AGPL-3.0-only
+license: AGPL-3.0
 source-code: https://github.com/gcclinux/weatherwidget
 website: https://easysmartapps.co.uk/weatherwidget
 contact: https://easysmartapps.co.uk/contact
@@ -22,6 +24,8 @@ apps:
     desktop: snap/gui/weatherwidget.desktop
     autostart: weatherwidget.desktop
     extensions: [gnome]
+    environment:
+      GDK_BACKEND: x11
     plugs:
       - network
       - network-bind
@@ -39,45 +43,38 @@ parts:
     source: .
     source-type: local
     build-packages:
+      - golang
       - gcc
       - g++
       - pkg-config
-      - libgl1-mesa-dev
-      - xorg-dev
-      - libx11-dev
-      - libxrandr-dev
-      - libxinerama-dev
-      - libxi-dev
-      - libxcursor-dev
-      - libxxf86vm-dev
+      - libgtk-3-dev
+      - libglib2.0-dev
+      - libcairo2-dev
+      - libayatana-appindicator3-dev
     stage-packages:
+      - libayatana-appindicator3-1
+      - libayatana-indicator3-7
+      - libdbusmenu-glib4
+      - libdbusmenu-gtk3-4
       - wmctrl
       - xdotool
       - x11-utils
       - x11-xserver-utils
-      - libxmu6
       - libxdo3
-    stage:
-      - bin/*
-      - usr/bin/wmctrl
-      - usr/bin/xdotool
-      - usr/bin/xprop
-      - usr/bin/xrandr
-      - usr/bin/xwininfo
-      - usr/lib/*/libXmu.so*
-      - usr/lib/*/libxdo.so*
-      - -usr/lib/*/libc.so*
-      - -usr/lib/*/libGL*
-      - -usr/lib/*/libX11.so*
-      - -usr/lib/*/libxcb.so*
-      - -usr/lib/*/libXdmcp.so*
     override-build: |
       VERSION=$(cat release 2>/dev/null | tr -d '[:space:]')
       if [ -z "$VERSION" ]; then
         VERSION="dev"
       fi
       craftctl set-version "$VERSION" 2>/dev/null || snapcraftctl set-version "$VERSION"
+      # Use go from PATH (installed via build-packages: golang on core24)
       GO_BIN=$(command -v go || echo "/usr/local/go/bin/go")
       DEST_DIR="${CRAFT_PART_INSTALL:-$SNAPCRAFT_PART_INSTALL}"
       mkdir -p "$DEST_DIR/bin"
-      $GO_BIN build -v -ldflags="-s -w -X main.version=$VERSION" -o "$DEST_DIR/bin/weatherwidget" ./cmd/weatherwidget/
+      unset CFLAGS CPPFLAGS LDFLAGS
+      export CGO_CFLAGS="-Wno-deprecated-declarations $(pkg-config --cflags gtk+-3.0 ayatana-appindicator3-0.1 2>/dev/null)"
+      export CGO_LDFLAGS="$(pkg-config --libs gtk+-3.0 ayatana-appindicator3-0.1 2>/dev/null)"
+      CGO_ENABLED=1 $GO_BIN build -p 1 -v \
+        -ldflags="-s -w -X main.version=$VERSION" \
+        -o "$DEST_DIR/bin/weatherwidget" \
+        ./cmd/weatherwidget-gtk/

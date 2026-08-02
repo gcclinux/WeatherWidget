@@ -9,10 +9,11 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 APP_NAME="weatherwidget"
 APP_DISPLAY_NAME="WeatherWidget"
-APP_VERSION="$(cat "$SCRIPT_DIR/release" 2>/dev/null | tr -d '[:space:]')"
+APP_VERSION="$(cat "$PROJECT_ROOT/release" 2>/dev/null | tr -d '[:space:]')"
 if [ -z "$APP_VERSION" ]; then
     APP_VERSION="1.0.0"
 fi
@@ -42,12 +43,35 @@ else
 fi
 
 BIN_OUTPUT="$BUILD_DIR/${APP_NAME}_${APP_VERSION}_${DEB_ARCH}.bin"
+GTK_BIN_OUTPUT="$BUILD_DIR/${APP_NAME}-gtk_${APP_VERSION}_${DEB_ARCH}.bin"
 
 build_bin() {
-    echo "==> Building standalone binary: $(basename "$BIN_OUTPUT")..."
-    $GO_CMD build -ldflags="-s -w -X main.version=$APP_VERSION" -o "$BIN_OUTPUT" "$SCRIPT_DIR/cmd/weatherwidget/"
+    echo "==> Building standalone binary (Fyne): $(basename "$BIN_OUTPUT")..."
+    $GO_CMD build -ldflags="-s -w -X main.version=$APP_VERSION" -o "$BIN_OUTPUT" "$PROJECT_ROOT/cmd/weatherwidget/"
     chmod +x "$BIN_OUTPUT"
     echo "    Created: $BIN_OUTPUT"
+}
+
+build_gtk_bin() {
+    echo "==> Building standalone binary (GTK3 native): $(basename "$GTK_BIN_OUTPUT")..."
+    if ! pkg-config --exists gtk+-3.0 2>/dev/null; then
+        echo "    WARNING: GTK3 development headers not found (install libgtk-3-dev)."
+        echo "    Skipping GTK binary build — Fyne binary still available."
+        return 0
+    fi
+    if ! pkg-config --exists ayatana-appindicator3-0.1 2>/dev/null; then
+        echo "    WARNING: AppIndicator headers not found (install libayatana-appindicator3-dev)."
+        echo "    Skipping GTK binary build — Fyne binary still available."
+        return 0
+    fi
+    # Suppress deprecation warnings from gotk3 and appindicator C headers.
+    CGO_CFLAGS="${CGO_CFLAGS:-} -Wno-deprecated-declarations" \
+    $GO_CMD build -p 1 \
+        -ldflags="-s -w -X main.version=$APP_VERSION" \
+        -o "$GTK_BIN_OUTPUT" \
+        "$PROJECT_ROOT/cmd/weatherwidget-gtk/"
+    chmod +x "$GTK_BIN_OUTPUT"
+    echo "    Created: $GTK_BIN_OUTPUT"
 }
 
 prepare_staging() {
@@ -63,7 +87,14 @@ prepare_staging() {
     mkdir -p "$staging/usr/share/icons/hicolor/512x512/apps"
     mkdir -p "$staging/usr/share/icons/hicolor/scalable/apps"
 
-    cp "$BIN_OUTPUT" "$staging/usr/bin/$APP_NAME"
+    # Prefer the native GTK binary; fall back to Fyne if it wasn't built.
+    if [ -f "$GTK_BIN_OUTPUT" ]; then
+        cp "$GTK_BIN_OUTPUT" "$staging/usr/bin/$APP_NAME"
+        echo "    Packaging: GTK3 native binary"
+    else
+        cp "$BIN_OUTPUT" "$staging/usr/bin/$APP_NAME"
+        echo "    Packaging: Fyne binary (GTK build unavailable)"
+    fi
 
     # Desktop file
     cat > "$staging/usr/share/applications/$APP_NAME.desktop" <<EOF
@@ -79,12 +110,12 @@ Keywords=weather;widget;forecast;clock;temperature;
 StartupWMClass=$APP_NAME
 EOF
 
-    # Icon - install to pixmaps and all hicolor resolutions for launcher compatibility
+    # Icon
     local icon_src=""
-    if [ -f "$SCRIPT_DIR/assets/icons/clear.png" ]; then
-        icon_src="$SCRIPT_DIR/assets/icons/clear.png"
-    elif [ -f "$SCRIPT_DIR/snap/gui/weatherwidget.png" ]; then
-        icon_src="$SCRIPT_DIR/snap/gui/weatherwidget.png"
+    if [ -f "$PROJECT_ROOT/assets/icons/clear.png" ]; then
+        icon_src="$PROJECT_ROOT/assets/icons/clear.png"
+    elif [ -f "$PROJECT_ROOT/snap/gui/weatherwidget.png" ]; then
+        icon_src="$PROJECT_ROOT/snap/gui/weatherwidget.png"
     fi
 
     if [ -n "$icon_src" ]; then
@@ -235,7 +266,14 @@ build_appimage() {
     rm -rf "$appdir"
     mkdir -p "$appdir/usr/bin"
 
-    cp "$BIN_OUTPUT" "$appdir/usr/bin/$APP_NAME"
+    # Prefer GTK binary; fall back to Fyne if GTK wasn't built.
+    if [ -f "$GTK_BIN_OUTPUT" ]; then
+        cp "$GTK_BIN_OUTPUT" "$appdir/usr/bin/$APP_NAME"
+        echo "    Packaging: GTK3 native binary"
+    else
+        cp "$BIN_OUTPUT" "$appdir/usr/bin/$APP_NAME"
+        echo "    Packaging: Fyne binary (GTK build unavailable)"
+    fi
 
     # Desktop file
     cat > "$appdir/$APP_NAME.desktop" <<EOF
@@ -252,10 +290,10 @@ EOF
 
     # Icon at root of AppDir and standard paths inside AppDir
     local icon_src=""
-    if [ -f "$SCRIPT_DIR/assets/icons/clear.png" ]; then
-        icon_src="$SCRIPT_DIR/assets/icons/clear.png"
-    elif [ -f "$SCRIPT_DIR/snap/gui/weatherwidget.png" ]; then
-        icon_src="$SCRIPT_DIR/snap/gui/weatherwidget.png"
+    if [ -f "$PROJECT_ROOT/assets/icons/clear.png" ]; then
+        icon_src="$PROJECT_ROOT/assets/icons/clear.png"
+    elif [ -f "$PROJECT_ROOT/snap/gui/weatherwidget.png" ]; then
+        icon_src="$PROJECT_ROOT/snap/gui/weatherwidget.png"
     fi
 
     if [ -n "$icon_src" ]; then
@@ -304,17 +342,22 @@ main() {
 
     case "$target" in
         bin)
+            build_gtk_bin
             ;;
         deb)
+            build_gtk_bin
             build_deb
             ;;
         rpm)
+            build_gtk_bin
             build_rpm
             ;;
         appimage)
+            build_gtk_bin
             build_appimage
             ;;
         all)
+            build_gtk_bin
             build_deb
             build_rpm
             build_appimage
@@ -327,7 +370,7 @@ main() {
 
     echo ""
     echo "==> Build complete! Output files in: $BUILD_DIR/"
-    ls -lh "$BUILD_DIR"/${APP_NAME}_${APP_VERSION}_* 2>/dev/null || true
+    ls -lh "$BUILD_DIR"/${APP_NAME}*_${APP_VERSION}_* 2>/dev/null || true
 }
 
 main "$@"

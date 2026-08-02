@@ -119,11 +119,12 @@ fi
 README_FILE="$PROJECT_ROOT/README.md"
 if [ -f "$README_FILE" ]; then
     # Match: -Version "X.Y.Z.W" or -Version "X.Y.Z"
-    if sed -i '' -E "s/(-Version \"")[0-9]+\.[0-9]+\.[0-9]+(\.[0-9]+)?(\")/\1${NEW_VERSION}\3/" "$README_FILE" 2>/dev/null; then
+    README_PATTERN='s/(-Version ")[0-9]+\.[0-9]+\.[0-9]+(\.[0-9]+)?(")/\1'"${NEW_VERSION}"'\3/'
+    if sed -i '' -E "$README_PATTERN" "$README_FILE" 2>/dev/null; then
         echo "  [OK] README.md"
         UPDATED=$((UPDATED + 1))
     else
-        if sed -i -E "s/(-Version \"")[0-9]+\.[0-9]+\.[0-9]+(\.[0-9]+)?(\")/\1${NEW_VERSION}\3/" "$README_FILE" 2>/dev/null; then
+        if sed -i -E "$README_PATTERN" "$README_FILE" 2>/dev/null; then
             echo "  [OK] README.md"
             UPDATED=$((UPDATED + 1))
         else

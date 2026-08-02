@@ -37,6 +37,8 @@ type Config struct {
 	CustomX         *int            `json:"customX,omitempty"`
 	CustomY         *int            `json:"customY,omitempty"`
 	Opacity         int             `json:"opacity"` // 25, 50, 75, or 100 (percent)
+	NoBackground    bool            `json:"noBackground,omitempty"` // remove panel background (GTK Linux)
+	NoBorder        bool            `json:"noBorder,omitempty"`     // remove window decorations (GTK Linux)
 	Locale          string          `json:"locale"`
 	TemperatureUnit TemperatureUnit `json:"temperatureUnit,omitempty"`
 	DisplayFields   *DisplayFields  `json:"displayFields,omitempty"`

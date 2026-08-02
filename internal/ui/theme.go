@@ -9,7 +9,6 @@ import (
 	"fyne.io/fyne/v2/theme"
 )
 
-
 // transparencyKey is the color Windows will make invisible via LWA_COLORKEY.
 // Chosen to be near-black but distinct from pure black so it doesn't clash
 // with any real UI element color.

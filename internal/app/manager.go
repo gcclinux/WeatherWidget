@@ -190,6 +190,7 @@ func (a *AppManager) applyPosition(cfg *config.Config) {
 	} else {
 		a.ui.SetCorner(cfg.CornerPosition, cfg.MonitorIndex)
 	}
+	// Always apply opacity.
 	opacity := cfg.Opacity
 	if opacity == 0 {
 		opacity = 100
