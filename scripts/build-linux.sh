@@ -183,7 +183,11 @@ EOF
     find "$staging/usr" -type f -exec chmod 644 {} \;
     chmod 755 "$staging/usr/bin/$APP_NAME"
 
-    local output="$BUILD_DIR/${APP_NAME}_${APP_VERSION}_${DEB_ARCH}.deb"
+    local pkg_name="$APP_NAME"
+    if [ -f "$GTK_BIN_OUTPUT" ]; then
+        pkg_name="${APP_NAME}-gtk"
+    fi
+    local output="$BUILD_DIR/${pkg_name}_${APP_VERSION}_${DEB_ARCH}.deb"
     dpkg-deb --build --root-owner-group "$staging" "$output"
     rm -rf "$staging"
     echo "    Created: $output"
@@ -250,7 +254,11 @@ EOF
     local rpm_generated
     rpm_generated=$(find "$rpmbuild_dir/RPMS" -name "*.rpm" | head -1)
     if [ -n "$rpm_generated" ]; then
-        local output="$BUILD_DIR/${APP_NAME}_${APP_VERSION}_${DEB_ARCH}.rpm"
+        local pkg_name="$APP_NAME"
+        if [ -f "$GTK_BIN_OUTPUT" ]; then
+            pkg_name="${APP_NAME}-gtk"
+        fi
+        local output="$BUILD_DIR/${pkg_name}_${APP_VERSION}_${DEB_ARCH}.rpm"
         cp "$rpm_generated" "$output"
         rm -rf "$rpmbuild_dir"
         echo "    Created: $output"
@@ -327,7 +335,11 @@ APPRUN
         chmod +x "$appimagetool"
     fi
 
-    local output="$BUILD_DIR/${APP_NAME}_${APP_VERSION}_${DEB_ARCH}.AppImage"
+    local pkg_name="$APP_NAME"
+    if [ -f "$GTK_BIN_OUTPUT" ]; then
+        pkg_name="${APP_NAME}-gtk"
+    fi
+    local output="$BUILD_DIR/${pkg_name}_${APP_VERSION}_${DEB_ARCH}.AppImage"
     rm -f "$output"
     ARCH="$ARCH" "$appimagetool" --appimage-extract-and-run "$appdir" "$output" || \
     ARCH="$ARCH" "$appimagetool" --appimage-extract-and-run --no-appstream "$appdir" "$output"

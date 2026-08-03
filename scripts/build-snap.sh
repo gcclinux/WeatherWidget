@@ -112,7 +112,7 @@ donation: https://buy.stripe.com/bJe3cvaJOa650fQ8cPdZ603
 apps:
   $BINARY_NAME:
     command: bin/$BINARY_NAME
-    desktop: snap/gui/$BINARY_NAME.desktop
+    desktop: meta/gui/$BINARY_NAME.desktop
     autostart: $BINARY_NAME.desktop
     extensions: [gnome]
     environment:
@@ -182,8 +182,8 @@ description: |
   Supports multiple city locations, opacity/transparency options, and
   customizable weather providers.
 
-confinement: classic
-base: core26
+confinement: strict
+base: core24
 adopt-info: $BINARY_NAME
 
 license: AGPL-3.0
@@ -306,13 +306,25 @@ if command -v snapcraft >/dev/null 2>&1; then
             sudo snapcraft pack --destructive-mode "$@"
         fi
     fi
+
+    # Fix permissions of all generated files/directories back to default host user
+    HOST_UID=$(id -u)
+    HOST_GID=$(id -g)
+    if [ -n "$HOST_UID" ] && [ -n "$HOST_GID" ]; then
+        if command -v docker >/dev/null 2>&1 && [ "$NEED_DOCKER" = "true" ]; then
+            docker run --rm -v "$PROJECT_ROOT":/build -w /build ubuntu:24.04 chown -R "$HOST_UID:$HOST_GID" . 2>/dev/null || true
+        elif command -v sudo >/dev/null 2>&1; then
+            sudo chown -R "$HOST_UID:$HOST_GID" "$PROJECT_ROOT/parts" "$PROJECT_ROOT/stage" "$PROJECT_ROOT/prime" "$PROJECT_ROOT/overlay" "$PROJECT_ROOT/snap" "$PROJECT_ROOT"/*.snap "$SCRIPT_DIR/build" 2>/dev/null || true
+        fi
+    fi
+
     echo ""
     mkdir -p "$SCRIPT_DIR/build"
     SNAP_FILE=$(find "$PROJECT_ROOT" -maxdepth 1 -name "${BINARY_NAME}_*.snap" | head -n 1)
     if [ -n "$SNAP_FILE" ] && [ -f "$SNAP_FILE" ]; then
-        cp "$SNAP_FILE" "$SCRIPT_DIR/build/"
+        mv "$SNAP_FILE" "$SCRIPT_DIR/build/"
         echo "==> Snap package build complete!"
-        echo "    Saved: $SCRIPT_DIR/build/$(basename "$SNAP_FILE")"
+        echo "    Moved to: $SCRIPT_DIR/build/$(basename "$SNAP_FILE")"
     else
         echo "==> Snap package build complete!"
         echo "    Check $PROJECT_ROOT for ${BINARY_NAME}_${VERSION}_*.snap"

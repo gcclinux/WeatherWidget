@@ -21,7 +21,7 @@ donation: https://buy.stripe.com/bJe3cvaJOa650fQ8cPdZ603
 apps:
   weatherwidget:
     command: bin/weatherwidget
-    desktop: snap/gui/weatherwidget.desktop
+    desktop: meta/gui/weatherwidget.desktop
     autostart: weatherwidget.desktop
     extensions: [gnome]
     environment:

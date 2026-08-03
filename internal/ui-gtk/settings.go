@@ -4,11 +4,13 @@ package uitk
 
 import (
 	"context"
+	"crypto/rand"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"net/url"
+	"os/exec"
 	"strconv"
 	"strings"
 	"time"
@@ -18,6 +20,24 @@ import (
 
 	"weatherwidget/internal/config"
 )
+
+// ewwAPIKeyLen is the expected length of an EasyWeatherWidget API key (UUID v4).
+const ewwAPIKeyLen = 36
+
+// generateClientReferenceID creates a random UUID v4 string (e.g. "f169fecc-de0c-4de1-b8c8-4ec3701b671c")
+// to be used as a unique client_reference_id for Stripe payment links.
+func generateClientReferenceID() string {
+	var uuid [16]byte
+	_, _ = rand.Read(uuid[:])
+	uuid[6] = (uuid[6] & 0x0f) | 0x40
+	uuid[8] = (uuid[8] & 0x3f) | 0x80
+	return fmt.Sprintf("%08x-%04x-%04x-%04x-%012x",
+		uuid[0:4], uuid[4:6], uuid[6:8], uuid[8:10], uuid[10:16])
+}
+
+func openURL(urlStr string) {
+	_ = exec.Command("xdg-open", urlStr).Start()
+}
 
 // showSettingsDialog opens the GTK settings dialog for WeatherWidget.
 // It is transient for the main widget window so it appears centred on it.
@@ -147,7 +167,13 @@ func buildProviderTab(m *manager, parent *gtk.Dialog) *gtk.Box {
 		selectedProvider = 1
 	}
 	providerCombo.SetActive(selectedProvider)
-	vbox.PackStart(providerCombo, false, false, 0)
+
+	getApiBtn, _ := gtk.ButtonNewWithLabel(m.t("settings.provider.getFreeApi"))
+
+	providerRow, _ := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 6)
+	providerRow.PackStart(providerCombo, true, true, 0)
+	providerRow.PackStart(getApiBtn, false, false, 0)
+	vbox.PackStart(providerRow, false, false, 0)
 
 	// API key entry.
 	apiKeyLabel, _ := gtk.LabelNew(m.t("settings.provider.apiKeyLabel") + ":")
@@ -160,6 +186,83 @@ func buildProviderTab(m *manager, parent *gtk.Dialog) *gtk.Box {
 		apiKeyEntry.SetText(m.cfg.APIConfig.APIKey)
 	}
 	vbox.PackStart(apiKeyEntry, false, false, 0)
+
+	// Activation card frame — shown when a Pro API key is active or just generated.
+	activationFrame, _ := gtk.FrameNew("")
+	activationBox, _ := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 4)
+	activationBox.SetMarginTop(6)
+	activationBox.SetMarginBottom(6)
+	activationBox.SetMarginStart(6)
+	activationBox.SetMarginEnd(6)
+
+	activationKeyLabel, _ := gtk.LabelNew("")
+	activationKeyLabel.SetHAlign(gtk.ALIGN_START)
+
+	activationMsgLabel, _ := gtk.LabelNew("")
+	activationMsgLabel.SetHAlign(gtk.ALIGN_START)
+	activationMsgLabel.SetLineWrap(true)
+
+	activationBox.PackStart(activationKeyLabel, false, false, 0)
+	activationBox.PackStart(activationMsgLabel, false, false, 0)
+	activationFrame.Add(activationBox)
+
+	showActivationCard := func(key string) {
+		activationFrame.SetLabel(m.t("settings.provider.apiKeyActivation.title"))
+		activationKeyLabel.SetMarkup(fmt.Sprintf("<tt>%s</tt>", glib.MarkupEscapeText(key)))
+		activationMsgLabel.SetText(m.t("settings.provider.apiKeyActivation.message"))
+		activationFrame.ShowAll()
+	}
+
+	activationFrame.Hide()
+
+	if m.cfg.APIConfig != nil && m.cfg.APIConfig.Provider == "easyweatherwidget" && len(m.cfg.APIConfig.APIKey) == ewwAPIKeyLen {
+		showActivationCard(m.cfg.APIConfig.APIKey)
+	}
+
+	updateGetApiBtn := func() {
+		provIdx := providerCombo.GetActive()
+		if provIdx == 0 { // EasyWeatherWidget (Pro)
+			getApiBtn.SetLabel(m.t("settings.provider.getProApi"))
+		} else { // OpenWeatherMap (Free)
+			getApiBtn.SetLabel(m.t("settings.provider.getFreeApi"))
+		}
+	}
+	updateGetApiBtn()
+
+	providerCombo.Connect("changed", func() {
+		updateGetApiBtn()
+	})
+
+	handleGetProAPI := func() {
+		apiKey, _ := apiKeyEntry.GetText()
+		currentKey := strings.TrimSpace(apiKey)
+
+		clientRef := currentKey
+		if len(currentKey) != ewwAPIKeyLen {
+			clientRef = generateClientReferenceID()
+
+			if m.cfg.APIConfig == nil {
+				m.cfg.APIConfig = &config.APIConfig{}
+			}
+			m.cfg.APIConfig.Provider = "easyweatherwidget"
+			m.cfg.APIConfig.APIKey = clientRef
+
+			apiKeyEntry.SetText(clientRef)
+		}
+
+		showActivationCard(clientRef)
+
+		openURL("https://buy.stripe.com/bJe3cvaJOa650fQ8cPdZ603?client_reference_id=" + clientRef)
+	}
+
+	getApiBtn.Connect("clicked", func() {
+		provIdx := providerCombo.GetActive()
+		if provIdx == 0 { // EasyWeatherWidget (Pro)
+			handleGetProAPI()
+		} else {
+			openURL("https://openweathermap.org/")
+		}
+	})
 
 	// Refresh interval.
 	intervalLabel, _ := gtk.LabelNew(m.t("settings.interval.title") + ":")
@@ -174,6 +277,8 @@ func buildProviderTab(m *manager, parent *gtk.Dialog) *gtk.Box {
 	noteLabel.SetHAlign(gtk.ALIGN_START)
 	noteLabel.SetLineWrap(true)
 	vbox.PackStart(noteLabel, false, false, 0)
+
+	vbox.PackStart(activationFrame, false, false, 0)
 
 	// Save button (provider tab).
 	saveAPIBtn, _ := gtk.ButtonNewWithLabel(m.t("settings.save"))
