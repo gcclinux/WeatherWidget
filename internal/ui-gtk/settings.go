@@ -1091,5 +1091,15 @@ func buildAboutTab(m *manager) *gtk.Box {
 	manualRow.PackStart(manualLink, false, false, 0)
 	vbox.PackStart(manualRow, false, false, 0)
 
+	// Known issue note.
+	sep3, _ := gtk.SeparatorNew(gtk.ORIENTATION_HORIZONTAL)
+	vbox.PackStart(sep3, false, false, 4)
+
+	knownIssueLbl, _ := gtk.LabelNew(m.t("settings.about.knownIssue"))
+	knownIssueLbl.SetHAlign(gtk.ALIGN_START)
+	knownIssueLbl.SetLineWrap(true)
+	knownIssueLbl.SetMaxWidthChars(70)
+	vbox.PackStart(knownIssueLbl, false, false, 0)
+
 	return vbox
 }

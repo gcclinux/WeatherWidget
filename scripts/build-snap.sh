@@ -118,6 +118,7 @@ apps:
     environment:
       GDK_BACKEND: x11
     plugs:
+      - home
       - network
       - network-bind
       - desktop
@@ -200,6 +201,7 @@ apps:
     autostart: $BINARY_NAME.desktop
     extensions: [gnome]
     plugs:
+      - home
       - network
       - network-bind
       - desktop
@@ -314,7 +316,9 @@ if command -v snapcraft >/dev/null 2>&1; then
         if command -v docker >/dev/null 2>&1 && [ "$NEED_DOCKER" = "true" ]; then
             docker run --rm -v "$PROJECT_ROOT":/build -w /build ubuntu:24.04 chown -R "$HOST_UID:$HOST_GID" . 2>/dev/null || true
         elif command -v sudo >/dev/null 2>&1; then
-            sudo chown -R "$HOST_UID:$HOST_GID" "$PROJECT_ROOT/parts" "$PROJECT_ROOT/stage" "$PROJECT_ROOT/prime" "$PROJECT_ROOT/overlay" "$PROJECT_ROOT/snap" "$PROJECT_ROOT"/*.snap "$SCRIPT_DIR/build" 2>/dev/null || true
+           sudo chown -R "$HOST_UID:$HOST_GID" "$PROJECT_ROOT/snap" "$PROJECT_ROOT"/*.snap "$SCRIPT_DIR/build" 2>/dev/null || true
+           sudo rm -rf parts stage prime overlay 2>/dev/null || true
+           sudo snapcraft clean
         fi
     fi
 

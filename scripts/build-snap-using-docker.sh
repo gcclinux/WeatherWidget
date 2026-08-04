@@ -102,6 +102,7 @@ apps:
     environment:
       GDK_BACKEND: x11
     plugs:
+      - home
       - network
       - network-bind
       - desktop

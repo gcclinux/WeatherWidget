@@ -5,6 +5,8 @@ package uitk
 import (
 	"fmt"
 	"log"
+	"os/exec"
+	"strconv"
 
 	"github.com/gotk3/gotk3/cairo"
 	"github.com/gotk3/gotk3/gdk"
@@ -242,4 +244,30 @@ func enableDrag(win *gtk.Window, onMove func(x, y int)) {
 		dragging = false
 		return false
 	})
+}
+
+// moveWindowForced moves the window to (x, y) by sending _NET_MOVERESIZE_WINDOW
+// to the WM via wmctrl. This bypasses XWayland's limitation where XMoveWindow()
+// (used by gtk.Window.Move) is silently discarded for xdg_toplevel surfaces —
+// the Wayland compositor owns their position and ignores client-side X11 moves.
+// wmctrl sends a WM-level client message that GNOME Mutter honours directly.
+// Falls back to xdotool if wmctrl is not available.
+// Must be called from a goroutine (runs external processes).
+func moveWindowForced(title string, x, y int) {
+	// wmctrl: -r <title> -e <gravity,x,y,w,h>  (-1 = unchanged for w/h)
+	arg := fmt.Sprintf("0,%d,%d,-1,-1", x, y)
+	cmd := exec.Command("wmctrl", "-r", title, "-e", arg)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		log.Printf("wmctrl move failed (%v: %s), trying xdotool...", err, string(out))
+		// xdotool fallback
+		xdo := exec.Command("xdotool", "search", "--name", title,
+			"windowmove", strconv.Itoa(x), strconv.Itoa(y))
+		if out2, err2 := xdo.CombinedOutput(); err2 != nil {
+			log.Printf("xdotool move also failed (%v: %s)", err2, string(out2))
+		} else {
+			log.Printf("xdotool moved '%s' to (%d,%d)", title, x, y)
+		}
+	} else {
+		log.Printf("wmctrl moved '%s' to (%d,%d)", title, x, y)
+	}
 }
