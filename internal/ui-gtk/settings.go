@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"net/url"
 	"os/exec"
@@ -40,17 +41,18 @@ func openURL(urlStr string) {
 }
 
 // showSettingsDialog opens the GTK settings dialog for WeatherWidget.
-// It is transient for the main widget window so it appears centred on it.
+// Not transient for the main window (which is a positioned desktop widget).
 func showSettingsDialog(m *manager) {
 	dlg, err := gtk.DialogNew()
 	if err != nil {
 		return
 	}
 	dlg.SetTitle(m.t("settings.title"))
-	dlg.SetTransientFor(m.win)
-	dlg.SetModal(true)
+	// Don't set transient-for — the main window is a positioned desktop widget
+	// and making the dialog transient causes them to move together.
+	dlg.SetModal(false)
 	dlg.SetDefaultSize(600, 580)
-	dlg.SetPosition(gtk.WIN_POS_CENTER_ON_PARENT)
+	dlg.SetPosition(gtk.WIN_POS_CENTER)
 
 	box, _ := dlg.GetContentArea()
 	box.SetSpacing(8)
@@ -377,6 +379,123 @@ func buildAppearanceTab(m *manager) (*gtk.Box, *gtk.Scale, *gtk.CheckButton, *gt
 	vbox.PackStart(autostartCheck, false, false, 0)
 
 	// Temperature unit moved to Widget tab — matches the Fyne settings layout.
+
+	// ── Widget Position ─────────────────────────────────────────────────────
+	posSep, _ := gtk.SeparatorNew(gtk.ORIENTATION_HORIZONTAL)
+	vbox.PackStart(posSep, false, false, 4)
+
+	posTitle, _ := gtk.LabelNew("")
+	posTitle.SetMarkup("<b>Widget Position</b>")
+	posTitle.SetHAlign(gtk.ALIGN_START)
+	vbox.PackStart(posTitle, false, false, 0)
+
+	posSubtitle, _ := gtk.LabelNew("Move the widget on screen. Changes apply immediately.")
+	posSubtitle.SetHAlign(gtk.ALIGN_START)
+	posSubtitle.SetLineWrap(true)
+	vbox.PackStart(posSubtitle, false, false, 0)
+
+	// Current position from config or window.
+	var curX, curY int
+	if m.cfg.CustomX != nil && m.cfg.CustomY != nil {
+		curX, curY = *m.cfg.CustomX, *m.cfg.CustomY
+	} else {
+		curX, curY = m.win.GetPosition()
+	}
+
+	// X/Y entry fields + Apply button.
+	posRow, _ := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 8)
+
+	xLabel, _ := gtk.LabelNew("X:")
+	posRow.PackStart(xLabel, false, false, 0)
+
+	xEntry, _ := gtk.EntryNew()
+	xEntry.SetText(strconv.Itoa(curX))
+	xEntry.SetWidthChars(6)
+	posRow.PackStart(xEntry, false, false, 0)
+
+	yLabel, _ := gtk.LabelNew("Y:")
+	posRow.PackStart(yLabel, false, false, 0)
+
+	yEntry, _ := gtk.EntryNew()
+	yEntry.SetText(strconv.Itoa(curY))
+	yEntry.SetWidthChars(6)
+	posRow.PackStart(yEntry, false, false, 0)
+
+	applyPosBtn, _ := gtk.ButtonNewWithLabel("Apply")
+	posRow.PackStart(applyPosBtn, false, false, 0)
+
+	vbox.PackStart(posRow, false, false, 0)
+
+	// Arrow nudge buttons (10px per click).
+	arrowRow, _ := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 4)
+	const nudge = 10
+
+	leftBtn, _ := gtk.ButtonNewWithLabel("◀")
+	upBtn, _ := gtk.ButtonNewWithLabel("▲")
+	downBtn, _ := gtk.ButtonNewWithLabel("▼")
+	rightBtn, _ := gtk.ButtonNewWithLabel("▶")
+
+	// moveAndSave repositions the widget, updates entries, and persists.
+	moveAndSave := func(x, y int) {
+		cx, cy := x, y
+		m.cfg.CustomX = &cx
+		m.cfg.CustomY = &cy
+		// Move the window immediately using both GTK and X11 calls.
+		m.win.Move(x, y)
+		x11MoveWindow(m.win, x, y)
+		// Update entry fields to reflect new position.
+		xEntry.SetText(strconv.Itoa(x))
+		yEntry.SetText(strconv.Itoa(y))
+		// Persist to config file.
+		go func() {
+			if err := m.cfgSvc.Save(m.cfg); err != nil {
+				log.Printf("position save failed (%d,%d): %v", cx, cy, err)
+			}
+		}()
+	}
+
+	applyPosBtn.Connect("clicked", func() {
+		xText, _ := xEntry.GetText()
+		yText, _ := yEntry.GetText()
+		x, _ := strconv.Atoi(strings.TrimSpace(xText))
+		y, _ := strconv.Atoi(strings.TrimSpace(yText))
+		moveAndSave(x, y)
+	})
+	leftBtn.Connect("clicked", func() {
+		xText, _ := xEntry.GetText()
+		yText, _ := yEntry.GetText()
+		x, _ := strconv.Atoi(strings.TrimSpace(xText))
+		y, _ := strconv.Atoi(strings.TrimSpace(yText))
+		moveAndSave(x-nudge, y)
+	})
+	rightBtn.Connect("clicked", func() {
+		xText, _ := xEntry.GetText()
+		yText, _ := yEntry.GetText()
+		x, _ := strconv.Atoi(strings.TrimSpace(xText))
+		y, _ := strconv.Atoi(strings.TrimSpace(yText))
+		moveAndSave(x+nudge, y)
+	})
+	upBtn.Connect("clicked", func() {
+		xText, _ := xEntry.GetText()
+		yText, _ := yEntry.GetText()
+		x, _ := strconv.Atoi(strings.TrimSpace(xText))
+		y, _ := strconv.Atoi(strings.TrimSpace(yText))
+		moveAndSave(x, y-nudge)
+	})
+	downBtn.Connect("clicked", func() {
+		xText, _ := xEntry.GetText()
+		yText, _ := yEntry.GetText()
+		x, _ := strconv.Atoi(strings.TrimSpace(xText))
+		y, _ := strconv.Atoi(strings.TrimSpace(yText))
+		moveAndSave(x, y+nudge)
+	})
+
+	arrowRow.PackStart(leftBtn, false, false, 0)
+	arrowRow.PackStart(upBtn, false, false, 0)
+	arrowRow.PackStart(downBtn, false, false, 0)
+	arrowRow.PackStart(rightBtn, false, false, 0)
+
+	vbox.PackStart(arrowRow, false, false, 0)
 
 	return vbox, opacityScale, noBgCheck, noBorderCheck
 }
@@ -1047,7 +1166,7 @@ func buildAboutTab(m *manager) *gtk.Box {
 
 	// Version.
 	versionLbl, _ := gtk.LabelNew("")
-	// Strip markdown bold markers from the i18n string ("**Version:** 1.0.0" → "Version: 1.0.0").
+	// Strip markdown bold markers from the i18n string ("**Version:** 1.0.3" → "Version: 1.0.3").
 	versionText := m.t("settings.about.version")
 	versionText = strings.ReplaceAll(versionText, "**", "")
 	versionLbl.SetText(versionText)
@@ -1094,12 +1213,6 @@ func buildAboutTab(m *manager) *gtk.Box {
 	// Known issue note.
 	sep3, _ := gtk.SeparatorNew(gtk.ORIENTATION_HORIZONTAL)
 	vbox.PackStart(sep3, false, false, 4)
-
-	knownIssueLbl, _ := gtk.LabelNew(m.t("settings.about.knownIssue"))
-	knownIssueLbl.SetHAlign(gtk.ALIGN_START)
-	knownIssueLbl.SetLineWrap(true)
-	knownIssueLbl.SetMaxWidthChars(70)
-	vbox.PackStart(knownIssueLbl, false, false, 0)
 
 	return vbox
 }

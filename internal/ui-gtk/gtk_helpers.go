@@ -5,8 +5,6 @@ package uitk
 import (
 	"fmt"
 	"log"
-	"os/exec"
-	"strconv"
 
 	"github.com/gotk3/gotk3/cairo"
 	"github.com/gotk3/gotk3/gdk"
@@ -205,10 +203,11 @@ func restoreDecorations(win *gtk.Window) {
 }
 
 // enableDrag wires button-press and motion events for manual drag-to-reposition.
-// Works on X11 and XWayland (GDK_BACKEND=x11).
+// moveFunc is called with the computed (x, y) to actually reposition the window;
+// on X11 this is typically win.Move(), on Wayland it updates layer-shell margins.
 // onMove is called with the new (x,y) after every position change so callers
 // can auto-save without user action.
-func enableDrag(win *gtk.Window, onMove func(x, y int)) {
+func enableDrag(win *gtk.Window, moveFunc func(x, y int), onMove func(x, y int)) {
 	var dragging bool
 	var startRootX, startRootY int // pointer position at drag start
 	var startWinX, startWinY int   // window position at drag start
@@ -233,7 +232,7 @@ func enableDrag(win *gtk.Window, onMove func(x, y int)) {
 		rx, ry := motion.MotionValRoot()
 		newX := startWinX + int(rx) - startRootX
 		newY := startWinY + int(ry) - startRootY
-		win.Move(newX, newY)
+		moveFunc(newX, newY)
 		if onMove != nil {
 			onMove(newX, newY)
 		}
@@ -246,28 +245,4 @@ func enableDrag(win *gtk.Window, onMove func(x, y int)) {
 	})
 }
 
-// moveWindowForced moves the window to (x, y) by sending _NET_MOVERESIZE_WINDOW
-// to the WM via wmctrl. This bypasses XWayland's limitation where XMoveWindow()
-// (used by gtk.Window.Move) is silently discarded for xdg_toplevel surfaces —
-// the Wayland compositor owns their position and ignores client-side X11 moves.
-// wmctrl sends a WM-level client message that GNOME Mutter honours directly.
-// Falls back to xdotool if wmctrl is not available.
-// Must be called from a goroutine (runs external processes).
-func moveWindowForced(title string, x, y int) {
-	// wmctrl: -r <title> -e <gravity,x,y,w,h>  (-1 = unchanged for w/h)
-	arg := fmt.Sprintf("0,%d,%d,-1,-1", x, y)
-	cmd := exec.Command("wmctrl", "-r", title, "-e", arg)
-	if out, err := cmd.CombinedOutput(); err != nil {
-		log.Printf("wmctrl move failed (%v: %s), trying xdotool...", err, string(out))
-		// xdotool fallback
-		xdo := exec.Command("xdotool", "search", "--name", title,
-			"windowmove", strconv.Itoa(x), strconv.Itoa(y))
-		if out2, err2 := xdo.CombinedOutput(); err2 != nil {
-			log.Printf("xdotool move also failed (%v: %s)", err2, string(out2))
-		} else {
-			log.Printf("xdotool moved '%s' to (%d,%d)", title, x, y)
-		}
-	} else {
-		log.Printf("wmctrl moved '%s' to (%d,%d)", title, x, y)
-	}
-}
+

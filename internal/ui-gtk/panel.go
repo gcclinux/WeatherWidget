@@ -64,6 +64,7 @@ func newCityPanel(city, region, timezone string, lm *i18n.LocaleManager) (*cityP
 	p.nameBox = nameBox
 
 	iconWidget, _ := gtk.ImageNew()
+	iconWidget.SetSizeRequest(32, 32)
 	p.icon = iconWidget
 
 	cityLbl, err := gtk.LabelNew(city + ", " + region)
@@ -233,12 +234,15 @@ func (p *cityPanel) loadIcon(iconCode string) {
 		p.icon.Clear()
 		return
 	}
+	// Scale to 32x32 — if ScaleSimple fails, use the original but constrain the widget.
 	scaled, err := pb.ScaleSimple(32, 32, gdk.INTERP_BILINEAR)
-	if err != nil {
+	if err != nil || scaled == nil {
 		p.icon.SetFromPixbuf(pb)
-		return
+	} else {
+		p.icon.SetFromPixbuf(scaled)
 	}
-	p.icon.SetFromPixbuf(scaled)
+	// Always constrain the image widget size to prevent oversized rendering.
+	p.icon.SetSizeRequest(32, 32)
 }
 
 // startClock starts the clock ticker that updates the time/date labels every

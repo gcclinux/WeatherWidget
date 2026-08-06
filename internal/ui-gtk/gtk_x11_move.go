@@ -54,6 +54,18 @@ package uitk
 //                SubstructureRedirectMask | SubstructureNotifyMask, &ev);
 //     XFlush(dpy);
 // }
+//
+// // x11_move_window calls XMoveWindow directly. This is the lowest-level X11
+// // positioning call — it configures the window position at the protocol level.
+// // Under XWayland, this is translated to a surface position request.
+// static void x11_move_window(GtkWidget *widget, int x, int y) {
+//     GdkWindow *gdk_win = gtk_widget_get_window(widget);
+//     if (!gdk_win || !GDK_IS_X11_WINDOW(gdk_win)) return;
+//     Display *dpy  = gdk_x11_get_default_xdisplay();
+//     Window   xwin = gdk_x11_window_get_xid(gdk_win);
+//     XMoveWindow(dpy, xwin, x, y);
+//     XFlush(dpy);
+// }
 import "C"
 
 import (
@@ -86,4 +98,15 @@ func x11NetMoveWindow(win *gtk.Window, x, y int) {
 	}
 	C.x11_net_moveresize((*C.GtkWidget)(unsafe.Pointer(ptr)), C.int(x), C.int(y))
 	log.Printf("x11NetMoveWindow: sent _NET_MOVERESIZE_WINDOW (%d,%d)", x, y)
+}
+
+// x11MoveWindow calls XMoveWindow directly — the most forceful X11 positioning.
+func x11MoveWindow(win *gtk.Window, x, y int) {
+	ptr := win.Native()
+	if ptr == 0 {
+		log.Println("x11MoveWindow: nil pointer")
+		return
+	}
+	C.x11_move_window((*C.GtkWidget)(unsafe.Pointer(ptr)), C.int(x), C.int(y))
+	log.Printf("x11MoveWindow: XMoveWindow to (%d,%d)", x, y)
 }

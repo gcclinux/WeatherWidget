@@ -47,7 +47,7 @@ You can download the latest pre-compiled binaries for Windows and Linux from the
 
 ### Windows MSI Package
 ```powershell
- .\installer\build-msi.ps1 -Version "1.0.2" -SkipSign
+ .\installer\build-msi.ps1 -Version "1.0.3" -SkipSign
  ```
 
 ### Linux
@@ -165,7 +165,7 @@ There are two ways to fix this:
 - **macOS: Auto-start at login** — Added LaunchAgent support so the "Launch WeatherWidget when starts" setting works on macOS (creates `~/Library/LaunchAgents/com.weatherwidget.app.plist`)
 - **macOS: Build script** — Added `scripts/build-darwin.sh` for one-command universal .app + .dmg creation
 
-### v1.0.0 — 2026-07-31
+### v1.0.3 — 2026-07-31
 
 - **Humidity & wind display** — Each city panel now shows humidity percentage and wind speed with compass direction (e.g. "💧 45% 💨 4.5 NW") below the weather description
 - **Live settings preview** — Opacity, position, and temperature unit changes are applied to the widget in real-time as you adjust them in settings; reverts automatically if you close without saving

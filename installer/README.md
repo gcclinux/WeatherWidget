@@ -108,13 +108,13 @@ calls).
 
 ```powershell
 # Unsigned (for testing only):
-.\installer\build-msi.ps1 -Version "1.0.0.0" -SkipSign
+.\installer\build-msi.ps1 -Version "1.0.3" -SkipSign
 
 # Signed with certificate from Windows certificate store:
-.\installer\build-msi.ps1 -Version "1.0.0.0" -CertThumbprint "THUMBPRINT"
+.\installer\build-msi.ps1 -Version "1.0.3" -CertThumbprint "THUMBPRINT"
 
 # Signed with a .pfx file:
-.\installer\build-msi.ps1 -Version "1.0.0.0" -CertPath "cert.pfx" -CertPassword "pass"
+.\installer\build-msi.ps1 -Version "1.0.3" -CertPath "cert.pfx" -CertPassword "pass"
 ```
 
 ---
@@ -125,10 +125,10 @@ calls).
 
 ```powershell
 # For Store submission (Microsoft signs it for you):
-.\installer\build-msix.ps1 -Version "1.0.0.0" -StoreUpload
+.\installer\build-msix.ps1 -Version "1.0.3" -StoreUpload
 
 # For local sideload testing:
-.\installer\build-msix.ps1 -Version "1.0.0.0" -CertPath "cert.pfx" -CertPassword "pass"
+.\installer\build-msix.ps1 -Version "1.0.3" -CertPath "cert.pfx" -CertPassword "pass"
 ```
 
 The `-StoreUpload` flag produces an unsigned `.msixupload` for Partner Center.

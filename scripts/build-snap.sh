@@ -81,13 +81,15 @@ SNAPCRAFT_YAML="$PROJECT_ROOT/snap/snapcraft.yaml"
 echo "==> Writing snap/snapcraft.yaml..."
 
 if $USE_GTK; then
-    # GTK3 native build using the gnome extension for strict confinement.
-    # The 'gnome' extension (core24 + gnome-46-2404) provides GTK3, Pango, Cairo,
-    # and all GNOME runtime libs via a content snap — no staging needed and no
-    # glibc mismatch. Strict confinement is required for Snap Store submission.
+    # GTK3 native build WITHOUT the gnome extension. The gnome extension sets up
+    # an X11 proxy that blocks XMoveWindow calls, preventing window positioning.
+    # Instead, we manually connect to the gnome-46-2404 content snap for GTK libs
+    # and configure the environment ourselves. This gives direct X11 access while
+    # maintaining strict confinement for Snap Store submission.
     #
     # Build requirement: must be built on Ubuntu 24.04 (core24).
     # On Ubuntu 26+: the build script falls back to Docker automatically.
+    ARCH_TRIPLET="x86_64-linux-gnu"
     cat > "$SNAPCRAFT_YAML" <<EOF
 name: $BINARY_NAME
 title: $APP_NAME
@@ -109,14 +111,52 @@ contact: https://easysmartapps.co.uk/contact
 issues: https://github.com/gcclinux/weatherwidget/issues
 donation: https://buy.stripe.com/bJe3cvaJOa650fQ8cPdZ603
 
+plugs:
+  gnome-46-2404:
+    interface: content
+    target: \$SNAP/gnome-platform
+    default-provider: gnome-46-2404
+  gtk-3-themes:
+    interface: content
+    target: \$SNAP/data-dir/themes
+    default-provider: gtk-common-themes
+  icon-themes:
+    interface: content
+    target: \$SNAP/data-dir/icons
+    default-provider: gtk-common-themes
+  sound-themes:
+    interface: content
+    target: \$SNAP/data-dir/sounds
+    default-provider: gtk-common-themes
+
+environment:
+  # Library paths
+  LD_LIBRARY_PATH: \$SNAP/gnome-platform/usr/lib/$ARCH_TRIPLET:\$SNAP/gnome-platform/usr/lib:\$SNAP/usr/lib/$ARCH_TRIPLET:\$SNAP/usr/lib:\$LD_LIBRARY_PATH
+  # GTK and GDK configuration
+  GTK_PATH: \$SNAP/gnome-platform/usr/lib/$ARCH_TRIPLET/gtk-3.0
+  GTK_EXE_PREFIX: \$SNAP/gnome-platform/usr
+  GTK_IM_MODULE_DIR: \$SNAP/gnome-platform/usr/lib/$ARCH_TRIPLET/gtk-3.0/3.0.0/immodules
+  GTK_IM_MODULE_FILE: \$SNAP/gnome-platform/usr/lib/$ARCH_TRIPLET/gtk-3.0/3.0.0/immodules.cache
+  GDK_PIXBUF_MODULE_FILE: \$SNAP/gnome-platform/usr/lib/$ARCH_TRIPLET/gdk-pixbuf-2.0/2.10.0/loaders.cache
+  # XDG paths for themes, icons, and data
+  XDG_DATA_DIRS: \$SNAP/data-dir:\$SNAP/gnome-platform/usr/share:\$XDG_DATA_DIRS
+  XDG_CONFIG_DIRS: \$SNAP/gnome-platform/etc/xdg:\$XDG_CONFIG_DIRS
+  # Font configuration
+  FONTCONFIG_PATH: \$SNAP/gnome-platform/etc/fonts
+  FONTCONFIG_FILE: \$SNAP/gnome-platform/etc/fonts/fonts.conf
+  # GIO/GLib
+  GIO_MODULE_DIR: \$SNAP/gnome-platform/usr/lib/$ARCH_TRIPLET/gio/modules
+  GI_TYPELIB_PATH: \$SNAP/gnome-platform/usr/lib/$ARCH_TRIPLET/girepository-1.0:\$SNAP/usr/lib/$ARCH_TRIPLET/girepository-1.0
+  # Locale
+  LOCPATH: \$SNAP/gnome-platform/usr/lib/locale
+  # Force X11 for window positioning
+  GDK_BACKEND: x11
+
 apps:
   $BINARY_NAME:
     command: bin/$BINARY_NAME
     desktop: meta/gui/$BINARY_NAME.desktop
     autostart: $BINARY_NAME.desktop
-    extensions: [gnome]
-    environment:
-      GDK_BACKEND: x11
     plugs:
       - home
       - network
@@ -128,6 +168,24 @@ apps:
       - unity7
       - opengl
       - gsettings
+
+layout:
+  /usr/lib/$ARCH_TRIPLET/gdk-pixbuf-2.0:
+    bind: \$SNAP/gnome-platform/usr/lib/$ARCH_TRIPLET/gdk-pixbuf-2.0
+  /usr/lib/$ARCH_TRIPLET/gtk-3.0:
+    bind: \$SNAP/gnome-platform/usr/lib/$ARCH_TRIPLET/gtk-3.0
+  /usr/share/glib-2.0:
+    bind: \$SNAP/gnome-platform/usr/share/glib-2.0
+  /usr/share/icons:
+    bind: \$SNAP/data-dir/icons
+  /usr/share/mime:
+    bind: \$SNAP/gnome-platform/usr/share/mime
+  /usr/share/xml/iso-codes:
+    bind: \$SNAP/gnome-platform/usr/share/xml/iso-codes
+  /etc/fonts:
+    bind: \$SNAP/gnome-platform/etc/fonts
+  /etc/gtk-3.0:
+    bind: \$SNAP/gnome-platform/etc/gtk-3.0
 
 parts:
   $BINARY_NAME:
@@ -148,21 +206,21 @@ parts:
       - libayatana-indicator3-7
       - libdbusmenu-glib4
       - libdbusmenu-gtk3-4
-      - wmctrl
-      - xdotool
-      - x11-utils
-      - x11-xserver-utils
-      - libxdo3
+      - librsvg2-common
+      - shared-mime-info
     override-build: |
       VERSION=\$(cat release 2>/dev/null | tr -d '[:space:]')
       if [ -z "\$VERSION" ]; then
         VERSION="dev"
       fi
       craftctl set-version "\$VERSION" 2>/dev/null || snapcraftctl set-version "\$VERSION"
-      # Use go from PATH (installed via build-packages: golang on core24)
       GO_BIN=\$(command -v go || echo "/usr/local/go/bin/go")
       DEST_DIR="\${CRAFT_PART_INSTALL:-\$SNAPCRAFT_PART_INSTALL}"
       mkdir -p "\$DEST_DIR/bin"
+      mkdir -p "\$DEST_DIR/data-dir/themes"
+      mkdir -p "\$DEST_DIR/data-dir/icons"
+      mkdir -p "\$DEST_DIR/data-dir/sounds"
+      mkdir -p "\$DEST_DIR/gnome-platform"
       unset CFLAGS CPPFLAGS LDFLAGS
       export CGO_CFLAGS="-Wno-deprecated-declarations \$(pkg-config --cflags gtk+-3.0 ayatana-appindicator3-0.1 2>/dev/null)"
       export CGO_LDFLAGS="\$(pkg-config --libs gtk+-3.0 ayatana-appindicator3-0.1 2>/dev/null)"

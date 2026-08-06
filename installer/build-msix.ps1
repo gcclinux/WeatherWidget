@@ -3,13 +3,13 @@
 # ============================================================================
 # Usage:
 #   # For Microsoft Store submission (unsigned — Store signs it for you):
-#   .\installer\build-msix.ps1 -Version "1.0.0.0" -StoreUpload
+#   .\installer\build-msix.ps1 -Version "1.0.3" -StoreUpload
 #
 #   # For local testing with self-signed cert:
-#   .\installer\build-msix.ps1 -Version "1.0.0.0" -CertPath "cert.pfx" -CertPassword "pass"
+#   .\installer\build-msix.ps1 -Version "1.0.3" -CertPath "cert.pfx" -CertPassword "pass"
 #
 #   # For local testing without signing:
-#   .\installer\build-msix.ps1 -Version "1.0.0.0" -SkipSign
+#   .\installer\build-msix.ps1 -Version "1.0.3" -SkipSign
 #
 # Prerequisites:
 #   - Go 1.25+ with CGO enabled (for Fyne)

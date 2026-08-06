@@ -1,182 +1,140 @@
 {
-  "pbtResults": {
-    "1. Write bug condition exploration test": {
-      "status": "passed",
-      "failingExample": "Property test (rapid): customX=1, customY=1 → effective position (0, 0) instead of (1, 1). Fails immediately on first draw.\n\nConcrete counterexample: buildWindow(env{GDK_BACKEND=\"x11\", WAYLAND_DISPLAY=\"/run/user/1000/wayland-0\", customX=440, customY=440}) → window position = (0, 0), expected (440, 440).\n\nFull rapid output:\n[rapid] failed after 0 tests: BUG CONFIRMED — window position mismatch in XWayland/Snap environment:\n  Environment:  GDK_BACKEND=\"x11\"  WAYLAND_DISPLAY=\"/run/user/1000/wayland-0\"\n  Configured:   (1, 1)\n  Effective:    (0, 0)  ← compositor placed window here (Mutter discards all X11 hints)\n  Root cause:   x11SetPositionHint, x11NetMoveWindow, and gtk.Window.Move() are all no-ops under XWayland because Mutter owns xdg_toplevel placement.\n  Fix required: Remove GDK_BACKEND=x11 from snap/snapcraft.yaml and add isWayland() guard in buildWindow() to skip X11-only hints.",
-      "lastRunTimestamp": 1785773345700
-    },
-    "2. Write preservation property tests (BEFORE implementing fix)": {
-      "status": "passed",
-      "lastRunTimestamp": 1785774103011
-    },
-    "3.5 Verify bug condition exploration test now passes": {
-      "status": "passed",
-      "lastRunTimestamp": 1785774934772
-    },
-    "3.6 Verify preservation tests still pass": {
-      "status": "passed",
-      "lastRunTimestamp": 1785775042258
-    }
-  },
+  "pbtResults": {},
   "executionHistory": {
-    "1. Write bug condition exploration test": [
+    "1. Update `snap/snapcraft.yaml` for gtk-layer-shell": [
       {
-        "executionId": "e5fd9f93-066d-4667-907f-b7070d0d3ab9",
-        "chatSessionId": "sess_7e95a6ee-1753-450d-a12d-8886ec7494a5",
-        "timestamp": 1785772790422
+        "executionId": "6c2ddce6-fca4-441b-b989-e6783dd56c25",
+        "chatSessionId": "sess_2cb20cc9-4f3e-417c-9ad4-788d61cfa1dc",
+        "timestamp": 1785966955993
       },
       {
-        "executionId": "e5fd9f93-066d-4667-907f-b7070d0d3ab9",
-        "chatSessionId": "sess_7e95a6ee-1753-450d-a12d-8886ec7494a5",
-        "timestamp": 1785772797136
+        "executionId": "6c2ddce6-fca4-441b-b989-e6783dd56c25",
+        "chatSessionId": "sess_2cb20cc9-4f3e-417c-9ad4-788d61cfa1dc",
+        "timestamp": 1785966964156
       },
       {
-        "executionId": "e5fd9f93-066d-4667-907f-b7070d0d3ab9",
-        "chatSessionId": "sess_7e95a6ee-1753-450d-a12d-8886ec7494a5",
-        "timestamp": 1785773362082
+        "executionId": "6c2ddce6-fca4-441b-b989-e6783dd56c25",
+        "chatSessionId": "sess_2cb20cc9-4f3e-417c-9ad4-788d61cfa1dc",
+        "timestamp": 1785967021575
       }
     ],
-    "2. Write preservation property tests (BEFORE implementing fix)": [
+    "2. Remove GDK_BACKEND override from `cmd/weatherwidget-gtk/main.go`": [
       {
-        "executionId": "e5fd9f93-066d-4667-907f-b7070d0d3ab9",
-        "chatSessionId": "sess_7e95a6ee-1753-450d-a12d-8886ec7494a5",
-        "timestamp": 1785772790603
+        "executionId": "6c2ddce6-fca4-441b-b989-e6783dd56c25",
+        "chatSessionId": "sess_2cb20cc9-4f3e-417c-9ad4-788d61cfa1dc",
+        "timestamp": 1785966956108
       },
       {
-        "executionId": "e5fd9f93-066d-4667-907f-b7070d0d3ab9",
-        "chatSessionId": "sess_7e95a6ee-1753-450d-a12d-8886ec7494a5",
-        "timestamp": 1785773367701
+        "executionId": "6c2ddce6-fca4-441b-b989-e6783dd56c25",
+        "chatSessionId": "sess_2cb20cc9-4f3e-417c-9ad4-788d61cfa1dc",
+        "timestamp": 1785967030801
       },
       {
-        "executionId": "e5fd9f93-066d-4667-907f-b7070d0d3ab9",
-        "chatSessionId": "sess_7e95a6ee-1753-450d-a12d-8886ec7494a5",
-        "timestamp": 1785774123305
+        "executionId": "6c2ddce6-fca4-441b-b989-e6783dd56c25",
+        "chatSessionId": "sess_2cb20cc9-4f3e-417c-9ad4-788d61cfa1dc",
+        "timestamp": 1785967065738
       }
     ],
-    "3.1 Remove `GDK_BACKEND: x11` from `snap/snapcraft.yaml`": [
+    "3. Create `internal/ui-gtk/gtk_layer_shell.go` with CGo bindings": [
       {
-        "executionId": "e5fd9f93-066d-4667-907f-b7070d0d3ab9",
-        "chatSessionId": "sess_7e95a6ee-1753-450d-a12d-8886ec7494a5",
-        "timestamp": 1785772790707
+        "executionId": "6c2ddce6-fca4-441b-b989-e6783dd56c25",
+        "chatSessionId": "sess_2cb20cc9-4f3e-417c-9ad4-788d61cfa1dc",
+        "timestamp": 1785966956173
       },
       {
-        "executionId": "e5fd9f93-066d-4667-907f-b7070d0d3ab9",
-        "chatSessionId": "sess_7e95a6ee-1753-450d-a12d-8886ec7494a5",
-        "timestamp": 1785774129070
+        "executionId": "6c2ddce6-fca4-441b-b989-e6783dd56c25",
+        "chatSessionId": "sess_2cb20cc9-4f3e-417c-9ad4-788d61cfa1dc",
+        "timestamp": 1785967070262
       },
       {
-        "executionId": "e5fd9f93-066d-4667-907f-b7070d0d3ab9",
-        "chatSessionId": "sess_7e95a6ee-1753-450d-a12d-8886ec7494a5",
-        "timestamp": 1785774264411
+        "executionId": "6c2ddce6-fca4-441b-b989-e6783dd56c25",
+        "chatSessionId": "sess_2cb20cc9-4f3e-417c-9ad4-788d61cfa1dc",
+        "timestamp": 1785967898992
       }
     ],
-    "3.2 Add `isWayland()` session-type detection in `internal/ui-gtk/manager.go`": [
+    "4. Update `buildWindow()` in `internal/ui-gtk/manager.go` for layer-shell positioning": [
       {
-        "executionId": "e5fd9f93-066d-4667-907f-b7070d0d3ab9",
-        "chatSessionId": "sess_7e95a6ee-1753-450d-a12d-8886ec7494a5",
-        "timestamp": 1785772790774
+        "executionId": "6c2ddce6-fca4-441b-b989-e6783dd56c25",
+        "chatSessionId": "sess_2cb20cc9-4f3e-417c-9ad4-788d61cfa1dc",
+        "timestamp": 1785966956237
       },
       {
-        "executionId": "e5fd9f93-066d-4667-907f-b7070d0d3ab9",
-        "chatSessionId": "sess_7e95a6ee-1753-450d-a12d-8886ec7494a5",
-        "timestamp": 1785774277396
+        "executionId": "6c2ddce6-fca4-441b-b989-e6783dd56c25",
+        "chatSessionId": "sess_2cb20cc9-4f3e-417c-9ad4-788d61cfa1dc",
+        "timestamp": 1785967903697
       },
       {
-        "executionId": "e5fd9f93-066d-4667-907f-b7070d0d3ab9",
-        "chatSessionId": "sess_7e95a6ee-1753-450d-a12d-8886ec7494a5",
-        "timestamp": 1785774440240
+        "executionId": "6c2ddce6-fca4-441b-b989-e6783dd56c25",
+        "chatSessionId": "sess_2cb20cc9-4f3e-417c-9ad4-788d61cfa1dc",
+        "timestamp": 1785968003559
       }
     ],
-    "3.3 Guard X11-only positioning calls in `buildWindow()` with `!isWayland()`": [
+    "5. Update drag behavior for Wayland in `internal/ui-gtk/manager.go`": [
       {
-        "executionId": "e5fd9f93-066d-4667-907f-b7070d0d3ab9",
-        "chatSessionId": "sess_7e95a6ee-1753-450d-a12d-8886ec7494a5",
-        "timestamp": 1785772790847
+        "executionId": "6c2ddce6-fca4-441b-b989-e6783dd56c25",
+        "chatSessionId": "sess_2cb20cc9-4f3e-417c-9ad4-788d61cfa1dc",
+        "timestamp": 1785966956321
       },
       {
-        "executionId": "e5fd9f93-066d-4667-907f-b7070d0d3ab9",
-        "chatSessionId": "sess_7e95a6ee-1753-450d-a12d-8886ec7494a5",
-        "timestamp": 1785774446971
+        "executionId": "6c2ddce6-fca4-441b-b989-e6783dd56c25",
+        "chatSessionId": "sess_2cb20cc9-4f3e-417c-9ad4-788d61cfa1dc",
+        "timestamp": 1785968007620
       },
       {
-        "executionId": "e5fd9f93-066d-4667-907f-b7070d0d3ab9",
-        "chatSessionId": "sess_7e95a6ee-1753-450d-a12d-8886ec7494a5",
-        "timestamp": 1785774584005
+        "executionId": "6c2ddce6-fca4-441b-b989-e6783dd56c25",
+        "chatSessionId": "sess_2cb20cc9-4f3e-417c-9ad4-788d61cfa1dc",
+        "timestamp": 1785968150335
       }
     ],
-    "3.4 Review and clean up `stage-packages` in `snap/snapcraft.yaml`": [
+    "6. Remove `moveWindowForced()` from `internal/ui-gtk/gtk_helpers.go`": [
       {
-        "executionId": "e5fd9f93-066d-4667-907f-b7070d0d3ab9",
-        "chatSessionId": "sess_7e95a6ee-1753-450d-a12d-8886ec7494a5",
-        "timestamp": 1785772790913
+        "executionId": "6c2ddce6-fca4-441b-b989-e6783dd56c25",
+        "chatSessionId": "sess_2cb20cc9-4f3e-417c-9ad4-788d61cfa1dc",
+        "timestamp": 1785966956391
       },
       {
-        "executionId": "e5fd9f93-066d-4667-907f-b7070d0d3ab9",
-        "chatSessionId": "sess_7e95a6ee-1753-450d-a12d-8886ec7494a5",
-        "timestamp": 1785774590211
+        "executionId": "6c2ddce6-fca4-441b-b989-e6783dd56c25",
+        "chatSessionId": "sess_2cb20cc9-4f3e-417c-9ad4-788d61cfa1dc",
+        "timestamp": 1785968154572
       },
       {
-        "executionId": "e5fd9f93-066d-4667-907f-b7070d0d3ab9",
-        "chatSessionId": "sess_7e95a6ee-1753-450d-a12d-8886ec7494a5",
-        "timestamp": 1785774651961
+        "executionId": "6c2ddce6-fca4-441b-b989-e6783dd56c25",
+        "chatSessionId": "sess_2cb20cc9-4f3e-417c-9ad4-788d61cfa1dc",
+        "timestamp": 1785968210571
       }
     ],
-    "3.5 Verify bug condition exploration test now passes": [
+    "7. Update existing tests for the new positioning model": [
       {
-        "executionId": "e5fd9f93-066d-4667-907f-b7070d0d3ab9",
-        "chatSessionId": "sess_7e95a6ee-1753-450d-a12d-8886ec7494a5",
-        "timestamp": 1785772790968
+        "executionId": "6c2ddce6-fca4-441b-b989-e6783dd56c25",
+        "chatSessionId": "sess_2cb20cc9-4f3e-417c-9ad4-788d61cfa1dc",
+        "timestamp": 1785966956449
       },
       {
-        "executionId": "e5fd9f93-066d-4667-907f-b7070d0d3ab9",
-        "chatSessionId": "sess_7e95a6ee-1753-450d-a12d-8886ec7494a5",
-        "timestamp": 1785774658906
+        "executionId": "6c2ddce6-fca4-441b-b989-e6783dd56c25",
+        "chatSessionId": "sess_2cb20cc9-4f3e-417c-9ad4-788d61cfa1dc",
+        "timestamp": 1785968214566
       },
       {
-        "executionId": "e5fd9f93-066d-4667-907f-b7070d0d3ab9",
-        "chatSessionId": "sess_7e95a6ee-1753-450d-a12d-8886ec7494a5",
-        "timestamp": 1785774955781
+        "executionId": "6c2ddce6-fca4-441b-b989-e6783dd56c25",
+        "chatSessionId": "sess_2cb20cc9-4f3e-417c-9ad4-788d61cfa1dc",
+        "timestamp": 1785968516032
       }
     ],
-    "3.6 Verify preservation tests still pass": [
+    "8. Build verification": [
       {
-        "executionId": "e5fd9f93-066d-4667-907f-b7070d0d3ab9",
-        "chatSessionId": "sess_7e95a6ee-1753-450d-a12d-8886ec7494a5",
-        "timestamp": 1785772791031
+        "executionId": "6c2ddce6-fca4-441b-b989-e6783dd56c25",
+        "chatSessionId": "sess_2cb20cc9-4f3e-417c-9ad4-788d61cfa1dc",
+        "timestamp": 1785966956514
       },
       {
-        "executionId": "e5fd9f93-066d-4667-907f-b7070d0d3ab9",
-        "chatSessionId": "sess_7e95a6ee-1753-450d-a12d-8886ec7494a5",
-        "timestamp": 1785774961966
+        "executionId": "6c2ddce6-fca4-441b-b989-e6783dd56c25",
+        "chatSessionId": "sess_2cb20cc9-4f3e-417c-9ad4-788d61cfa1dc",
+        "timestamp": 1785968520268
       },
       {
-        "executionId": "e5fd9f93-066d-4667-907f-b7070d0d3ab9",
-        "chatSessionId": "sess_7e95a6ee-1753-450d-a12d-8886ec7494a5",
-        "timestamp": 1785775060557
-      }
-    ],
-    "4. Checkpoint — Ensure all tests pass": [
-      {
-        "executionId": "e5fd9f93-066d-4667-907f-b7070d0d3ab9",
-        "chatSessionId": "sess_7e95a6ee-1753-450d-a12d-8886ec7494a5",
-        "timestamp": 1785772791101
-      },
-      {
-        "executionId": "e5fd9f93-066d-4667-907f-b7070d0d3ab9",
-        "chatSessionId": "sess_7e95a6ee-1753-450d-a12d-8886ec7494a5",
-        "timestamp": 1785775064459
-      },
-      {
-        "executionId": "e5fd9f93-066d-4667-907f-b7070d0d3ab9",
-        "chatSessionId": "sess_7e95a6ee-1753-450d-a12d-8886ec7494a5",
-        "timestamp": 1785775154019
-      }
-    ],
-    "3. Fix for XWayland window position ignored in Snap on Wayland sessions": [
-      {
-        "executionId": "e5fd9f93-066d-4667-907f-b7070d0d3ab9",
-        "chatSessionId": "sess_7e95a6ee-1753-450d-a12d-8886ec7494a5",
-        "timestamp": 1785775060806
+        "executionId": "6c2ddce6-fca4-441b-b989-e6783dd56c25",
+        "chatSessionId": "sess_2cb20cc9-4f3e-417c-9ad4-788d61cfa1dc",
+        "timestamp": 1785968719512
       }
     ]
   }

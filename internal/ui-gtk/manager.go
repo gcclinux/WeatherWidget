@@ -79,6 +79,12 @@ func (m *manager) tFmt(key string, args ...interface{}) string {
 // Run initialises GTK, sets up all application components, and starts the
 // GTK main loop. It does not return until the application exits.
 func Run(appDataDir string, openSettings bool) {
+	// Set GDK_BACKEND=x11 via C's setenv before GTK reads the environment.
+	// This ensures reliable window positioning via XWayland on Wayland desktops.
+	ensureGDKBackendX11()
+
+	log.Printf("GDK_BACKEND=%s", os.Getenv("GDK_BACKEND"))
+
 	gtk.Init(nil)
 
 	m := newManager(appDataDir)
@@ -211,16 +217,12 @@ func (m *manager) buildWindow() error {
 	win.SetDecorated(false)
 	win.SetSkipTaskbarHint(true)
 	win.SetSkipPagerHint(true)
-	win.SetKeepBelow(true)   // stay behind all normal windows
+	win.SetKeepBelow(true) // stay behind all normal windows
 	win.SetResizable(false)
 	win.SetAppPaintable(true)
 
-	// Use NORMAL type so GNOME Mutter honours application-requested positions
-	// (win.Move()). UTILITY type causes Mutter to own window placement and
-	// silently ignore all Move() calls — the confirmed root cause of the snap
-	// positioning bug on Ubuntu 24.
-	// SetSkipTaskbarHint + SetSkipPagerHint + SetKeepBelow already provide
-	// the same "desktop widget" behaviour without blocking position requests.
+	// Use NORMAL type — UTILITY and DIALOG types cause Mutter to own placement.
+	// Positioning is achieved through USPosition hints + repeated XMoveWindow calls.
 	win.SetTypeHint(gdk.WINDOW_TYPE_HINT_NORMAL)
 
 	// Remove title bar decorations if the user enabled no-border mode.
@@ -264,20 +266,14 @@ func (m *manager) buildWindow() error {
 		paintTransparent(cr)
 	})
 
-	// --- Window positioning strategy for GNOME Mutter + XWayland ---
+	// --- Window positioning ---
 	//
-	// Under XWayland, gtk.Window.Move() (XMoveWindow) is silently discarded for
-	// xdg_toplevel surfaces because the Wayland protocol has no client-side
-	// position API. We use a two-phase approach:
+	// GDK_BACKEND=x11 is always set (via main.go or snap environment).
+	// XMoveWindow works for native builds (deb/rpm/appimage) where the app
+	// connects directly to XWayland. For snaps, the X11 portal blocks
+	// XMoveWindow, so positioning is done via Settings → Display controls.
 	//
-	// Phase 1 (pre-map): Realize() the window without showing it, then write
-	//   WM_NORMAL_HINTS with USPosition|PPosition via Xlib. The WM reads these
-	//   during the MapWindow request and places the window at our coordinates.
-	//   USPosition ("user specified position") is the highest-priority X11 hint.
-	//
-	// Phase 2 (post-map): 400ms after map-event, send _NET_MOVERESIZE_WINDOW to
-	//   the root window. This is handled by the WM directly (not relayed through
-	//   XWayland) and overrides any smart-placement the WM applied.
+	// The Settings position controls work for ALL environments.
 
 	// Compute target position once.
 	var posX, posY int
@@ -288,40 +284,45 @@ func (m *manager) buildWindow() error {
 		posX, posY = cornerToXY(m.cfg.CornerPosition, m.cfg.MonitorIndex, pw, ph)
 	}
 
-	// Phase 1: realize → set USPosition hint → applyPosition (GTK level) → show.
+	// Set event mask before realize.
+	win.SetEvents(int(gdk.BUTTON_PRESS_MASK | gdk.BUTTON_RELEASE_MASK | gdk.POINTER_MOTION_MASK))
+
+	// Phase 1: realize → X11 hints → move → show.
 	win.Realize()
-	if !isWayland() {
-		x11SetPositionHint(win, posX, posY)
-	}
+	x11SetPositionHint(win, posX, posY)
+	x11MoveWindow(win, posX, posY)
 	m.applyPosition()
 
-	// Phase 2: after the WM maps and (potentially re-places) the window,
-	// send _NET_MOVERESIZE_WINDOW as a follow-up override.
+	// Phase 2: after map, force position with repeated XMoveWindow.
 	win.Connect("map-event", func(_ *gtk.Window, _ *gdk.Event) bool {
-		m.win.SetKeepBelow(true)
-		if !isWayland() {
-			glib.TimeoutAdd(400, func() bool {
-				x11NetMoveWindow(m.win, posX, posY)
-				return false
-			})
-		}
-		// Unlock drag auto-save after 1s (well after positioning completes).
+		x11MoveWindow(m.win, posX, posY)
+		glib.TimeoutAdd(100, func() bool {
+			x11MoveWindow(m.win, posX, posY)
+			return false
+		})
+		glib.TimeoutAdd(400, func() bool {
+			x11MoveWindow(m.win, posX, posY)
+			x11NetMoveWindow(m.win, posX, posY)
+			return false
+		})
 		glib.TimeoutAdd(1000, func() bool {
+			x11MoveWindow(m.win, posX, posY)
 			m.positioned = true
 			return false
 		})
 		return false
 	})
 
-	// Drag-to-reposition via left-click drag anywhere on the window.
-	// Auto-saves position 300ms after the last move — no Save button needed.
-	// NOTE: auto-save is suppressed until m.positioned is true to avoid
-	// overwriting the loaded coordinates with WM-reported coordinates on startup.
-	win.SetEvents(int(gdk.BUTTON_PRESS_MASK | gdk.BUTTON_RELEASE_MASK | gdk.POINTER_MOTION_MASK))
+	// Drag-to-reposition: left-click drag moves the window and saves position.
+	moveFunc := func(x, y int) {
+		win.Move(x, y)
+		x11MoveWindow(win, x, y)
+	}
+
 	var saveTimer *time.Timer
-	enableDrag(win, func(x, y int) {
+	enableDrag(win, moveFunc, func(x, y int) {
 		if !m.positioned {
-			return // startup not finished yet — ignore spurious moves
+			return
 		}
 		cx, cy := x, y
 		m.cfg.CustomX = &cx

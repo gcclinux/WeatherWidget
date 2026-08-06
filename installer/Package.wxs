@@ -8,7 +8,7 @@
   Replace "Ricardo Wagemaker" below if your Partner Center legal entity name differs.
   
   Build with:
-    wix build installer\Package.wxs -d BuildDir=. -d Version=1.0.0.0 -o WeatherWidget.msi
+    wix build installer\Package.wxs -d BuildDir=. -d Version=1.0.3 -o WeatherWidget.msi
 -->
 <Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
   <Package Name="Weather Widget"

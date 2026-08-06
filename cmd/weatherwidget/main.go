@@ -15,7 +15,7 @@ import (
 	"weatherwidget/internal/ui"
 )
 
-// version is set at build time via -ldflags "-X main.version=1.0.0.0"
+// version is set at build time via -ldflags "-X main.version=1.0.3"
 var version = "dev"
 
 func main() {

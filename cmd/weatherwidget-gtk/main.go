@@ -15,18 +15,10 @@ import (
 	uitk "weatherwidget/internal/ui-gtk"
 )
 
-// version is set at build time via -ldflags "-X main.version=1.0.0"
+// version is set at build time via -ldflags "-X main.version=1.0.3"
 var version = "dev"
 
 func main() {
-	// Force X11 backend via XWayland so that window positioning (Move/GetPosition)
-	// works reliably. On native Wayland these calls are no-ops — the compositor
-	// controls placement. XWayland is present on all modern Wayland desktops and
-	// gives us full X11 window management while still running under Wayland.
-	if os.Getenv("GDK_BACKEND") == "" {
-		os.Setenv("GDK_BACKEND", "x11")
-	}
-
 	debugFlag := flag.Bool("debug", false, "Enable debug logging to a file")
 	settingsFlag := flag.Bool("settings", false, "Open the settings window on launch")
 	flag.Parse()
