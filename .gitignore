@@ -22,3 +22,4 @@ stage/
 overlay/
 *.snap
 .local
+weatherwidget-gtk
