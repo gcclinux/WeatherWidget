@@ -250,10 +250,10 @@ func (p *CityPanel) Update(data *weather.WeatherData, unit config.TemperatureUni
 	p.cityText.Text = weather.FormatCityRegion(data.CityName, data.Region)
 	p.cityText.Refresh()
 
-	p.windGustText.Text = weather.FormatWindGust(data.WindGust)
+	p.windGustText.Text = weather.FormatWindGust(data.WindGust, p.lm)
 	p.windGustText.Refresh()
 
-	p.dewPointText.Text = weather.FormatDewPoint(data.DewPoint)
+	p.dewPointText.Text = weather.FormatDewPoint(data.DewPoint, p.lm)
 	p.dewPointText.Refresh()
 
 	p.pressureText.Text = weather.FormatPressure(data.Pressure)

@@ -31,7 +31,7 @@ $env:GOARCH = "amd64"
 # Update version in all locale JSON files so the About tab matches.
 function Update-LocaleVersions {
     param([string]$Ver)
-    $localeDir = Join-Path $ProjectRoot "internal" "i18n" "locales"
+    $localeDir = Join-Path $ProjectRoot "internal/i18n/locales"
     if (Test-Path $localeDir) {
         Get-ChildItem -Path $localeDir -Filter "*.json" | ForEach-Object {
             $content = Get-Content $_.FullName -Raw

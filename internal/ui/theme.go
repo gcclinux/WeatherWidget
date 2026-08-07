@@ -7,6 +7,8 @@ import (
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/theme"
+
+	"weatherwidget/assets"
 )
 
 // transparencyKey is the color Windows will make invisible via LWA_COLORKEY.
@@ -21,8 +23,24 @@ var transparencyActive atomic.Int32
 // Controlled by the opacity setting: 100% = fully dark (30), 25% = lighter (90).
 var linuxBgShade atomic.Int32
 
+var (
+	fontRegular fyne.Resource
+	fontBold    fyne.Resource
+	fontItalic  fyne.Resource
+)
+
 func init() {
 	linuxBgShade.Store(30) // default: dark background
+
+	if data, err := assets.Fonts.ReadFile("fonts/segoeui.ttf"); err == nil {
+		fontRegular = fyne.NewStaticResource("segoeui.ttf", data)
+	}
+	if data, err := assets.Fonts.ReadFile("fonts/segoeuib.ttf"); err == nil {
+		fontBold = fyne.NewStaticResource("segoeuib.ttf", data)
+	}
+	if data, err := assets.Fonts.ReadFile("fonts/segoeuii.ttf"); err == nil {
+		fontItalic = fyne.NewStaticResource("segoeuii.ttf", data)
+	}
 }
 
 // SetTransparencyActive switches the background color key on or off.
@@ -120,6 +138,15 @@ func (t *widgetTheme) Color(name fyne.ThemeColorName, variant fyne.ThemeVariant)
 }
 
 func (t *widgetTheme) Font(style fyne.TextStyle) fyne.Resource {
+	if style.Bold && fontBold != nil {
+		return fontBold
+	}
+	if style.Italic && fontItalic != nil {
+		return fontItalic
+	}
+	if fontRegular != nil {
+		return fontRegular
+	}
 	return t.base.Font(style)
 }
 

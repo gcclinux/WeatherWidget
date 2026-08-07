@@ -223,3 +223,70 @@ func TestFormatDescription(t *testing.T) {
 		t.Errorf("FormatDescription(clear sky, nil) = %q, want %q", got, "Clear Sky")
 	}
 }
+
+func TestFormatWindDir(t *testing.T) {
+	tests := []struct {
+		deg      int
+		expected string
+	}{
+		{0, ""},
+		{360, "↑ N"},
+		{1, "↑ N"},
+		{45, "⬈ NE"},
+		{90, "→ E"},
+		{135, "⬊ SE"},
+		{180, "↓ S"},
+		{202, "⬋ SSW"},
+		{225, "⬋ SW"},
+		{270, "← W"},
+		{315, "⬉ NW"},
+	}
+
+	for _, tc := range tests {
+		got := FormatWindDir(tc.deg)
+		if got != tc.expected {
+			t.Errorf("FormatWindDir(%d) = %q, want %q", tc.deg, got, tc.expected)
+		}
+	}
+}
+
+func TestFormatWindGustAndDewPoint_Localization(t *testing.T) {
+	lm, err := i18n.NewLocaleManager(i18n.LocaleFS)
+	if err != nil {
+		t.Fatalf("NewLocaleManager error = %v", err)
+	}
+
+	// Nil locale manager fallback
+	if got := FormatWindGust(10.5, nil); got != "💨 Gust 10.5 km/h" {
+		t.Errorf("FormatWindGust(10.5, nil) = %q, want %q", got, "💨 Gust 10.5 km/h")
+	}
+	if got := FormatDewPoint(15.9, nil); got != "💧 Dew 15.9°C" {
+		t.Errorf("FormatDewPoint(15.9, nil) = %q, want %q", got, "💧 Dew 15.9°C")
+	}
+
+	// Zero value fallback (empty string)
+	if got := FormatWindGust(0, lm); got != "" {
+		t.Errorf("FormatWindGust(0, lm) = %q, want %q", got, "")
+	}
+	if got := FormatDewPoint(0, lm); got != "" {
+		t.Errorf("FormatDewPoint(0, lm) = %q, want %q", got, "")
+	}
+
+	// Portuguese (pt-BR)
+	_ = lm.SetLocale("pt-BR")
+	if got := FormatWindGust(8.9, lm); got != "💨 Rajada 8.9 km/h" {
+		t.Errorf("FormatWindGust(pt-BR) = %q, want %q", got, "💨 Rajada 8.9 km/h")
+	}
+	if got := FormatDewPoint(15.9, lm); got != "💧 Orvalho 15.9°C" {
+		t.Errorf("FormatDewPoint(pt-BR) = %q, want %q", got, "💧 Orvalho 15.9°C")
+	}
+
+	// Polish (pl-PL)
+	_ = lm.SetLocale("pl-PL")
+	if got := FormatWindGust(7.4, lm); got != "💨 Poryw 7.4 km/h" {
+		t.Errorf("FormatWindGust(pl-PL) = %q, want %q", got, "💨 Poryw 7.4 km/h")
+	}
+	if got := FormatDewPoint(11.0, lm); got != "💧 Rosa 11.0°C" {
+		t.Errorf("FormatDewPoint(pl-PL) = %q, want %q", got, "💧 Rosa 11.0°C")
+	}
+}

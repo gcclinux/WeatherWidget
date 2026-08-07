@@ -153,22 +153,55 @@ func FormatHumidityWind(humidity int, windSpeed float64, windDirection int) stri
 	return fmt.Sprintf("💧 %d%%   💨 %.1f %s", humidity, windSpeed, compass)
 }
 
+// compassArrows maps 16 cardinal/intercardinal compass points to clean typographic vector arrows.
+// Uses U+2B08..U+2B0B diagonal arrows which are strictly vector text glyphs across all OS font renderers.
+var compassArrows = []string{
+	"↑", "⬈", "⬈", "⬈",
+	"→", "⬊", "⬊", "⬊",
+	"↓", "⬋", "⬋", "⬋",
+	"←", "⬉", "⬉", "⬉",
+}
+
+// DegreesToArrow converts a wind direction in degrees (0–360) to a
+// directional arrow (e.g. 0 → "↑", 90 → "→", 225 → "↙").
+func DegreesToArrow(degrees int) string {
+	deg := ((degrees % 360) + 360) % 360
+	index := int(math.Round(float64(deg)/22.5)) % 16
+	return compassArrows[index]
+}
+
 // FormatWindGust returns a compact string like "💨 Gust 12.3 km/h".
 // Returns an empty string if gustSpeed is zero (data not available).
-func FormatWindGust(gustSpeed float64) string {
+// If lm is non-nil, the label is localized according to the active locale.
+func FormatWindGust(gustSpeed float64, lm *i18n.LocaleManager) string {
 	if gustSpeed == 0 {
 		return ""
 	}
-	return fmt.Sprintf("💨 Gust %.1f km/h", gustSpeed)
+	label := "Gust"
+	if lm != nil {
+		translated := lm.T("weather.gust")
+		if translated != "weather.gust" {
+			label = translated
+		}
+	}
+	return fmt.Sprintf("💨 %s %.1f km/h", label, gustSpeed)
 }
 
 // FormatDewPoint returns a compact string like "💧 Dew 8.5°C".
 // Returns an empty string if dewPoint is zero (data not available).
-func FormatDewPoint(dewPoint float64) string {
+// If lm is non-nil, the label is localized according to the active locale.
+func FormatDewPoint(dewPoint float64, lm *i18n.LocaleManager) string {
 	if dewPoint == 0 {
 		return ""
 	}
-	return fmt.Sprintf("💧 Dew %.1f°C", dewPoint)
+	label := "Dew"
+	if lm != nil {
+		translated := lm.T("weather.dew")
+		if translated != "weather.dew" {
+			label = translated
+		}
+	}
+	return fmt.Sprintf("💧 %s %.1f°C", label, dewPoint)
 }
 
 // FormatPressure returns a compact string like "🌡 1019 hPa".
@@ -195,5 +228,5 @@ func FormatWindDir(windDirection int) string {
 	if windDirection == 0 {
 		return ""
 	}
-	return fmt.Sprintf("🧭 %s", DegreesToCompass(windDirection))
+	return fmt.Sprintf("%s %s", DegreesToArrow(windDirection), DegreesToCompass(windDirection))
 }

@@ -1188,7 +1188,7 @@ func buildAboutTab(m *manager) *gtk.Box {
 
 	// Version.
 	versionLbl, _ := gtk.LabelNew("")
-	// Strip markdown bold markers from the i18n string ("**Version:** 1.0.3" → "Version: 1.0.3").
+	// Strip markdown bold markers from the i18n string ("**Version:** 1.0.5" → "Version: 1.0.5").
 	versionText := m.t("settings.about.version")
 	versionText = strings.ReplaceAll(versionText, "**", "")
 	versionLbl.SetText(versionText)

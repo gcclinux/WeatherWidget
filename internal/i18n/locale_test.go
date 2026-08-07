@@ -453,6 +453,8 @@ func TestEnGBCompleteness(t *testing.T) {
 		"panel.placeholder.time",
 		"panel.placeholder.date",
 		"panel.staleWarning",
+		"weather.gust",
+		"weather.dew",
 		"weather.tempSuffix",
 		"weather.tempFormat",
 		"weather.dateFormat",

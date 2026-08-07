@@ -4,12 +4,12 @@
       "0409": {
         "identity": {
           "name": "WeatherWidget",
-          "version": "1.0.3"
+          "version": "1.0.5"
         },
         "description": "Weather Widget - Desktop weather display",
         "minimum-os": "win10",
         "execution-level": "asInvoker",
-        "dpi-awareness": "system",
+        "dpi-awareness": "true",
         "auto-elevate": false
       }
     }
@@ -23,19 +23,19 @@
     "#1": {
       "0409": {
         "fixed": {
-          "file_version": "1.0.3",
-          "product_version": "1.0.3"
+          "file_version": "1.0.5",
+          "product_version": "1.0.5"
         },
         "info": {
           "0409": {
             "CompanyName": "Ricardo Wagemaker",
             "FileDescription": "Weather Widget Desktop Application",
-            "FileVersion": "1.0.3",
+            "FileVersion": "1.0.5",
             "InternalName": "weatherwidget",
             "LegalCopyright": "© 2026 Ricardo Wagemaker",
             "OriginalFilename": "weatherwidget.exe",
             "ProductName": "Weather Widget",
-            "ProductVersion": "1.0.3"
+            "ProductVersion": "1.0.5"
           }
         }
       }

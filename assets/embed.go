@@ -11,3 +11,8 @@ var Icons embed.FS
 //
 //go:embed demo.png
 var DemoPNG []byte
+
+// Fonts embeds custom TTF font files for crisp UI typography.
+//
+//go:embed fonts/*.ttf
+var Fonts embed.FS

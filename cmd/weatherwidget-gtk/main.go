@@ -15,7 +15,7 @@ import (
 	uitk "weatherwidget/internal/ui-gtk"
 )
 
-// version is set at build time via -ldflags "-X main.version=1.0.3"
+// version is set at build time via -ldflags "-X main.version=1.0.5"
 var version = "dev"
 
 func main() {
