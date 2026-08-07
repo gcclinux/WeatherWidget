@@ -177,11 +177,8 @@ func (m *manager) start(openSettings bool) error {
 	// Setup system tray (best-effort).
 	setupTray(m)
 
-	if openSettings {
-		m.openSettings()
-	}
-
-	// Scheduler.
+	// Scheduler — must be initialised before openSettings so that saving
+	// from the settings dialog can call m.sched.SetInterval() safely.
 	interval := time.Duration(cfg.RefreshInterval) * time.Minute
 	m.sched = scheduler.NewRefreshScheduler(interval, m.weather)
 	m.sched.SetCities(cfg.Cities)
@@ -192,6 +189,10 @@ func (m *manager) start(openSettings bool) error {
 		log.Printf("weather error for %s: %v", city, err)
 	})
 	m.sched.Start()
+
+	if openSettings {
+		m.openSettings()
+	}
 
 	// Listen for power-resume events.
 	go func() {
@@ -337,6 +338,45 @@ func (m *manager) buildWindow() error {
 				log.Printf("position auto-saved: (%d,%d)", cx, cy)
 			}
 		})
+	})
+
+	// Right-click context menu: provides access to Settings and Quit without
+	// requiring a system tray icon (which needs an SNI host / GNOME extension).
+	win.Connect("button-press-event", func(_ *gtk.Window, ev *gdk.Event) bool {
+		btn := gdk.EventButtonNewFromEvent(ev)
+		if btn.Button() != 3 {
+			return false
+		}
+		menu, err := gtk.MenuNew()
+		if err != nil {
+			return false
+		}
+		settingsItem, _ := gtk.MenuItemNewWithLabel(m.t("tray.settings"))
+		settingsItem.Connect("activate", func() {
+			glib.IdleAdd(func() { m.openSettings() })
+		})
+		menu.Append(settingsItem)
+
+		sep, _ := gtk.SeparatorMenuItemNew()
+		menu.Append(sep)
+
+		quitItem, _ := gtk.MenuItemNewWithLabel(m.t("tray.quit"))
+		quitItem.Connect("activate", func() {
+			glib.IdleAdd(func() {
+				if m.sched != nil {
+					m.sched.Stop()
+				}
+				if m.guard != nil {
+					_ = m.guard.Release()
+				}
+				gtk.MainQuit()
+			})
+		})
+		menu.Append(quitItem)
+
+		menu.ShowAll()
+		menu.PopupAtPointer(ev)
+		return true
 	})
 
 	win.ShowAll()

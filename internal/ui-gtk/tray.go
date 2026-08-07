@@ -53,13 +53,51 @@ import (
 	"log"
 	"unsafe"
 
+	dbus "github.com/godbus/dbus/v5"
 	"github.com/gotk3/gotk3/glib"
 	"github.com/gotk3/gotk3/gtk"
 )
 
+// hasSNIHost checks whether a StatusNotifierWatcher is registered on the
+// session D-Bus. This is the host service that consumes AppIndicator/SNI
+// registrations and renders the tray icon. On GNOME, this requires the
+// "AppIndicator and KStatusNotifierItem Support" extension; KDE Plasma and
+// other DEs ship one by default.
+func hasSNIHost() bool {
+	conn, err := dbus.SessionBus()
+	if err != nil {
+		return false
+	}
+	reply, err := conn.RequestName("org.freedesktop.StatusNotifierWatcher",
+		dbus.NameFlagDoNotQueue)
+	if err != nil {
+		return false
+	}
+	// If we acquired the name, no host is registered — release it immediately.
+	if reply == dbus.RequestNameReplyPrimaryOwner {
+		_, _ = conn.ReleaseName("org.freedesktop.StatusNotifierWatcher")
+		return false
+	}
+	// Name is already taken — a host is running.
+	return true
+}
+
 // setupTray installs an AppIndicator system tray icon with a context menu
 // providing Show, Hide, Settings, and Quit actions.
 func setupTray(m *manager) {
+	// Check if an SNI host is available on D-Bus. Without one the icon will
+	// be registered but never rendered (common on vanilla GNOME).
+	if !hasSNIHost() {
+		log.Println("GTK tray: WARNING — no StatusNotifierWatcher (SNI host) found on D-Bus.")
+		log.Println("  The tray icon will NOT be visible.")
+		log.Println("  On GNOME, install and enable the AppIndicator extension:")
+		log.Println("    sudo dnf install gnome-shell-extension-appindicator   # Fedora")
+		log.Println("    sudo apt install gnome-shell-extension-appindicator   # Debian/Ubuntu")
+		log.Println("    gnome-extensions enable appindicatorsupport@rgcjonas.gmail.com")
+		log.Println("  Then log out and back in (required on Wayland).")
+		log.Println("  Alternatively, launch with --settings to open settings directly.")
+	}
+
 	id := C.CString("com.weatherwidget.gtk")
 	defer C.free(unsafe.Pointer(id))
 
