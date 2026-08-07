@@ -421,19 +421,23 @@ func buildAppearanceTab(m *manager) (*gtk.Box, *gtk.Scale, *gtk.CheckButton, *gt
 	yEntry.SetWidthChars(6)
 	posRow.PackStart(yEntry, false, false, 0)
 
-	applyPosBtn, _ := gtk.ButtonNewWithLabel("Apply")
-	posRow.PackStart(applyPosBtn, false, false, 0)
-
-	vbox.PackStart(posRow, false, false, 0)
-
-	// Arrow nudge buttons (10px per click).
-	arrowRow, _ := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 4)
+	// Arrow nudge buttons (10px per click) — inline with X/Y fields.
 	const nudge = 10
 
 	leftBtn, _ := gtk.ButtonNewWithLabel("◀")
 	upBtn, _ := gtk.ButtonNewWithLabel("▲")
 	downBtn, _ := gtk.ButtonNewWithLabel("▼")
 	rightBtn, _ := gtk.ButtonNewWithLabel("▶")
+
+	posRow.PackStart(leftBtn, false, false, 0)
+	posRow.PackStart(upBtn, false, false, 0)
+	posRow.PackStart(downBtn, false, false, 0)
+	posRow.PackStart(rightBtn, false, false, 0)
+
+	applyPosBtn, _ := gtk.ButtonNewWithLabel("Apply")
+	posRow.PackStart(applyPosBtn, false, false, 0)
+
+	vbox.PackStart(posRow, false, false, 0)
 
 	// moveAndSave repositions the widget, updates entries, and persists.
 	moveAndSave := func(x, y int) {
@@ -489,13 +493,6 @@ func buildAppearanceTab(m *manager) (*gtk.Box, *gtk.Scale, *gtk.CheckButton, *gt
 		y, _ := strconv.Atoi(strings.TrimSpace(yText))
 		moveAndSave(x, y+nudge)
 	})
-
-	arrowRow.PackStart(leftBtn, false, false, 0)
-	arrowRow.PackStart(upBtn, false, false, 0)
-	arrowRow.PackStart(downBtn, false, false, 0)
-	arrowRow.PackStart(rightBtn, false, false, 0)
-
-	vbox.PackStart(arrowRow, false, false, 0)
 
 	return vbox, opacityScale, noBgCheck, noBorderCheck
 }

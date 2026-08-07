@@ -56,29 +56,30 @@ func newCityPanel(city, region, timezone string, lm *i18n.LocaleManager) (*cityP
 	root.SetSizeRequest(158, -1)
 	p.root = root
 
-	// ── City row (icon + name) ──────────────────────────────────────────────
-	nameBox, err := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 4)
+	// ── City row (name then icon below) ─────────────────────────────────────
+	nameBox, err := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 4)
 	if err != nil {
 		return nil, err
 	}
 	p.nameBox = nameBox
 
-	iconWidget, _ := gtk.ImageNew()
-	iconWidget.SetSizeRequest(32, 32)
-	p.icon = iconWidget
-
 	cityLbl, err := gtk.LabelNew(city + ", " + region)
 	if err != nil {
 		return nil, err
 	}
-	cityLbl.SetHAlign(gtk.ALIGN_START)
+	cityLbl.SetHAlign(gtk.ALIGN_CENTER)
 	cityLbl.SetEllipsize(3) // PANGO_ELLIPSIZE_END
 	sc, _ = cityLbl.GetStyleContext()
 	sc.AddClass("city-label")
 	p.cityLbl = cityLbl
 
+	iconWidget, _ := gtk.ImageNew()
+	iconWidget.SetSizeRequest(32, 32)
+	iconWidget.SetHAlign(gtk.ALIGN_CENTER)
+	p.icon = iconWidget
+
+	nameBox.PackStart(cityLbl, false, false, 0)
 	nameBox.PackStart(iconWidget, false, false, 0)
-	nameBox.PackStart(cityLbl, true, true, 0)
 	root.PackStart(nameBox, false, false, 0)
 
 	// ── Time ────────────────────────────────────────────────────────────────
@@ -86,7 +87,7 @@ func newCityPanel(city, region, timezone string, lm *i18n.LocaleManager) (*cityP
 	if err != nil {
 		return nil, err
 	}
-	timeLbl.SetHAlign(gtk.ALIGN_START)
+	timeLbl.SetHAlign(gtk.ALIGN_CENTER)
 	sc, _ = timeLbl.GetStyleContext()
 	sc.AddClass("time-label")
 	p.timeLbl = timeLbl
@@ -97,7 +98,7 @@ func newCityPanel(city, region, timezone string, lm *i18n.LocaleManager) (*cityP
 	if err != nil {
 		return nil, err
 	}
-	dateLbl.SetHAlign(gtk.ALIGN_START)
+	dateLbl.SetHAlign(gtk.ALIGN_CENTER)
 	sc, _ = dateLbl.GetStyleContext()
 	sc.AddClass("date-label")
 	p.dateLbl = dateLbl
@@ -108,7 +109,7 @@ func newCityPanel(city, region, timezone string, lm *i18n.LocaleManager) (*cityP
 	if err != nil {
 		return nil, err
 	}
-	tempLbl.SetHAlign(gtk.ALIGN_START)
+	tempLbl.SetHAlign(gtk.ALIGN_CENTER)
 	sc, _ = tempLbl.GetStyleContext()
 	sc.AddClass("temp-label")
 	p.tempLbl = tempLbl
@@ -119,7 +120,7 @@ func newCityPanel(city, region, timezone string, lm *i18n.LocaleManager) (*cityP
 	if err != nil {
 		return nil, err
 	}
-	descLbl.SetHAlign(gtk.ALIGN_START)
+	descLbl.SetHAlign(gtk.ALIGN_CENTER)
 	descLbl.SetLineWrap(true)
 	sc, _ = descLbl.GetStyleContext()
 	sc.AddClass("desc-label")
@@ -131,7 +132,7 @@ func newCityPanel(city, region, timezone string, lm *i18n.LocaleManager) (*cityP
 	if err != nil {
 		return nil, err
 	}
-	infoLbl.SetHAlign(gtk.ALIGN_START)
+	infoLbl.SetHAlign(gtk.ALIGN_CENTER)
 	sc, _ = infoLbl.GetStyleContext()
 	sc.AddClass("info-label")
 	p.infoLbl = infoLbl
