@@ -15,6 +15,10 @@ if [ -z "$VERSION" ]; then
     exit 1
 fi
 
+# Output directory
+BUILD_DIR="scripts/build"
+mkdir -p "$BUILD_DIR"
+
 echo "==> Building WeatherWidget $VERSION for macOS..."
 
 # Update version in all locale JSON files so the About tab matches.
@@ -27,13 +31,13 @@ fi
 
 # Build both architectures
 echo "    Compiling darwin/amd64..."
-CGO_ENABLED=1 GOOS=darwin GOARCH=amd64 go build -v -ldflags="-s -w -X main.version=$VERSION" -o "$BINARY_NAME-darwin-amd64" "$CMD_PATH"
+CGO_ENABLED=1 GOOS=darwin GOARCH=amd64 go build -v -ldflags="-s -w -X main.version=$VERSION" -o "$BUILD_DIR/$BINARY_NAME-darwin-amd64" "$CMD_PATH"
 
 echo "    Compiling darwin/arm64..."
-CGO_ENABLED=1 GOOS=darwin GOARCH=arm64 go build -v -ldflags="-s -w -X main.version=$VERSION" -o "$BINARY_NAME-darwin-arm64" "$CMD_PATH"
+CGO_ENABLED=1 GOOS=darwin GOARCH=arm64 go build -v -ldflags="-s -w -X main.version=$VERSION" -o "$BUILD_DIR/$BINARY_NAME-darwin-arm64" "$CMD_PATH"
 
 # Assemble .app bundle
-APP_BUNDLE="$APP_NAME-$VERSION.app"
+APP_BUNDLE="$BUILD_DIR/$APP_NAME-$VERSION.app"
 echo "==> Assembling $APP_BUNDLE..."
 
 rm -rf "$APP_BUNDLE"
@@ -42,8 +46,8 @@ mkdir -p "$APP_BUNDLE/Contents/Resources"
 
 # Universal binary
 lipo -create -output "$APP_BUNDLE/Contents/MacOS/$BINARY_NAME" \
-    "$BINARY_NAME-darwin-amd64" \
-    "$BINARY_NAME-darwin-arm64"
+    "$BUILD_DIR/$BINARY_NAME-darwin-amd64" \
+    "$BUILD_DIR/$BINARY_NAME-darwin-arm64"
 chmod +x "$APP_BUNDLE/Contents/MacOS/$BINARY_NAME"
 
 # Build .icns
@@ -102,7 +106,7 @@ EOF
 echo "==> Created: $APP_BUNDLE"
 
 # Build .dmg
-DMG_NAME="$APP_NAME-$VERSION.dmg"
+DMG_NAME="$BUILD_DIR/$APP_NAME-$VERSION.dmg"
 echo "==> Creating $DMG_NAME..."
 rm -f "$DMG_NAME"
 hdiutil create -volname "$APP_NAME $VERSION" \
@@ -118,4 +122,4 @@ echo ""
 echo "    To install: open $DMG_NAME and drag to /Applications"
 
 # Cleanup intermediate binaries
-rm -f "$BINARY_NAME-darwin-amd64" "$BINARY_NAME-darwin-arm64"
+rm -f "$BUILD_DIR/$BINARY_NAME-darwin-amd64" "$BUILD_DIR/$BINARY_NAME-darwin-arm64"
