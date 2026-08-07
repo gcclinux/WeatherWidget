@@ -27,6 +27,11 @@ type cityPanel struct {
 	tempLbl  *gtk.Label
 	descLbl  *gtk.Label
 	infoLbl  *gtk.Label // humidity + wind
+	windGustLbl *gtk.Label
+	dewPointLbl *gtk.Label
+	pressureLbl *gtk.Label
+	uvIndexLbl  *gtk.Label
+	windDirLbl  *gtk.Label
 	errorLbl *gtk.Label
 
 	city     string
@@ -138,6 +143,61 @@ func newCityPanel(city, region, timezone string, lm *i18n.LocaleManager) (*cityP
 	p.infoLbl = infoLbl
 	root.PackStart(infoLbl, false, false, 0)
 
+	// ── Wind direction ───────────────────────────────────────────────────────
+	windDirLbl, err := gtk.LabelNew("")
+	if err != nil {
+		return nil, err
+	}
+	windDirLbl.SetHAlign(gtk.ALIGN_CENTER)
+	sc, _ = windDirLbl.GetStyleContext()
+	sc.AddClass("info-label")
+	p.windDirLbl = windDirLbl
+	root.PackStart(windDirLbl, false, false, 0)
+
+	// ── Wind gust ────────────────────────────────────────────────────────────
+	windGustLbl, err := gtk.LabelNew("")
+	if err != nil {
+		return nil, err
+	}
+	windGustLbl.SetHAlign(gtk.ALIGN_CENTER)
+	sc, _ = windGustLbl.GetStyleContext()
+	sc.AddClass("info-label")
+	p.windGustLbl = windGustLbl
+	root.PackStart(windGustLbl, false, false, 0)
+
+	// ── Dew point ────────────────────────────────────────────────────────────
+	dewPointLbl, err := gtk.LabelNew("")
+	if err != nil {
+		return nil, err
+	}
+	dewPointLbl.SetHAlign(gtk.ALIGN_CENTER)
+	sc, _ = dewPointLbl.GetStyleContext()
+	sc.AddClass("info-label")
+	p.dewPointLbl = dewPointLbl
+	root.PackStart(dewPointLbl, false, false, 0)
+
+	// ── Pressure ─────────────────────────────────────────────────────────────
+	pressureLbl, err := gtk.LabelNew("")
+	if err != nil {
+		return nil, err
+	}
+	pressureLbl.SetHAlign(gtk.ALIGN_CENTER)
+	sc, _ = pressureLbl.GetStyleContext()
+	sc.AddClass("info-label")
+	p.pressureLbl = pressureLbl
+	root.PackStart(pressureLbl, false, false, 0)
+
+	// ── UV index ─────────────────────────────────────────────────────────────
+	uvIndexLbl, err := gtk.LabelNew("")
+	if err != nil {
+		return nil, err
+	}
+	uvIndexLbl.SetHAlign(gtk.ALIGN_CENTER)
+	sc, _ = uvIndexLbl.GetStyleContext()
+	sc.AddClass("info-label")
+	p.uvIndexLbl = uvIndexLbl
+	root.PackStart(uvIndexLbl, false, false, 0)
+
 	// ── Error label ──────────────────────────────────────────────────────────
 	errorLbl, err := gtk.LabelNew("")
 	if err != nil {
@@ -167,6 +227,11 @@ func (p *cityPanel) update(d *weather.WeatherData, unit config.TemperatureUnit) 
 	p.tempLbl.SetText(weather.FormatTemperature(d.Temperature, unit))
 	p.descLbl.SetText(weather.FormatDescription(d.Description, p.lm))
 	p.infoLbl.SetText(weather.FormatHumidityWind(d.Humidity, d.WindSpeed, d.WindDirection))
+	p.windGustLbl.SetText(weather.FormatWindGust(d.WindGust))
+	p.dewPointLbl.SetText(weather.FormatDewPoint(d.DewPoint))
+	p.pressureLbl.SetText(weather.FormatPressure(d.Pressure))
+	p.uvIndexLbl.SetText(weather.FormatUVIndex(d.UVIndex))
+	p.windDirLbl.SetText(weather.FormatWindDir(d.WindDirection))
 
 	// Load weather icon.
 	iconCode := weather.MapConditionToIcon(d.IconCode, d.LocalTime)
@@ -206,6 +271,11 @@ func (p *cityPanel) applyDisplayFields(df *config.DisplayFields) {
 	setVisible(p.tempLbl, df.ShowTemp)
 	setVisible(p.descLbl, df.ShowDesc)
 	setVisible(p.infoLbl, df.ShowHumidWind)
+	setVisible(p.windDirLbl, df.ShowWindDir)
+	setVisible(p.windGustLbl, df.ShowWindGust)
+	setVisible(p.dewPointLbl, df.ShowDewPoint)
+	setVisible(p.pressureLbl, df.ShowPressure)
+	setVisible(p.uvIndexLbl, df.ShowUVIndex)
 	setVisible(p.timeLbl, df.ShowTime)
 	setVisible(p.dateLbl, df.ShowDate)
 }

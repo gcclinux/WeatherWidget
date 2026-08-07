@@ -152,3 +152,48 @@ func FormatHumidityWind(humidity int, windSpeed float64, windDirection int) stri
 	compass := DegreesToCompass(windDirection)
 	return fmt.Sprintf("💧 %d%%   💨 %.1f %s", humidity, windSpeed, compass)
 }
+
+// FormatWindGust returns a compact string like "💨 Gust 12.3 km/h".
+// Returns an empty string if gustSpeed is zero (data not available).
+func FormatWindGust(gustSpeed float64) string {
+	if gustSpeed == 0 {
+		return ""
+	}
+	return fmt.Sprintf("💨 Gust %.1f km/h", gustSpeed)
+}
+
+// FormatDewPoint returns a compact string like "💧 Dew 8.5°C".
+// Returns an empty string if dewPoint is zero (data not available).
+func FormatDewPoint(dewPoint float64) string {
+	if dewPoint == 0 {
+		return ""
+	}
+	return fmt.Sprintf("💧 Dew %.1f°C", dewPoint)
+}
+
+// FormatPressure returns a compact string like "🌡 1019 hPa".
+// Returns an empty string if pressure is zero (data not available).
+func FormatPressure(pressure float64) string {
+	if pressure == 0 {
+		return ""
+	}
+	return fmt.Sprintf("🌡 %.0f hPa", pressure)
+}
+
+// FormatUVIndex returns a compact string like "☀ UV 3.2".
+// Returns an empty string if uvIndex is negative (data not available).
+func FormatUVIndex(uvIndex float64) string {
+	if uvIndex < 0 {
+		return ""
+	}
+	return fmt.Sprintf("☀ UV %.1f", uvIndex)
+}
+
+// FormatWindDir returns the wind direction as a compass label like "↖ NW".
+// Returns an empty string if windDirection is zero (data not available).
+func FormatWindDir(windDirection int) string {
+	if windDirection == 0 {
+		return ""
+	}
+	return fmt.Sprintf("🧭 %s", DegreesToCompass(windDirection))
+}

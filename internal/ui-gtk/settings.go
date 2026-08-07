@@ -559,6 +559,26 @@ func buildWidgetTab(m *manager) (*gtk.Box, func() *config.DisplayFields, func() 
 	chkDate.SetActive(df.ShowDate)
 	grid.Attach(chkDate, 2, 1, 1, 1)
 
+	chkWindDir, _ := gtk.CheckButtonNewWithLabel(m.t("settings.display.windDir"))
+	chkWindDir.SetActive(df.ShowWindDir)
+	grid.Attach(chkWindDir, 3, 1, 1, 1)
+
+	chkWindGust, _ := gtk.CheckButtonNewWithLabel(m.t("settings.display.windGust"))
+	chkWindGust.SetActive(df.ShowWindGust)
+	grid.Attach(chkWindGust, 0, 2, 1, 1)
+
+	chkDewPoint, _ := gtk.CheckButtonNewWithLabel(m.t("settings.display.dewPoint"))
+	chkDewPoint.SetActive(df.ShowDewPoint)
+	grid.Attach(chkDewPoint, 1, 2, 1, 1)
+
+	chkPressure, _ := gtk.CheckButtonNewWithLabel(m.t("settings.display.pressure"))
+	chkPressure.SetActive(df.ShowPressure)
+	grid.Attach(chkPressure, 2, 2, 1, 1)
+
+	chkUVIndex, _ := gtk.CheckButtonNewWithLabel(m.t("settings.display.uvIndex"))
+	chkUVIndex.SetActive(df.ShowUVIndex)
+	grid.Attach(chkUVIndex, 3, 2, 1, 1)
+
 	vbox.PackStart(grid, false, false, 0)
 
 	// ── Temperature Unit ──────────────────────────────────────────────────
@@ -595,6 +615,11 @@ func buildWidgetTab(m *manager) (*gtk.Box, func() *config.DisplayFields, func() 
 			ShowHumidWind: chkHumidWind.GetActive(),
 			ShowTime:      chkTime.GetActive(),
 			ShowDate:      chkDate.GetActive(),
+			ShowWindGust:  chkWindGust.GetActive(),
+			ShowDewPoint:  chkDewPoint.GetActive(),
+			ShowPressure:  chkPressure.GetActive(),
+			ShowUVIndex:   chkUVIndex.GetActive(),
+			ShowWindDir:   chkWindDir.GetActive(),
 		}
 	}
 

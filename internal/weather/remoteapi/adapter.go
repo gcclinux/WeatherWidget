@@ -89,15 +89,19 @@ type owmResponse struct {
 	Main     struct {
 		Temp     float64 `json:"temp"`
 		Humidity int     `json:"humidity"`
+		DewPoint float64 `json:"dew_point"`
+		Pressure float64 `json:"pressure"` // hPa
 	} `json:"main"`
 	Wind struct {
 		Speed float64 `json:"speed"` // m/s
 		Deg   int     `json:"deg"`   // degrees
+		Gust  float64 `json:"gust"`  // m/s; optional
 	} `json:"wind"`
 	Weather []struct {
 		ID          int    `json:"id"`
 		Description string `json:"description"`
 	} `json:"weather"`
+	Uvi     float64     `json:"uvi"` // UV index (not in standard current endpoint, but present in One Call)
 	Cod     interface{} `json:"cod"` // can be int or string
 	Message string      `json:"message"`
 }
@@ -159,6 +163,7 @@ func (r *RemoteAPIAdapter) fetchOWM(ctx context.Context, city config.CityConfig)
 
 	// OWM returns wind speed in m/s; convert to km/h.
 	windSpeedKmh := owm.Wind.Speed * 3.6
+	windGustKmh := owm.Wind.Gust * 3.6
 
 	return &weather.WeatherData{
 		CityName:      city.Name,
@@ -171,6 +176,10 @@ func (r *RemoteAPIAdapter) fetchOWM(ctx context.Context, city config.CityConfig)
 		Humidity:      owm.Main.Humidity,
 		WindSpeed:     windSpeedKmh,
 		WindDirection: owm.Wind.Deg,
+		WindGust:      windGustKmh,
+		DewPoint:      owm.Main.DewPoint,
+		Pressure:      owm.Main.Pressure,
+		UVIndex:       owm.Uvi,
 	}, nil
 }
 
@@ -256,6 +265,8 @@ type wuMetric struct {
 	WindSpeed  float64 `json:"windSpeed"`
 	WindGust   float64 `json:"windGust"`
 	PrecipRate float64 `json:"precipRate"`
+	DewPoint   float64 `json:"dewpt"`
+	Pressure   float64 `json:"pressure"`
 }
 
 func (r *RemoteAPIAdapter) fetchWU(ctx context.Context, city config.CityConfig) (*weather.WeatherData, error) {
@@ -327,6 +338,9 @@ func (r *RemoteAPIAdapter) fetchWU(ctx context.Context, city config.CityConfig) 
 		Humidity:      int(obs.Humidity),
 		WindSpeed:     obs.Metric.WindSpeed,
 		WindDirection: obs.WindDir,
+		WindGust:      obs.Metric.WindGust,
+		DewPoint:      obs.Metric.DewPoint,
+		Pressure:      obs.Metric.Pressure,
 	}, nil
 }
 
@@ -438,6 +452,10 @@ type ewwResponse struct {
 	Humidity     int     `json:"Humidity"`
 	WindSpeed    float64 `json:"WindSpeed"`
 	WindDir      int     `json:"WindDir"`
+	WindGust     float64 `json:"WindGust"`
+	DewPt        float64 `json:"DewPt"`
+	Pressure     float64 `json:"Pressure"`
+	UV           float64 `json:"UV"`
 }
 
 func (r *RemoteAPIAdapter) fetchEWW(ctx context.Context, city config.CityConfig) (*weather.WeatherData, error) {
@@ -506,6 +524,10 @@ func (r *RemoteAPIAdapter) fetchEWW(ctx context.Context, city config.CityConfig)
 		Humidity:      eww.Humidity,
 		WindSpeed:     eww.WindSpeed,
 		WindDirection: eww.WindDir,
+		WindGust:      eww.WindGust,
+		DewPoint:      eww.DewPt,
+		Pressure:      eww.Pressure,
+		UVIndex:       eww.UV,
 	}, nil
 }
 

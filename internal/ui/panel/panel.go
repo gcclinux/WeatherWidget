@@ -31,6 +31,11 @@ type CityPanel struct {
 	cityText      *canvas.Text
 	timeText      *canvas.Text
 	dateText      *canvas.Text
+	windGustText  *canvas.Text
+	dewPointText  *canvas.Text
+	pressureText  *canvas.Text
+	uvIndexText   *canvas.Text
+	windDirText   *canvas.Text
 	separatorRow  *fyne.Container
 	errorIcon     *canvas.Image
 	lastData      *weather.WeatherData  // cached for re-render on unit change
@@ -100,6 +105,26 @@ func NewCityPanel(lm *i18n.LocaleManager) *CityPanel {
 	p.humidWindText.TextSize = 12
 	p.humidWindText.Alignment = fyne.TextAlignCenter
 
+	p.windGustText = canvas.NewText("", theme.ForegroundColor())
+	p.windGustText.TextSize = 12
+	p.windGustText.Alignment = fyne.TextAlignCenter
+
+	p.dewPointText = canvas.NewText("", theme.ForegroundColor())
+	p.dewPointText.TextSize = 12
+	p.dewPointText.Alignment = fyne.TextAlignCenter
+
+	p.pressureText = canvas.NewText("", theme.ForegroundColor())
+	p.pressureText.TextSize = 12
+	p.pressureText.Alignment = fyne.TextAlignCenter
+
+	p.uvIndexText = canvas.NewText("", theme.ForegroundColor())
+	p.uvIndexText.TextSize = 12
+	p.uvIndexText.Alignment = fyne.TextAlignCenter
+
+	p.windDirText = canvas.NewText("", theme.ForegroundColor())
+	p.windDirText.TextSize = 12
+	p.windDirText.Alignment = fyne.TextAlignCenter
+
 	p.timeText = canvas.NewText(p.translate("panel.placeholder.time", "--:--:--"), theme.ForegroundColor())
 	p.timeText.TextSize = 20
 	p.timeText.TextStyle = fyne.TextStyle{Bold: true}
@@ -145,6 +170,21 @@ func (p *CityPanel) buildLayout() *fyne.Container {
 	}
 	if p.displayFields.ShowHumidWind {
 		objects = append(objects, container.NewCenter(p.humidWindText))
+	}
+	if p.displayFields.ShowWindDir {
+		objects = append(objects, container.NewCenter(p.windDirText))
+	}
+	if p.displayFields.ShowWindGust {
+		objects = append(objects, container.NewCenter(p.windGustText))
+	}
+	if p.displayFields.ShowDewPoint {
+		objects = append(objects, container.NewCenter(p.dewPointText))
+	}
+	if p.displayFields.ShowPressure {
+		objects = append(objects, container.NewCenter(p.pressureText))
+	}
+	if p.displayFields.ShowUVIndex {
+		objects = append(objects, container.NewCenter(p.uvIndexText))
 	}
 
 	objects = append(objects, layout.NewSpacer())
@@ -209,6 +249,21 @@ func (p *CityPanel) Update(data *weather.WeatherData, unit config.TemperatureUni
 
 	p.cityText.Text = weather.FormatCityRegion(data.CityName, data.Region)
 	p.cityText.Refresh()
+
+	p.windGustText.Text = weather.FormatWindGust(data.WindGust)
+	p.windGustText.Refresh()
+
+	p.dewPointText.Text = weather.FormatDewPoint(data.DewPoint)
+	p.dewPointText.Refresh()
+
+	p.pressureText.Text = weather.FormatPressure(data.Pressure)
+	p.pressureText.Refresh()
+
+	p.uvIndexText.Text = weather.FormatUVIndex(data.UVIndex)
+	p.uvIndexText.Refresh()
+
+	p.windDirText.Text = weather.FormatWindDir(data.WindDirection)
+	p.windDirText.Refresh()
 
 	// Hide error indicator on successful update.
 	p.errorIcon.Hide()

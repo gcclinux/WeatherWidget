@@ -1080,10 +1080,21 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 		chkTime.Checked = df.ShowTime
 		chkDate := widget.NewCheck(u.t("settings.display.date"), nil)
 		chkDate.Checked = df.ShowDate
+		chkWindGust := widget.NewCheck(u.t("settings.display.windGust"), nil)
+		chkWindGust.Checked = df.ShowWindGust
+		chkDewPoint := widget.NewCheck(u.t("settings.display.dewPoint"), nil)
+		chkDewPoint.Checked = df.ShowDewPoint
+		chkPressure := widget.NewCheck(u.t("settings.display.pressure"), nil)
+		chkPressure.Checked = df.ShowPressure
+		chkUVIndex := widget.NewCheck(u.t("settings.display.uvIndex"), nil)
+		chkUVIndex.Checked = df.ShowUVIndex
+		chkWindDir := widget.NewCheck(u.t("settings.display.windDir"), nil)
+		chkWindDir.Checked = df.ShowWindDir
 
 		displayChecks := container.NewGridWithColumns(4,
 			chkCity, chkIcon, chkTemp, chkDesc,
-			chkHumidWind, chkTime, chkDate,
+			chkHumidWind, chkTime, chkDate, chkWindDir,
+			chkWindGust, chkDewPoint, chkPressure, chkUVIndex,
 		)
 
 		// Live preview panels for the Appearance tab.
@@ -1108,6 +1119,11 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 				ShowHumidWind: chkHumidWind.Checked,
 				ShowTime:      chkTime.Checked,
 				ShowDate:      chkDate.Checked,
+				ShowWindGust:  chkWindGust.Checked,
+				ShowDewPoint:  chkDewPoint.Checked,
+				ShowPressure:  chkPressure.Checked,
+				ShowUVIndex:   chkUVIndex.Checked,
+				ShowWindDir:   chkWindDir.Checked,
 			}
 			state.displayFields = fields
 			for _, p := range appearancePreviewPanels {
@@ -1123,6 +1139,11 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 		chkHumidWind.OnChanged = func(_ bool) { applyDisplayPreview() }
 		chkTime.OnChanged = func(_ bool) { applyDisplayPreview() }
 		chkDate.OnChanged = func(_ bool) { applyDisplayPreview() }
+		chkWindGust.OnChanged = func(_ bool) { applyDisplayPreview() }
+		chkDewPoint.OnChanged = func(_ bool) { applyDisplayPreview() }
+		chkPressure.OnChanged = func(_ bool) { applyDisplayPreview() }
+		chkUVIndex.OnChanged = func(_ bool) { applyDisplayPreview() }
+		chkWindDir.OnChanged = func(_ bool) { applyDisplayPreview() }
 
 		// Fetch live weather data for appearance preview panels.
 		go func(cities []config.CityConfig, panels []*panel.CityPanel, unit config.TemperatureUnit) {

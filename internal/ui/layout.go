@@ -20,6 +20,7 @@ const (
 	heightSeparator = 8  // separator line + spacing
 	heightPadding   = 16 // container padding (top + bottom)
 	heightSpacers   = 10 // spacers between sections
+	heightInfoRow   = 18 // generic info row height (wind gust, dew point, pressure, UV, wind dir)
 )
 
 // CalculateLayout computes the widget dimensions for the given number of city panels.
@@ -50,6 +51,21 @@ func CalculateLayoutWithFields(cityCount int, df *config.DisplayFields) (width, 
 	}
 	if df.ShowHumidWind {
 		h += heightHumidWind
+	}
+	if df.ShowWindDir {
+		h += heightInfoRow
+	}
+	if df.ShowWindGust {
+		h += heightInfoRow
+	}
+	if df.ShowDewPoint {
+		h += heightInfoRow
+	}
+	if df.ShowPressure {
+		h += heightInfoRow
+	}
+	if df.ShowUVIndex {
+		h += heightInfoRow
 	}
 	if df.ShowTime || df.ShowDate {
 		h += heightSeparator

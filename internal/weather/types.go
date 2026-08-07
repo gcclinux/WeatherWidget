@@ -48,6 +48,10 @@ type WeatherData struct {
 	Humidity      int       `json:"humidity"`      // Percentage (0–100)
 	WindSpeed     float64   `json:"windSpeed"`     // km/h
 	WindDirection int       `json:"windDirection"` // Degrees (0–360)
+	WindGust      float64   `json:"windGust"`      // km/h; 0 if not available
+	DewPoint      float64   `json:"dewPoint"`      // Celsius; 0 if not available
+	Pressure      float64   `json:"pressure"`      // hPa; 0 if not available
+	UVIndex       float64   `json:"uvIndex"`       // 0–11+; 0 if not available
 }
 
 // WeatherProvider defines the interface for fetching weather data

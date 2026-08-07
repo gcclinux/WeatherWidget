@@ -56,6 +56,11 @@ type DisplayFields struct {
 	ShowHumidWind bool `json:"showHumidWind"`
 	ShowTime      bool `json:"showTime"`
 	ShowDate      bool `json:"showDate"`
+	ShowWindGust  bool `json:"showWindGust"`
+	ShowDewPoint  bool `json:"showDewPoint"`
+	ShowPressure  bool `json:"showPressure"`
+	ShowUVIndex   bool `json:"showUVIndex"`
+	ShowWindDir   bool `json:"showWindDir"`
 }
 
 // DefaultDisplayFields returns a DisplayFields with all elements visible.
@@ -68,6 +73,11 @@ func DefaultDisplayFields() *DisplayFields {
 		ShowHumidWind: true,
 		ShowTime:      true,
 		ShowDate:      true,
+		ShowWindGust:  false,
+		ShowDewPoint:  false,
+		ShowPressure:  false,
+		ShowUVIndex:   false,
+		ShowWindDir:   false,
 	}
 }
 
