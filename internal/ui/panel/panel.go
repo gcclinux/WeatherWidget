@@ -201,7 +201,7 @@ func (p *CityPanel) Update(data *weather.WeatherData, unit config.TemperatureUni
 	p.tempText.Text = weather.FormatTemperature(data.Temperature, unit)
 	p.tempText.Refresh()
 
-	p.descText.Text = weather.FormatDescription(data.Description)
+	p.descText.Text = weather.FormatDescription(data.Description, p.lm)
 	p.descText.Refresh()
 
 	p.humidWindText.Text = weather.FormatHumidityWind(data.Humidity, data.WindSpeed, data.WindDirection)

@@ -84,9 +84,21 @@ func FormatDate(t time.Time, timezone string, lm *i18n.LocaleManager) string {
 	return t.In(loc).Format(dateFormat)
 }
 
-// FormatDescription title-cases a weather description string.
-// e.g. "clear sky" → "Clear Sky", "broken clouds" → "Broken Clouds"
-func FormatDescription(desc string) string {
+// FormatDescription returns the translated weather description for the given freetext.
+// If lm is nil or no translation key matches, it falls back to title-casing the string.
+// e.g. "clear sky" → "Clear Sky" (en) / "Céu limpo" (pt-BR)
+func FormatDescription(desc string, lm *i18n.LocaleManager) string {
+	if desc == "" {
+		return ""
+	}
+	normalized := strings.ToLower(strings.TrimSpace(desc))
+	key := "weather.condition." + strings.ReplaceAll(normalized, " ", "_")
+	if lm != nil {
+		translated := lm.T(key)
+		if translated != key {
+			return translated
+		}
+	}
 	return strings.Title(desc)
 }
 

@@ -291,3 +291,23 @@ func TestBuildConfigFromUI_TemperatureUnit_InvalidNormalizesToCelsius(t *testing
 		t.Errorf("TemperatureUnit = %q, want %q (empty should normalize to celsius)", cfg.TemperatureUnit, config.TemperatureUnitCelsius)
 	}
 }
+
+func TestBuildConfigFromUI_CustomPosition(t *testing.T) {
+	cx, cy := 500, 300
+	state := &settingsState{
+		cities:       []config.CityConfig{{Name: "London", Region: "UK"}},
+		selectedLang: "en-GB",
+		customX:      &cx,
+		customY:      &cy,
+	}
+
+	cfg := buildConfigFromUIHelper(t, state)
+
+	if cfg.CustomX == nil || *cfg.CustomX != 500 {
+		t.Errorf("CustomX = %v, want 500", cfg.CustomX)
+	}
+	if cfg.CustomY == nil || *cfg.CustomY != 300 {
+		t.Errorf("CustomY = %v, want 300", cfg.CustomY)
+	}
+}
+

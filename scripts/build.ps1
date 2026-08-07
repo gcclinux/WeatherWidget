@@ -2,12 +2,12 @@
 # Usage: .\scripts\build.ps1 [build|test|clean|vet]
 
 param(
-    [Parameter(Position=0)]
+    [Parameter(Position = 0)]
     [ValidateSet("build", "test", "clean", "vet")]
     [string]$Target = "build"
 )
 
-$BinaryName = "weatherwidget.exe"
+$BinaryName = ".\scripts\build\weatherwidget.exe"
 $CmdPath = "./cmd/weatherwidget/"
 
 # Read version from the release file.
@@ -50,7 +50,8 @@ switch ($Target) {
         go build -ldflags="$LdFlags" -o $BinaryName $CmdPath
         if ($LASTEXITCODE -eq 0) {
             Write-Host "Build successful: $BinaryName (v$Version)"
-        } else {
+        }
+        else {
             Write-Host "Build failed" -ForegroundColor Red
             exit 1
         }
@@ -64,7 +65,8 @@ switch ($Target) {
         if (Test-Path $BinaryName) {
             Remove-Item $BinaryName
             Write-Host "Removed $BinaryName"
-        } else {
+        }
+        else {
             Write-Host "Nothing to clean"
         }
     }

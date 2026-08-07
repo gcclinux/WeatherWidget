@@ -164,7 +164,7 @@ func (p *cityPanel) update(d *weather.WeatherData, unit config.TemperatureUnit) 
 
 	p.cityLbl.SetText(d.CityName + ", " + d.Region)
 	p.tempLbl.SetText(weather.FormatTemperature(d.Temperature, unit))
-	p.descLbl.SetText(weather.FormatDescription(d.Description))
+	p.descLbl.SetText(weather.FormatDescription(d.Description, p.lm))
 	p.infoLbl.SetText(weather.FormatHumidityWind(d.Humidity, d.WindSpeed, d.WindDirection))
 
 	// Load weather icon.

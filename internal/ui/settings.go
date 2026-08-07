@@ -71,6 +71,8 @@ type settingsState struct {
 	previewPanels    []*panel.CityPanel     // live preview panels in the About tab
 	appearancePanels []*panel.CityPanel     // live preview panels in the Appearance tab
 	displayFields    *config.DisplayFields  // current display field checkbox state
+	customX          *int                   // pending custom X position
+	customY          *int                   // pending custom Y position
 }
 
 // t is a helper that returns the translated string for the given key.
@@ -123,6 +125,8 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 		selectedLang:  cfg.Locale,
 		selectedUnit:  config.NormalizeTemperatureUnit(cfg.TemperatureUnit),
 		displayFields: cfg.GetDisplayFields(),
+		customX:       cfg.CustomX,
+		customY:       cfg.CustomY,
 	}
 	if state.selectedLang == "" {
 		state.selectedLang = "en-GB"
@@ -295,10 +299,104 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 		var monitorSelect *widget.Select
 		var positionItems []fyne.CanvasObject
 
+		var curX, curY int
+		if state.customX != nil && state.customY != nil {
+			curX, curY = *state.customX, *state.customY
+		} else {
+			curX, curY = u.GetPosition()
+		}
+
+		xEntry := widget.NewEntry()
+		xEntry.SetText(strconv.Itoa(curX))
+
+		yEntry := widget.NewEntry()
+		yEntry.SetText(strconv.Itoa(curY))
+
+		moveAndSaveCustom := func(x, y int) {
+			u.SetPosition(x, y)
+			cx, cy := x, y
+			state.customX = &cx
+			state.customY = &cy
+			xEntry.SetText(strconv.Itoa(x))
+			yEntry.SetText(strconv.Itoa(y))
+		}
+
+		applyPosBtn := widget.NewButton("Apply", func() {
+			x, errX := strconv.Atoi(strings.TrimSpace(xEntry.Text))
+			y, errY := strconv.Atoi(strings.TrimSpace(yEntry.Text))
+			if errX == nil && errY == nil {
+				moveAndSaveCustom(x, y)
+			}
+		})
+		xEntry.OnSubmitted = func(_ string) { applyPosBtn.OnTapped() }
+		yEntry.OnSubmitted = func(_ string) { applyPosBtn.OnTapped() }
+
+		const nudge = 10
+		leftBtn := widget.NewButton("◄", func() {
+			x, errX := strconv.Atoi(strings.TrimSpace(xEntry.Text))
+			y, errY := strconv.Atoi(strings.TrimSpace(yEntry.Text))
+			if errX != nil || errY != nil {
+				x, y = u.GetPosition()
+			}
+			moveAndSaveCustom(x-nudge, y)
+		})
+		upBtn := widget.NewButton("▲", func() {
+			x, errX := strconv.Atoi(strings.TrimSpace(xEntry.Text))
+			y, errY := strconv.Atoi(strings.TrimSpace(yEntry.Text))
+			if errX != nil || errY != nil {
+				x, y = u.GetPosition()
+			}
+			moveAndSaveCustom(x, y-nudge)
+		})
+		downBtn := widget.NewButton("▼", func() {
+			x, errX := strconv.Atoi(strings.TrimSpace(xEntry.Text))
+			y, errY := strconv.Atoi(strings.TrimSpace(yEntry.Text))
+			if errX != nil || errY != nil {
+				x, y = u.GetPosition()
+			}
+			moveAndSaveCustom(x, y+nudge)
+		})
+		rightBtn := widget.NewButton("►", func() {
+			x, errX := strconv.Atoi(strings.TrimSpace(xEntry.Text))
+			y, errY := strconv.Atoi(strings.TrimSpace(yEntry.Text))
+			if errX != nil || errY != nil {
+				x, y = u.GetPosition()
+			}
+			moveAndSaveCustom(x+nudge, y)
+		})
+
+		xEntrySizer := canvas.NewRectangle(color.Transparent)
+		xEntrySizer.SetMinSize(fyne.NewSize(70, 0))
+		xEntryContainer := container.NewMax(xEntrySizer, xEntry)
+
+		yEntrySizer := canvas.NewRectangle(color.Transparent)
+		yEntrySizer.SetMinSize(fyne.NewSize(70, 0))
+		yEntryContainer := container.NewMax(yEntrySizer, yEntry)
+
+		xIcon := widget.NewIcon(theme.ComputerIcon())
+		yIcon := widget.NewIcon(theme.ComputerIcon())
+
+		posRow := container.NewHBox(
+			xIcon,
+			widget.NewLabel("X:"),
+			xEntryContainer,
+			widget.NewLabel("  "),
+			yIcon,
+			widget.NewLabel("Y:"),
+			yEntryContainer,
+			widget.NewLabel("  "),
+			leftBtn,
+			upBtn,
+			downBtn,
+			rightBtn,
+			widget.NewLabel("  "),
+			applyPosBtn,
+		)
+
 		if runtime.GOOS == "linux" {
 			noticeLabel := widget.NewLabel(u.t("settings.position.linuxNotice"))
 			noticeLabel.Wrapping = fyne.TextWrapWord
-			positionItems = []fyne.CanvasObject{noticeLabel}
+			positionItems = []fyne.CanvasObject{noticeLabel, posRow}
 		} else {
 			topLeftLabel := u.t("settings.position.topLeft")
 			topRightLabel := u.t("settings.position.topRight")
@@ -350,6 +448,11 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 					}
 				}
 				u.SetCorner(pos, monIdx)
+				state.customX = nil
+				state.customY = nil
+				nx, ny := u.GetPosition()
+				xEntry.SetText(strconv.Itoa(nx))
+				yEntry.SetText(strconv.Itoa(ny))
 			}
 			positionRadio.OnChanged = func(_ string) { applyPositionPreview() }
 			monitorSelect.OnChanged = func(_ string) { applyPositionPreview() }
@@ -360,6 +463,7 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 				monitorLabel.TextStyle = fyne.TextStyle{Bold: true}
 				positionItems = append(positionItems, monitorLabel, monitorSelect)
 			}
+			positionItems = append(positionItems, posRow)
 		}
 
 		// ── Transparency ─────────────────────────────────────────────────────
@@ -1237,10 +1341,13 @@ func buildConfigFromUI(
 	if opacity == 0 {
 		opacity = 100
 	}
-	// When the user picks a corner position, clear any previous custom
-	// drag coordinates so applyPosition uses SetCorner instead.
+	// Custom coordinates logic: if state.customX/Y are set, use them;
+	// otherwise if no corner was selected, preserve existing custom coordinates.
 	var customX, customY *int
-	if (positionRadio == nil || positionRadio.Selected == "") && current.CustomX != nil && current.CustomY != nil {
+	if state.customX != nil && state.customY != nil {
+		customX = state.customX
+		customY = state.customY
+	} else if (positionRadio == nil || positionRadio.Selected == "") && current.CustomX != nil && current.CustomY != nil {
 		// No corner selected — preserve existing custom coordinates.
 		customX = current.CustomX
 		customY = current.CustomY

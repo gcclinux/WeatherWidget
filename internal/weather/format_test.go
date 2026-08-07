@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"weatherwidget/internal/config"
+	"weatherwidget/internal/i18n"
 )
 
 func TestFormatTemperature(t *testing.T) {
@@ -176,5 +177,49 @@ func TestMapConditionToIcon_NighttimeSwaps(t *testing.T) {
 		if got != code {
 			t.Errorf("MapConditionToIcon(%q, 21:00) = %q, want %q", code, got, code)
 		}
+	}
+}
+
+func TestFormatDescription(t *testing.T) {
+	lm, err := i18n.NewLocaleManager(i18n.LocaleFS)
+	if err != nil {
+		t.Fatalf("NewLocaleManager error = %v", err)
+	}
+
+	tests := []struct {
+		desc     string
+		locale   string
+		expected string
+	}{
+		{"clear sky", "pt-BR", "Céu limpo"},
+		{"overcast clouds", "de-DE", "Bedeckt"},
+		{"broken clouds", "es-ES", "Nubes dispersas"},
+		{"few clouds", "fr-FR", "Peu de nuages"},
+		{"scattered clouds", "it-IT", "Nuvole sparse"},
+		{"light rain", "nl-NL", "Lichte regen"},
+		{"moderate rain", "pl-PL", "Umiarkowany deszcz"},
+		{"heavy intensity rain", "tr-TR", "Kuvvetli yağmurlu"},
+		{"very heavy rain", "en-GB", "Very Heavy Rain"},
+		// Mixed case input
+		{"CLEAR SKY", "pt-BR", "Céu limpo"},
+		{"  light rain  ", "en-GB", "Light Rain"},
+		// Fallback for unknown condition
+		{"unusual hurricane", "pt-BR", "Unusual Hurricane"},
+		{"", "pt-BR", ""},
+	}
+
+	for _, tc := range tests {
+		if tc.locale != "" {
+			_ = lm.SetLocale(tc.locale)
+		}
+		got := FormatDescription(tc.desc, lm)
+		if got != tc.expected {
+			t.Errorf("FormatDescription(%q, %s) = %q, want %q", tc.desc, tc.locale, got, tc.expected)
+		}
+	}
+
+	// Test with nil LocaleManager
+	if got := FormatDescription("clear sky", nil); got != "Clear Sky" {
+		t.Errorf("FormatDescription(clear sky, nil) = %q, want %q", got, "Clear Sky")
 	}
 }

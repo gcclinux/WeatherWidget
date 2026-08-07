@@ -457,9 +457,10 @@ const (
 // the current provider state which is not available here).
 func determineSettingsSaveAction(oldCfg, newCfg *config.Config, providerChanged bool) settingsSaveActionType {
 	unitChanged := oldCfg.TemperatureUnit != newCfg.TemperatureUnit
+	localeChanged := oldCfg.Locale != newCfg.Locale
 	citiesChanged := len(oldCfg.Cities) != len(newCfg.Cities) || !sameCities(oldCfg.Cities, newCfg.Cities)
 
-	if unitChanged && !citiesChanged && !providerChanged {
+	if (unitChanged || localeChanged) && !citiesChanged && !providerChanged {
 		return settingsSaveActionRerender
 	}
 	return settingsSaveActionFetch

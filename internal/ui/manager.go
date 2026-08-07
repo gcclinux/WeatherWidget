@@ -64,7 +64,7 @@ func (u *UIManager) ShowWidget(cities []config.CityConfig) {
 	u.panels = make([]*panel.CityPanel, count)
 	objects := make([]fyne.CanvasObject, count)
 	for i := 0; i < count; i++ {
-		p := panel.NewCityPanel(nil)
+		p := panel.NewCityPanel(u.lm)
 		u.panels[i] = p
 		objects[i] = p.Container()
 	}
