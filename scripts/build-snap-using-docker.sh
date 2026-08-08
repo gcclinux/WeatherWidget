@@ -3,10 +3,13 @@ set -e
 
 # WeatherWidget Snap Build Script (Docker Container Build)
 # Builds a strict-confinement Snap package for Linux using GTK3 native binary
-# inside an Ubuntu Core24 (Ubuntu 24.04) Docker container.
+# inside the official Canonical Snapcraft OCI image (ghcr.io/canonical/snapcraft:8_core24).
 #
 # All build dependencies, tools, and headers (GTK3, AppIndicator, Go)
 # are installed inside the Docker container, isolating the host system.
+#
+# NOTE: This does NOT use the gnome extension (broken in container builds).
+# Instead, GTK3 libraries are bundled directly via stage-packages.
 
 APP_NAME="WeatherWidget"
 BINARY_NAME="weatherwidget"
@@ -84,7 +87,7 @@ description: |
 
 confinement: strict
 base: core24
-version: "$VERSION"
+adopt-info: $BINARY_NAME
 
 license: AGPL-3.0
 source-code: https://github.com/gcclinux/weatherwidget
@@ -93,14 +96,52 @@ contact: https://easysmartapps.co.uk/contact
 issues: https://github.com/gcclinux/weatherwidget/issues
 donation: https://buy.stripe.com/bJe3cvaJOa650fQ8cPdZ603
 
+plugs:
+  gnome-46-2404:
+    interface: content
+    target: \$SNAP/gnome-platform
+    default-provider: gnome-46-2404
+  gtk-3-themes:
+    interface: content
+    target: \$SNAP/data-dir/themes
+    default-provider: gtk-common-themes
+  icon-themes:
+    interface: content
+    target: \$SNAP/data-dir/icons
+    default-provider: gtk-common-themes
+  sound-themes:
+    interface: content
+    target: \$SNAP/data-dir/sounds
+    default-provider: gtk-common-themes
+
+environment:
+  # Library paths
+  LD_LIBRARY_PATH: \$SNAP/gnome-platform/usr/lib/x86_64-linux-gnu:\$SNAP/gnome-platform/usr/lib:\$SNAP/usr/lib/x86_64-linux-gnu:\$SNAP/usr/lib:\$LD_LIBRARY_PATH
+  # GTK and GDK configuration
+  GTK_PATH: \$SNAP/gnome-platform/usr/lib/x86_64-linux-gnu/gtk-3.0
+  GTK_EXE_PREFIX: \$SNAP/gnome-platform/usr
+  GTK_IM_MODULE_DIR: \$SNAP/gnome-platform/usr/lib/x86_64-linux-gnu/gtk-3.0/3.0.0/immodules
+  GTK_IM_MODULE_FILE: \$SNAP/gnome-platform/usr/lib/x86_64-linux-gnu/gtk-3.0/3.0.0/immodules.cache
+  GDK_PIXBUF_MODULE_FILE: \$SNAP/gnome-platform/usr/lib/x86_64-linux-gnu/gdk-pixbuf-2.0/2.10.0/loaders.cache
+  # XDG paths for themes, icons, and data
+  XDG_DATA_DIRS: \$SNAP/data-dir:\$SNAP/gnome-platform/usr/share:\$XDG_DATA_DIRS
+  XDG_CONFIG_DIRS: \$SNAP/gnome-platform/etc/xdg:\$XDG_CONFIG_DIRS
+  # Font configuration
+  FONTCONFIG_PATH: \$SNAP/gnome-platform/etc/fonts
+  FONTCONFIG_FILE: \$SNAP/gnome-platform/etc/fonts/fonts.conf
+  # GIO/GLib
+  GIO_MODULE_DIR: \$SNAP/gnome-platform/usr/lib/x86_64-linux-gnu/gio/modules
+  GI_TYPELIB_PATH: \$SNAP/gnome-platform/usr/lib/x86_64-linux-gnu/girepository-1.0:\$SNAP/usr/lib/x86_64-linux-gnu/girepository-1.0
+  # Locale
+  LOCPATH: \$SNAP/gnome-platform/usr/lib/locale
+  # Force X11 for window positioning
+  GDK_BACKEND: x11
+
 apps:
   $BINARY_NAME:
     command: bin/$BINARY_NAME
     desktop: meta/gui/$BINARY_NAME.desktop
     autostart: $BINARY_NAME.desktop
-    extensions: [gnome]
-    environment:
-      GDK_BACKEND: x11
     plugs:
       - home
       - network
@@ -112,6 +153,24 @@ apps:
       - unity7
       - opengl
       - gsettings
+
+layout:
+  /usr/lib/x86_64-linux-gnu/gdk-pixbuf-2.0:
+    bind: \$SNAP/gnome-platform/usr/lib/x86_64-linux-gnu/gdk-pixbuf-2.0
+  /usr/lib/x86_64-linux-gnu/gtk-3.0:
+    bind: \$SNAP/gnome-platform/usr/lib/x86_64-linux-gnu/gtk-3.0
+  /usr/share/glib-2.0:
+    bind: \$SNAP/gnome-platform/usr/share/glib-2.0
+  /usr/share/icons:
+    bind: \$SNAP/data-dir/icons
+  /usr/share/mime:
+    bind: \$SNAP/gnome-platform/usr/share/mime
+  /usr/share/xml/iso-codes:
+    bind: \$SNAP/gnome-platform/usr/share/xml/iso-codes
+  /etc/fonts:
+    bind: \$SNAP/gnome-platform/etc/fonts
+  /etc/gtk-3.0:
+    bind: \$SNAP/gnome-platform/etc/gtk-3.0
 
 parts:
   $BINARY_NAME:
@@ -132,21 +191,26 @@ parts:
       - libayatana-indicator3-7
       - libdbusmenu-glib4
       - libdbusmenu-gtk3-4
-    prime:
-      - -usr/share/icons/Humanity
-      - -usr/share/icons/ubuntu-mono-dark
-      - -usr/share/icons/ubuntu-mono-light
-      - "*"
+      - librsvg2-common
+      - shared-mime-info
     override-build: |
-      git config --global --add safe.directory '*' 2>/dev/null || true
+      VERSION=\$(cat release 2>/dev/null | tr -d '[:space:]')
+      if [ -z "\$VERSION" ]; then
+        VERSION="dev"
+      fi
+      craftctl set-version "\$VERSION" 2>/dev/null || snapcraftctl set-version "\$VERSION"
       GO_BIN=\$(command -v go || echo "/usr/local/go/bin/go")
       DEST_DIR="\${CRAFT_PART_INSTALL:-\$SNAPCRAFT_PART_INSTALL}"
       mkdir -p "\$DEST_DIR/bin"
+      mkdir -p "\$DEST_DIR/data-dir/themes"
+      mkdir -p "\$DEST_DIR/data-dir/icons"
+      mkdir -p "\$DEST_DIR/data-dir/sounds"
+      mkdir -p "\$DEST_DIR/gnome-platform"
       unset CFLAGS CPPFLAGS LDFLAGS
       export CGO_CFLAGS="-Wno-deprecated-declarations \$(pkg-config --cflags gtk+-3.0 ayatana-appindicator3-0.1 2>/dev/null)"
       export CGO_LDFLAGS="\$(pkg-config --libs gtk+-3.0 ayatana-appindicator3-0.1 2>/dev/null)"
       CGO_ENABLED=1 \$GO_BIN build -buildvcs=false -p 1 -v \\
-        -ldflags="-s -w -X main.version=$VERSION" \\
+        -ldflags="-s -w -X main.version=\$VERSION" \\
         -o "\$DEST_DIR/bin/$BINARY_NAME" \\
         $GTK_CMD_PATH
 EOF
@@ -154,35 +218,21 @@ EOF
 echo "    Snap metadata written."
 echo ""
 
-# 6. Execute build in Ubuntu Core24 Docker container
-echo "==> Executing Snapcraft inside Ubuntu Core24 Docker container..."
-cd "$PROJECT_ROOT"
-
-# Ensure host command-chain directory exists and is writable
-mkdir -p /tmp/snap-command-chain
-
-SNAPCRAFT_BIN="/snap/snapcraft/current/bin/snapcraft"
-if [ ! -x "$SNAPCRAFT_BIN" ]; then
-    SNAPCRAFT_BIN="snapcraft"
+# 6. Clean previous build artifacts to avoid stale state
+echo "==> Cleaning previous snapcraft build state..."
+# Use docker to remove root-owned build artifacts from prior runs
+if [ -d "$PROJECT_ROOT/parts" ] || [ -d "$PROJECT_ROOT/stage" ] || [ -d "$PROJECT_ROOT/prime" ]; then
+    docker run --rm -v "$PROJECT_ROOT":/build -w /build ubuntu:24.04 rm -rf parts stage prime
 fi
 
+# 7. Execute build using official Canonical Snapcraft rock image
+echo "==> Executing Snapcraft inside Docker container..."
+cd "$PROJECT_ROOT"
+
 docker run --rm \
-    -v /snap:/snap:ro \
-    -v /tmp/snap-command-chain:/snap/command-chain \
-    -v /run/snapd.socket:/run/snapd.socket \
-    -v "$PROJECT_ROOT":/build \
-    -w /build \
-    ubuntu:24.04 bash -c "
-        set -e
-        export PATH=\"/snap/snapcraft/current/libexec/snapcraft:/snap/bin:\$PATH\"
-        apt-get update -y
-        apt-get install -y golang gcc g++ pkg-config \
-            libgtk-3-dev libglib2.0-dev libcairo2-dev \
-            libayatana-appindicator3-dev squashfs-tools ca-certificates git
-        git config --global --add safe.directory '*' 2>/dev/null || true
-        apt-get update -y
-        $SNAPCRAFT_BIN pack --destructive-mode \"\$@\"
-    "
+    -v "$PROJECT_ROOT":/project \
+    ghcr.io/canonical/snapcraft:8_core24 \
+    pack --verbosity=brief
 
 # Adjust file ownership of artifacts back to host user if needed
 HOST_UID=$(id -u)

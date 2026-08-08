@@ -131,7 +131,7 @@ parts:
       unset CFLAGS CPPFLAGS LDFLAGS
       export CGO_CFLAGS="-Wno-deprecated-declarations $(pkg-config --cflags gtk+-3.0 ayatana-appindicator3-0.1 2>/dev/null)"
       export CGO_LDFLAGS="$(pkg-config --libs gtk+-3.0 ayatana-appindicator3-0.1 2>/dev/null)"
-      CGO_ENABLED=1 $GO_BIN build -p 1 -v \
+      CGO_ENABLED=1 $GO_BIN build -buildvcs=false -p 1 -v \
         -ldflags="-s -w -X main.version=$VERSION" \
         -o "$DEST_DIR/bin/weatherwidget" \
         ./cmd/weatherwidget-gtk/
