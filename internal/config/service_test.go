@@ -79,6 +79,7 @@ func TestSaveAndLoad_RoundTrip(t *testing.T) {
 		CornerPosition:  "top-left",
 		Locale:          "en-GB",
 		TemperatureUnit: TemperatureUnitCelsius,
+		WindSpeedUnit:   WindSpeedUnitKmh,
 		DatabaseConfig: &DatabaseConfig{
 			Host:     "localhost",
 			Port:     5432,
@@ -156,6 +157,7 @@ func TestSave_AtomicWrite_NoPartialFile(t *testing.T) {
 		CornerPosition:  "top-right",
 		Locale:          "en-GB",
 		TemperatureUnit: TemperatureUnitCelsius,
+		WindSpeedUnit:   WindSpeedUnitKmh,
 		APIConfig: &APIConfig{
 			Provider: "easyweatherwidget",
 			APIKey:   "test-key-123",

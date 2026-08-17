@@ -2,7 +2,6 @@ package panel
 
 import (
 	"fmt"
-	"image/color"
 	"log"
 	"sync"
 	"time"
@@ -10,8 +9,8 @@ import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
-	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/theme"
+	"fyne.io/fyne/v2/widget"
 
 	"weatherwidget/assets"
 	"weatherwidget/internal/config"
@@ -39,6 +38,8 @@ type CityPanel struct {
 	separatorRow  *fyne.Container
 	errorIcon     *canvas.Image
 	lastData      *weather.WeatherData  // cached for re-render on unit change
+	lastTempUnit  config.TemperatureUnit
+	lastWindUnit  config.WindSpeedUnit
 	displayFields *config.DisplayFields // current visibility config
 
 	mu         sync.Mutex
@@ -101,101 +102,111 @@ func NewCityPanel(lm *i18n.LocaleManager) *CityPanel {
 	p.descText.TextStyle = fyne.TextStyle{Italic: true}
 	p.descText.Alignment = fyne.TextAlignCenter
 
-	p.humidWindText = canvas.NewText(p.translate("panel.placeholder.humidWind", "💧 --   💨 --"), theme.ForegroundColor())
+	p.humidWindText = canvas.NewText(p.translate("panel.placeholder.humidWind", "💧 --%   🪁 -- NW"), theme.ForegroundColor())
 	p.humidWindText.TextSize = 12
+	p.humidWindText.TextStyle = fyne.TextStyle{Italic: true}
 	p.humidWindText.Alignment = fyne.TextAlignCenter
+
+	p.timeText = canvas.NewText(p.translate("panel.placeholder.time", "00:00:00"), theme.ForegroundColor())
+	p.timeText.TextSize = 22
+	p.timeText.TextStyle = fyne.TextStyle{Bold: true}
+	p.timeText.Alignment = fyne.TextAlignCenter
+
+	p.dateText = canvas.NewText(p.translate("panel.placeholder.date", "Monday, Jan 02"), theme.ForegroundColor())
+	p.dateText.TextSize = 11
+	p.dateText.Alignment = fyne.TextAlignCenter
 
 	p.windGustText = canvas.NewText("", theme.ForegroundColor())
 	p.windGustText.TextSize = 12
+	p.windGustText.TextStyle = fyne.TextStyle{Italic: true}
 	p.windGustText.Alignment = fyne.TextAlignCenter
 
 	p.dewPointText = canvas.NewText("", theme.ForegroundColor())
 	p.dewPointText.TextSize = 12
+	p.dewPointText.TextStyle = fyne.TextStyle{Italic: true}
 	p.dewPointText.Alignment = fyne.TextAlignCenter
 
 	p.pressureText = canvas.NewText("", theme.ForegroundColor())
 	p.pressureText.TextSize = 12
+	p.pressureText.TextStyle = fyne.TextStyle{Italic: true}
 	p.pressureText.Alignment = fyne.TextAlignCenter
 
 	p.uvIndexText = canvas.NewText("", theme.ForegroundColor())
 	p.uvIndexText.TextSize = 12
+	p.uvIndexText.TextStyle = fyne.TextStyle{Italic: true}
 	p.uvIndexText.Alignment = fyne.TextAlignCenter
 
 	p.windDirText = canvas.NewText("", theme.ForegroundColor())
 	p.windDirText.TextSize = 12
+	p.windDirText.TextStyle = fyne.TextStyle{Italic: true}
 	p.windDirText.Alignment = fyne.TextAlignCenter
 
-	p.timeText = canvas.NewText(p.translate("panel.placeholder.time", "--:--:--"), theme.ForegroundColor())
-	p.timeText.TextSize = 20
-	p.timeText.TextStyle = fyne.TextStyle{Bold: true}
-	p.timeText.Alignment = fyne.TextAlignCenter
+	p.separatorRow = container.NewCenter(widget.NewSeparator())
 
-	p.dateText = canvas.NewText(p.translate("panel.placeholder.date", "--/--/----"), theme.ForegroundColor())
-	p.dateText.TextSize = 12
-	p.dateText.Alignment = fyne.TextAlignCenter
-
-	// Icon row: weather icon + error icon overlay.
-	p.iconRow = container.NewHBox(layout.NewSpacer(), p.iconWidget, p.errorIcon, layout.NewSpacer())
-
-	// Separator line — use a thin colored rectangle at 70% panel width,
-	// centered between humidity/wind and time sections.
-	separator := canvas.NewRectangle(color.NRGBA{R: 255, G: 255, B: 255, A: 100})
-	separator.SetMinSize(fyne.NewSize(112, 1)) // ~70% of 160 panel width
-	p.separatorRow = container.NewCenter(separator)
-
-	// Build the initial layout with all fields visible.
-	p.container = container.NewPadded(p.buildLayout())
-
+	p.container = container.NewMax(p.buildLayout())
 	return p
 }
 
-// buildLayout constructs the VBox layout based on current displayFields.
-func (p *CityPanel) buildLayout() *fyne.Container {
+// buildLayout constructs the vertical layout hierarchy of labels.
+func (p *CityPanel) buildLayout() fyne.CanvasObject {
 	var objects []fyne.CanvasObject
 
 	if p.displayFields.ShowCity {
-		objects = append(objects, container.NewCenter(p.cityText))
+		objects = append(objects, p.cityText)
 	}
 
-	objects = append(objects, layout.NewSpacer())
+	p.iconRow = container.NewBorder(nil, nil, nil, nil, container.NewCenter(p.iconWidget), p.errorIcon)
 
 	if p.displayFields.ShowIcon {
 		objects = append(objects, p.iconRow)
 	}
+
 	if p.displayFields.ShowTemp {
-		objects = append(objects, container.NewCenter(p.tempText))
+		objects = append(objects, p.tempText)
 	}
+
 	if p.displayFields.ShowDesc {
-		objects = append(objects, container.NewCenter(p.descText))
-	}
-	if p.displayFields.ShowHumidWind {
-		objects = append(objects, container.NewCenter(p.humidWindText))
-	}
-	if p.displayFields.ShowWindDir {
-		objects = append(objects, container.NewCenter(p.windDirText))
-	}
-	if p.displayFields.ShowWindGust {
-		objects = append(objects, container.NewCenter(p.windGustText))
-	}
-	if p.displayFields.ShowDewPoint {
-		objects = append(objects, container.NewCenter(p.dewPointText))
-	}
-	if p.displayFields.ShowPressure {
-		objects = append(objects, container.NewCenter(p.pressureText))
-	}
-	if p.displayFields.ShowUVIndex {
-		objects = append(objects, container.NewCenter(p.uvIndexText))
+		objects = append(objects, p.descText)
 	}
 
-	objects = append(objects, layout.NewSpacer())
+	if p.displayFields.ShowHumidWind || p.displayFields.ShowWindDir {
+		var rowObjects []fyne.CanvasObject
+		if p.displayFields.ShowHumidWind {
+			rowObjects = append(rowObjects, p.humidWindText)
+		}
+		if p.displayFields.ShowWindDir {
+			rowObjects = append(rowObjects, p.windDirText)
+		}
+		objects = append(objects, container.NewCenter(container.NewHBox(rowObjects...)))
+	}
 
-	// Show separator only if time or date is visible.
+	// Dynamic sections: only show if fields are visible.
+	hasDynamicField := p.displayFields.ShowWindGust || p.displayFields.ShowDewPoint || p.displayFields.ShowPressure || p.displayFields.ShowUVIndex
+	if hasDynamicField {
+		var dynamicObjects []fyne.CanvasObject
+		if p.displayFields.ShowWindGust && p.windGustText.Text != "" {
+			dynamicObjects = append(dynamicObjects, p.windGustText)
+		}
+		if p.displayFields.ShowDewPoint && p.dewPointText.Text != "" {
+			dynamicObjects = append(dynamicObjects, p.dewPointText)
+		}
+		if p.displayFields.ShowPressure && p.pressureText.Text != "" {
+			dynamicObjects = append(dynamicObjects, p.pressureText)
+		}
+		if p.displayFields.ShowUVIndex && p.uvIndexText.Text != "" {
+			dynamicObjects = append(dynamicObjects, p.uvIndexText)
+		}
+
+		if len(dynamicObjects) > 0 {
+			objects = append(objects, container.New(&tightVBoxLayout{}, dynamicObjects...))
+		}
+	}
+
 	if p.displayFields.ShowTime || p.displayFields.ShowDate {
 		objects = append(objects, p.separatorRow)
-
 		var timeObjects []fyne.CanvasObject
 		if p.displayFields.ShowTime {
-			timeObjects = append(timeObjects, container.NewCenter(p.timeText))
+			timeObjects = append(timeObjects, p.timeText)
 		}
 		if p.displayFields.ShowDate {
 			timeObjects = append(timeObjects, container.NewCenter(p.dateText))
@@ -222,12 +233,14 @@ func (p *CityPanel) Container() *fyne.Container {
 	return p.container
 }
 
-// Update sets the panel content from the given weather data using the specified unit.
-func (p *CityPanel) Update(data *weather.WeatherData, unit config.TemperatureUnit) {
+// Update sets the panel content from the given weather data using the specified units.
+func (p *CityPanel) Update(data *weather.WeatherData, tempUnit config.TemperatureUnit, windUnit config.WindSpeedUnit) {
 	if data == nil {
 		return
 	}
 	p.lastData = data // cache for re-render
+	p.lastTempUnit = tempUnit
+	p.lastWindUnit = windUnit
 
 	// Update icon from embedded assets.
 	iconCode := weather.MapConditionToIcon(data.IconCode, data.LocalTime)
@@ -238,19 +251,19 @@ func (p *CityPanel) Update(data *weather.WeatherData, unit config.TemperatureUni
 	}
 
 	// Update labels.
-	p.tempText.Text = weather.FormatTemperature(data.Temperature, unit)
+	p.tempText.Text = weather.FormatTemperature(data.Temperature, tempUnit)
 	p.tempText.Refresh()
 
 	p.descText.Text = weather.FormatDescription(data.Description, p.lm)
 	p.descText.Refresh()
 
-	p.humidWindText.Text = weather.FormatHumidityWind(data.Humidity, data.WindSpeed, data.WindDirection)
+	p.humidWindText.Text = weather.FormatHumidityWind(data.Humidity, data.WindSpeed, windUnit)
 	p.humidWindText.Refresh()
 
 	p.cityText.Text = weather.FormatCityRegion(data.CityName, data.Region)
 	p.cityText.Refresh()
 
-	p.windGustText.Text = weather.FormatWindGust(data.WindGust, p.lm)
+	p.windGustText.Text = weather.FormatWindGust(data.WindGust, windUnit, p.lm)
 	p.windGustText.Refresh()
 
 	p.dewPointText.Text = weather.FormatDewPoint(data.DewPoint, p.lm)
@@ -269,13 +282,13 @@ func (p *CityPanel) Update(data *weather.WeatherData, unit config.TemperatureUni
 	p.errorIcon.Hide()
 }
 
-// Rerender re-applies the last cached WeatherData with a new unit.
+// Rerender re-applies the last cached WeatherData with new units.
 // If no data has been cached yet, this is a no-op.
-func (p *CityPanel) Rerender(unit config.TemperatureUnit) {
+func (p *CityPanel) Rerender(tempUnit config.TemperatureUnit, windUnit config.WindSpeedUnit) {
 	if p.lastData == nil {
 		return
 	}
-	p.Update(p.lastData, unit)
+	p.Update(p.lastData, tempUnit, windUnit)
 }
 
 // ShowError displays an error indicator on the panel.

@@ -423,7 +423,7 @@ func (m *manager) handleWeatherUpdate(results []weather.WeatherResult) {
 		}
 		r := results[i]
 		if r.Data != nil {
-			p.update(r.Data, m.cfg.TemperatureUnit)
+			p.update(r.Data, m.cfg.TemperatureUnit, m.cfg.WindSpeedUnit)
 		} else if r.HasError {
 			p.showError(r.IsStale)
 		}

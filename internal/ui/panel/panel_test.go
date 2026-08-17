@@ -76,7 +76,7 @@ func TestCityPanel_Update(t *testing.T) {
 		FetchedAt:   time.Now(),
 	}
 
-	p.Update(data, "celsius")
+	p.Update(data, "celsius", config.WindSpeedUnitKmh)
 
 	if p.tempText.Text != "24°C" {
 		t.Errorf("tempText = %q, want %q", p.tempText.Text, "24°C")
@@ -96,7 +96,7 @@ func TestCityPanel_UpdateNil(t *testing.T) {
 	test.NewApp()
 	p := NewCityPanel(nil)
 	// Should not panic.
-	p.Update(nil, "celsius")
+	p.Update(nil, "celsius", config.WindSpeedUnitKmh)
 	if p.tempText.Text != "--°C" {
 		t.Errorf("tempText should remain placeholder after nil update, got %q", p.tempText.Text)
 	}
@@ -139,7 +139,7 @@ func TestCityPanel_ShowErrorThenUpdate(t *testing.T) {
 		LocalTime:   time.Now(),
 		FetchedAt:   time.Now(),
 	}
-	p.Update(data, "celsius")
+	p.Update(data, "celsius", config.WindSpeedUnitKmh)
 	if p.errorIcon.Visible() {
 		t.Error("errorIcon should be hidden after successful Update")
 	}
@@ -183,7 +183,7 @@ func TestCityPanel_Rerender_NilData(t *testing.T) {
 	test.NewApp()
 	p := NewCityPanel(nil)
 	// Should not panic and should be a no-op when no data has been cached.
-	p.Rerender(config.TemperatureUnitFahrenheit)
+	p.Rerender(config.TemperatureUnitFahrenheit, config.WindSpeedUnitKmh)
 	if p.tempText.Text != "--°C" {
 		t.Errorf("tempText should remain placeholder after Rerender with nil data, got %q", p.tempText.Text)
 	}
@@ -204,13 +204,13 @@ func TestCityPanel_Rerender_WithCachedData(t *testing.T) {
 	}
 
 	// First update with Celsius.
-	p.Update(data, config.TemperatureUnitCelsius)
+	p.Update(data, config.TemperatureUnitCelsius, config.WindSpeedUnitKmh)
 	if p.tempText.Text != "20°C" {
 		t.Errorf("after Update with celsius, tempText = %q, want %q", p.tempText.Text, "20°C")
 	}
 
 	// Rerender with Fahrenheit — should use cached data without a new fetch.
-	p.Rerender(config.TemperatureUnitFahrenheit)
+	p.Rerender(config.TemperatureUnitFahrenheit, config.WindSpeedUnitKmh)
 	if p.tempText.Text != "68°F" {
 		t.Errorf("after Rerender with fahrenheit, tempText = %q, want %q", p.tempText.Text, "68°F")
 	}

@@ -117,6 +117,7 @@ func genConfig(t *rapid.T) *Config {
 		CornerPosition:  cornerPos,
 		Locale:          validLocales[rapid.IntRange(0, len(validLocales)-1).Draw(t, "localeIdx")],
 		TemperatureUnit: rapid.SampledFrom([]TemperatureUnit{TemperatureUnitCelsius, TemperatureUnitFahrenheit}).Draw(t, "temperatureUnit"),
+		WindSpeedUnit:   rapid.SampledFrom([]WindSpeedUnit{WindSpeedUnitKmh, WindSpeedUnitMph, WindSpeedUnitKnots}).Draw(t, "windSpeedUnit"),
 		APIConfig:       apiCfg,
 		DatabaseConfig:  dbCfg,
 	}
@@ -205,6 +206,25 @@ func TestTemperatureUnitToggle_Property1_ConfigRoundTrip(t *testing.T) {
 		json.Unmarshal(data, &out)
 		if out.TemperatureUnit != unit {
 			t.Fatalf("round-trip failed: got %q, want %q", out.TemperatureUnit, unit)
+		}
+	})
+}
+
+// **Feature: wind-speed-unit-toggle, Property 1: Config round-trip preserves WindSpeedUnit**
+func TestWindSpeedUnitToggle_Property1_ConfigRoundTrip(t *testing.T) {
+	rapid.Check(t, func(t *rapid.T) {
+		unit := rapid.SampledFrom([]WindSpeedUnit{
+			WindSpeedUnitKmh,
+			WindSpeedUnitMph,
+			WindSpeedUnitKnots,
+		}).Draw(t, "unit")
+		cfg := DefaultConfig()
+		cfg.WindSpeedUnit = unit
+		data, _ := json.Marshal(cfg)
+		var out Config
+		json.Unmarshal(data, &out)
+		if out.WindSpeedUnit != unit {
+			t.Fatalf("round-trip failed: got %q, want %q", out.WindSpeedUnit, unit)
 		}
 	})
 }

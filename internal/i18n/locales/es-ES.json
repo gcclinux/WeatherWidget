@@ -71,6 +71,8 @@
   "settings.language.subtitle": "Elige tu idioma preferido.",
   "settings.temperature.title": "Unidad de temperatura",
   "settings.temperature.subtitle": "Elige tu unidad de temperatura preferida.",
+  "settings.windspeed.title": "Unidad de velocidad del viento",
+  "settings.windspeed.subtitle": "Elige tu unidad de velocidad del viento preferida.",
   "settings.display.title": "Visualización del Panel",
   "settings.display.subtitle": "Elige qué elementos mostrar en el widget.",
   "settings.display.city": "Nombre de la Ciudad",

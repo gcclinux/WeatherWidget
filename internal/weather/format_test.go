@@ -257,16 +257,25 @@ func TestFormatWindGustAndDewPoint_Localization(t *testing.T) {
 	}
 
 	// Nil locale manager fallback
-	if got := FormatWindGust(10.5, nil); got != "💨 Gust 10.5 km/h" {
-		t.Errorf("FormatWindGust(10.5, nil) = %q, want %q", got, "💨 Gust 10.5 km/h")
+	if got := FormatWindGust(10.5, config.WindSpeedUnitKmh, nil); got != "💨 Gust 10.5 km/h" {
+		t.Errorf("FormatWindGust(10.5, config.WindSpeedUnitKmh, nil) = %q, want %q", got, "💨 Gust 10.5 km/h")
+	}
+	if got := FormatWindGust(10.0, config.WindSpeedUnitMph, nil); got != "💨 Gust 6.2 mph" {
+		t.Errorf("FormatWindGust(10.0, config.WindSpeedUnitMph, nil) = %q, want %q", got, "💨 Gust 6.2 mph")
+	}
+	if got := FormatWindGust(10.0, config.WindSpeedUnitKnots, nil); got != "💨 Gust 5.4 knots" {
+		t.Errorf("FormatWindGust(10.0, config.WindSpeedUnitKnots, nil) = %q, want %q", got, "💨 Gust 5.4 knots")
 	}
 	if got := FormatDewPoint(15.9, nil); got != "💧 Dew 15.9°C" {
 		t.Errorf("FormatDewPoint(15.9, nil) = %q, want %q", got, "💧 Dew 15.9°C")
 	}
 
-	// Zero value fallback (empty string)
-	if got := FormatWindGust(0, lm); got != "" {
-		t.Errorf("FormatWindGust(0, lm) = %q, want %q", got, "")
+	// Zero value fallback
+	if got := FormatWindGust(0, config.WindSpeedUnitKmh, lm); got != "💨 Gust 0.0 km/h" {
+		t.Errorf("FormatWindGust(0, config.WindSpeedUnitKmh, lm) = %q, want %q", got, "💨 Gust 0.0 km/h")
+	}
+	if got := FormatWindGust(0, config.WindSpeedUnitMph, lm); got != "💨 Gust 0.0 mph" {
+		t.Errorf("FormatWindGust(0, config.WindSpeedUnitMph, lm) = %q, want %q", got, "💨 Gust 0.0 mph")
 	}
 	if got := FormatDewPoint(0, lm); got != "" {
 		t.Errorf("FormatDewPoint(0, lm) = %q, want %q", got, "")
@@ -274,7 +283,7 @@ func TestFormatWindGustAndDewPoint_Localization(t *testing.T) {
 
 	// Portuguese (pt-BR)
 	_ = lm.SetLocale("pt-BR")
-	if got := FormatWindGust(8.9, lm); got != "💨 Rajada 8.9 km/h" {
+	if got := FormatWindGust(8.9, config.WindSpeedUnitKmh, lm); got != "💨 Rajada 8.9 km/h" {
 		t.Errorf("FormatWindGust(pt-BR) = %q, want %q", got, "💨 Rajada 8.9 km/h")
 	}
 	if got := FormatDewPoint(15.9, lm); got != "💧 Orvalho 15.9°C" {
@@ -283,10 +292,30 @@ func TestFormatWindGustAndDewPoint_Localization(t *testing.T) {
 
 	// Polish (pl-PL)
 	_ = lm.SetLocale("pl-PL")
-	if got := FormatWindGust(7.4, lm); got != "💨 Poryw 7.4 km/h" {
+	if got := FormatWindGust(7.4, config.WindSpeedUnitKmh, lm); got != "💨 Poryw 7.4 km/h" {
 		t.Errorf("FormatWindGust(pl-PL) = %q, want %q", got, "💨 Poryw 7.4 km/h")
 	}
 	if got := FormatDewPoint(11.0, lm); got != "💧 Rosa 11.0°C" {
 		t.Errorf("FormatDewPoint(pl-PL) = %q, want %q", got, "💧 Rosa 11.0°C")
+	}
+}
+
+func TestFormatHumidityWind(t *testing.T) {
+	tests := []struct {
+		humidity  int
+		windSpeed float64
+		unit      config.WindSpeedUnit
+		expected  string
+	}{
+		{57, 2.6, config.WindSpeedUnitKmh, "💧 57%   💨 2.6 km/h"},
+		{57, 10.0, config.WindSpeedUnitMph, "💧 57%   💨 6.2 mph"},
+		{57, 10.0, config.WindSpeedUnitKnots, "💧 57%   💨 5.4 knots"},
+	}
+
+	for _, tc := range tests {
+		got := FormatHumidityWind(tc.humidity, tc.windSpeed, tc.unit)
+		if got != tc.expected {
+			t.Errorf("FormatHumidityWind(%d, %f, %q) = %q, want %q", tc.humidity, tc.windSpeed, tc.unit, got, tc.expected)
+		}
 	}
 }

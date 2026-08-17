@@ -71,6 +71,8 @@
   "settings.language.subtitle": "Choose your preferred language.",
   "settings.temperature.title": "Temperature Unit",
   "settings.temperature.subtitle": "Choose your preferred temperature unit.",
+  "settings.windspeed.title": "Wind Speed Unit",
+  "settings.windspeed.subtitle": "Choose your preferred wind speed unit.",
   "settings.display.title": "Panel Display",
   "settings.display.subtitle": "Choose which elements to show on the widget.",
   "settings.display.city": "City Name",

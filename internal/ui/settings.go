@@ -67,6 +67,7 @@ type settingsState struct {
 	window           fyne.Window
 	selectedLang     string                 // locale code selected in the language dropdown
 	selectedUnit     config.TemperatureUnit // temperature unit selected in the appearance tab
+	selectedWindUnit config.WindSpeedUnit   // wind speed unit selected in the widget tab
 	saved            bool                   // true if Save was clicked (suppresses revert on close)
 	previewPanels    []*panel.CityPanel     // live preview panels in the About tab
 	appearancePanels []*panel.CityPanel     // live preview panels in the Appearance tab
@@ -124,6 +125,7 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 		window:        win,
 		selectedLang:  cfg.Locale,
 		selectedUnit:  config.NormalizeTemperatureUnit(cfg.TemperatureUnit),
+		selectedWindUnit: config.NormalizeWindSpeedUnit(cfg.WindSpeedUnit),
 		displayFields: cfg.GetDisplayFields(),
 		customX:       cfg.CustomX,
 		customY:       cfg.CustomY,
@@ -140,6 +142,7 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 	origPosition := cfg.CornerPosition
 	origMonitor := cfg.MonitorIndex
 	origUnit := config.NormalizeTemperatureUnit(cfg.TemperatureUnit)
+	origWindUnit := config.NormalizeWindSpeedUnit(cfg.WindSpeedUnit)
 	origCustomX := cfg.CustomX
 	origCustomY := cfg.CustomY
 
@@ -506,10 +509,10 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 			func(selected string) {
 				state.selectedUnit = unitValueMap[selected]
 				// Live preview: re-render main widget panels with the new unit immediately.
-				u.RerenderPanels(state.selectedUnit)
+				u.RerenderPanels(state.selectedUnit, state.selectedWindUnit)
 				// Also re-render the Widget tab preview panels.
 				for _, p := range state.appearancePanels {
-					p.Rerender(state.selectedUnit)
+					p.Rerender(state.selectedUnit, state.selectedWindUnit)
 				}
 			},
 		)
@@ -521,6 +524,44 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 			unitRadio.SetSelected(label)
 		} else {
 			unitRadio.SetSelected(unitCelsiusLabel)
+		}
+
+		// ── Wind speed unit ─────────────────────────────────────────────────
+		windKmhLabel := "km/h"
+		windMphLabel := "mph"
+		windKnotsLabel := "knots"
+
+		windValueMap := map[string]config.WindSpeedUnit{
+			windKmhLabel:   config.WindSpeedUnitKmh,
+			windMphLabel:   config.WindSpeedUnitMph,
+			windKnotsLabel: config.WindSpeedUnitKnots,
+		}
+		windLabelMap := map[config.WindSpeedUnit]string{
+			config.WindSpeedUnitKmh:   windKmhLabel,
+			config.WindSpeedUnitMph:   windMphLabel,
+			config.WindSpeedUnitKnots: windKnotsLabel,
+		}
+
+		windUnitRadio := widget.NewRadioGroup(
+			[]string{windKmhLabel, windMphLabel, windKnotsLabel},
+			func(selected string) {
+				state.selectedWindUnit = windValueMap[selected]
+				// Live preview: re-render main widget panels with the new unit immediately.
+				u.RerenderPanels(state.selectedUnit, state.selectedWindUnit)
+				// Also re-render the Widget tab preview panels.
+				for _, p := range state.appearancePanels {
+					p.Rerender(state.selectedUnit, state.selectedWindUnit)
+				}
+			},
+		)
+		windUnitRadio.Horizontal = true
+
+		// Pre-select from current config, defaulting to km/h.
+		normalizedWindUnit := config.NormalizeWindSpeedUnit(cfg.WindSpeedUnit)
+		if label, ok := windLabelMap[normalizedWindUnit]; ok {
+			windUnitRadio.SetSelected(label)
+		} else {
+			windUnitRadio.SetSelected(windKmhLabel)
 		}
 
 		// ── RIGHT PANEL ───────────────────────────────────────────────────────
@@ -1146,7 +1187,7 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 		chkWindDir.OnChanged = func(_ bool) { applyDisplayPreview() }
 
 		// Fetch live weather data for appearance preview panels.
-		go func(cities []config.CityConfig, panels []*panel.CityPanel, unit config.TemperatureUnit) {
+		go func(cities []config.CityConfig, panels []*panel.CityPanel, tempUnit config.TemperatureUnit, windUnit config.WindSpeedUnit) {
 			adapter := remoteapi.NewRemoteAPIAdapter("easyweatherwidget", "free")
 			ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 			defer cancel()
@@ -1158,11 +1199,11 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 				idx := i
 				d := data
 				fyne.Do(func() {
-					panels[idx].Update(d, unit)
+					panels[idx].Update(d, tempUnit, windUnit)
 					panels[idx].StartClock(cities[idx].Timezone)
 				})
 			}
-		}(defaultCitiesAppearance, appearancePreviewPanels, state.selectedUnit)
+		}(defaultCitiesAppearance, appearancePreviewPanels, state.selectedUnit, state.selectedWindUnit)
 
 		appearanceContent := container.NewPadded(container.NewVScroll(container.NewVBox(
 			sectionBlock(u.t("settings.position.title"), u.t("settings.position.subtitle"),
@@ -1184,6 +1225,9 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 			),
 			sectionBlock(u.t("settings.temperature.title"), u.t("settings.temperature.subtitle"),
 				unitRadio,
+			),
+			sectionBlock(u.t("settings.windspeed.title"), u.t("settings.windspeed.subtitle"),
+				windUnitRadio,
 			),
 			appearancePreviewGrid,
 		)))
@@ -1237,7 +1281,7 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 		previewGrid := container.NewGridWithColumns(len(defaultCities), previewObjects...)
 
 		// Fetch live weather data for preview panels in the background.
-		go func(cities []config.CityConfig, panels []*panel.CityPanel, unit config.TemperatureUnit) {
+		go func(cities []config.CityConfig, panels []*panel.CityPanel, tempUnit config.TemperatureUnit, windUnit config.WindSpeedUnit) {
 			adapter := remoteapi.NewRemoteAPIAdapter("easyweatherwidget", "free")
 			ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 			defer cancel()
@@ -1249,11 +1293,11 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 				idx := i
 				d := data
 				fyne.Do(func() {
-					panels[idx].Update(d, unit)
+					panels[idx].Update(d, tempUnit, windUnit)
 					panels[idx].StartClock(cities[idx].Timezone)
 				})
 			}
-		}(defaultCities, previewPanels, state.selectedUnit)
+		}(defaultCities, previewPanels, state.selectedUnit, state.selectedWindUnit)
 
 		previewLabel := widget.NewRichTextFromMarkdown("**" + u.t("settings.about.previewLabel") + "**")
 
@@ -1323,7 +1367,7 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 		// Revert live preview changes if the user closed without saving.
 		if !state.saved {
 			u.SetOpacity(origOpacity)
-			u.RerenderPanels(origUnit)
+			u.RerenderPanels(origUnit, origWindUnit)
 			if origCustomX != nil && origCustomY != nil {
 				u.SetPosition(*origCustomX, *origCustomY)
 			} else {
@@ -1403,6 +1447,7 @@ func buildConfigFromUI(
 		Locale:          locale,
 	}
 	cfg.TemperatureUnit = config.NormalizeTemperatureUnit(state.selectedUnit)
+	cfg.WindSpeedUnit = config.NormalizeWindSpeedUnit(state.selectedWindUnit)
 	cfg.DisplayFields = state.displayFields
 	provider := providerDisplayToValue[providerSelect.Selected]
 	if provider == "" {
