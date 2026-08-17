@@ -109,10 +109,20 @@ echo "==> Created: $APP_BUNDLE"
 DMG_NAME="$BUILD_DIR/$APP_NAME-$VERSION.dmg"
 echo "==> Creating $DMG_NAME..."
 rm -f "$DMG_NAME"
+
+# Stage DMG contents: .app + Applications symlink
+DMG_STAGE="$BUILD_DIR/dmg-stage"
+rm -rf "$DMG_STAGE"
+mkdir -p "$DMG_STAGE"
+cp -R "$APP_BUNDLE" "$DMG_STAGE/"
+ln -s /Applications "$DMG_STAGE/Applications"
+
 hdiutil create -volname "$APP_NAME $VERSION" \
-    -srcfolder "$APP_BUNDLE" \
+    -srcfolder "$DMG_STAGE" \
     -ov -format UDZO \
     -o "$DMG_NAME"
+
+rm -rf "$DMG_STAGE"
 
 echo ""
 echo "==> Build complete!"

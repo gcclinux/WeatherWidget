@@ -165,13 +165,13 @@ func FormatHumidityWind(humidity int, windSpeed float64, unit config.WindSpeedUn
 	return fmt.Sprintf("💧 %d%%   💨 %.1f %s", humidity, convertedSpeed, unitLabel)
 }
 
-// compassArrows maps 16 cardinal/intercardinal compass points to clean typographic vector arrows.
-// Uses U+2B08..U+2B0B diagonal arrows which are strictly vector text glyphs across all OS font renderers.
+// compassArrows maps 16 cardinal/intercardinal compass points to directional arrows.
+// Uses U+2190..U+2199 arrows which have broad font coverage across all platforms.
 var compassArrows = []string{
-	"↑", "⬈", "⬈", "⬈",
-	"→", "⬊", "⬊", "⬊",
-	"↓", "⬋", "⬋", "⬋",
-	"←", "⬉", "⬉", "⬉",
+	"↑", "↗", "↗", "↗",
+	"→", "↘", "↘", "↘",
+	"↓", "↙", "↙", "↙",
+	"←", "↖", "↖", "↖",
 }
 
 // DegreesToArrow converts a wind direction in degrees (0–360) to a
