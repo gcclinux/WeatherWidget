@@ -15,7 +15,7 @@ APP_NAME="weatherwidget"
 APP_DISPLAY_NAME="WeatherWidget"
 APP_VERSION="$(cat "$PROJECT_ROOT/release" 2>/dev/null | tr -d '[:space:]')"
 if [ -z "$APP_VERSION" ]; then
-    APP_VERSION="1.0.5"
+    APP_VERSION="1.0.6"
 fi
 
 APP_DESCRIPTION="A compact desktop weather application"
