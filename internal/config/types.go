@@ -19,6 +19,26 @@ func NormalizeTemperatureUnit(u TemperatureUnit) TemperatureUnit {
 	}
 }
 
+// WindSpeedUnit represents the display unit for wind speed values.
+type WindSpeedUnit string
+
+const (
+	WindSpeedUnitKmh   WindSpeedUnit = "kmh"
+	WindSpeedUnitMph   WindSpeedUnit = "mph"
+	WindSpeedUnitKnots WindSpeedUnit = "knots"
+)
+
+// NormalizeWindSpeedUnit returns the unit unchanged if it is a known value,
+// otherwise returns WindSpeedUnitKmh as the safe default.
+func NormalizeWindSpeedUnit(u WindSpeedUnit) WindSpeedUnit {
+	switch u {
+	case WindSpeedUnitKmh, WindSpeedUnitMph, WindSpeedUnitKnots:
+		return u
+	default:
+		return WindSpeedUnitKmh
+	}
+}
+
 // DataSourceType represents the type of weather data source.
 type DataSourceType string
 
@@ -41,6 +61,7 @@ type Config struct {
 	NoBorder        bool            `json:"noBorder,omitempty"`     // remove window decorations (GTK Linux)
 	Locale          string          `json:"locale"`
 	TemperatureUnit TemperatureUnit `json:"temperatureUnit,omitempty"`
+	WindSpeedUnit   WindSpeedUnit   `json:"windSpeedUnit,omitempty"`
 	DisplayFields   *DisplayFields  `json:"displayFields,omitempty"`
 	APIConfig       *APIConfig      `json:"apiConfig,omitempty"`
 	DatabaseConfig  *DatabaseConfig `json:"databaseConfig,omitempty"`
@@ -184,6 +205,7 @@ func DefaultConfig() *Config {
 		Opacity:         100,
 		Locale:          "en-GB",
 		TemperatureUnit: TemperatureUnitCelsius,
+		WindSpeedUnit:   WindSpeedUnitKmh,
 		APIConfig: &APIConfig{
 			Provider: "easyweatherwidget",
 		},

@@ -27,6 +27,7 @@ type cityPanel struct {
 	tempLbl  *gtk.Label
 	descLbl  *gtk.Label
 	infoLbl  *gtk.Label // humidity + wind
+	windRowBox *gtk.Box
 	windGustLbl *gtk.Label
 	dewPointLbl *gtk.Label
 	pressureLbl *gtk.Label
@@ -132,7 +133,14 @@ func newCityPanel(city, region, timezone string, lm *i18n.LocaleManager) (*cityP
 	p.descLbl = descLbl
 	root.PackStart(descLbl, false, false, 0)
 
-	// ── Humidity / wind ──────────────────────────────────────────────────────
+	// ── Humidity / wind row ──────────────────────────────────────────────────
+	windRowBox, err := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 4)
+	if err != nil {
+		return nil, err
+	}
+	windRowBox.SetHAlign(gtk.ALIGN_CENTER)
+	p.windRowBox = windRowBox
+
 	infoLbl, err := gtk.LabelNew("")
 	if err != nil {
 		return nil, err
@@ -141,7 +149,7 @@ func newCityPanel(city, region, timezone string, lm *i18n.LocaleManager) (*cityP
 	sc, _ = infoLbl.GetStyleContext()
 	sc.AddClass("info-label")
 	p.infoLbl = infoLbl
-	root.PackStart(infoLbl, false, false, 0)
+	windRowBox.PackStart(infoLbl, false, false, 0)
 
 	// ── Wind direction ───────────────────────────────────────────────────────
 	windDirLbl, err := gtk.LabelNew("")
@@ -152,7 +160,9 @@ func newCityPanel(city, region, timezone string, lm *i18n.LocaleManager) (*cityP
 	sc, _ = windDirLbl.GetStyleContext()
 	sc.AddClass("info-label")
 	p.windDirLbl = windDirLbl
-	root.PackStart(windDirLbl, false, false, 0)
+	windRowBox.PackStart(windDirLbl, false, false, 0)
+
+	root.PackStart(windRowBox, false, false, 0)
 
 	// ── Wind gust ────────────────────────────────────────────────────────────
 	windGustLbl, err := gtk.LabelNew("")
@@ -217,17 +227,17 @@ func newCityPanel(city, region, timezone string, lm *i18n.LocaleManager) (*cityP
 }
 
 // update refreshes all labels with the given weather data.
-func (p *cityPanel) update(d *weather.WeatherData, unit config.TemperatureUnit) {
+func (p *cityPanel) update(d *weather.WeatherData, tempUnit config.TemperatureUnit, windUnit config.WindSpeedUnit) {
 	p.lastData = d
-	p.lastUnit = unit
+	p.lastUnit = tempUnit
 
 	p.errorLbl.Hide()
 
 	p.cityLbl.SetText(d.CityName + ", " + d.Region)
-	p.tempLbl.SetText(weather.FormatTemperature(d.Temperature, unit))
+	p.tempLbl.SetText(weather.FormatTemperature(d.Temperature, tempUnit))
 	p.descLbl.SetText(weather.FormatDescription(d.Description, p.lm))
-	p.infoLbl.SetText(weather.FormatHumidityWind(d.Humidity, d.WindSpeed, d.WindDirection))
-	p.windGustLbl.SetText(weather.FormatWindGust(d.WindGust, p.lm))
+	p.infoLbl.SetText(weather.FormatHumidityWind(d.Humidity, d.WindSpeed, windUnit))
+	p.windGustLbl.SetText(weather.FormatWindGust(d.WindGust, windUnit, p.lm))
 	p.dewPointLbl.SetText(weather.FormatDewPoint(d.DewPoint, p.lm))
 	p.pressureLbl.SetText(weather.FormatPressure(d.Pressure))
 	p.uvIndexLbl.SetText(weather.FormatUVIndex(d.UVIndex))
@@ -272,6 +282,7 @@ func (p *cityPanel) applyDisplayFields(df *config.DisplayFields) {
 	setVisible(p.descLbl, df.ShowDesc)
 	setVisible(p.infoLbl, df.ShowHumidWind)
 	setVisible(p.windDirLbl, df.ShowWindDir)
+	setVisible(p.windRowBox, df.ShowHumidWind || df.ShowWindDir)
 	setVisible(p.windGustLbl, df.ShowWindGust)
 	setVisible(p.dewPointLbl, df.ShowDewPoint)
 	setVisible(p.pressureLbl, df.ShowPressure)

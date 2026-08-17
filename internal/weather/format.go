@@ -146,11 +146,23 @@ func DegreesToCompass(degrees int) string {
 	return compassDirections[index]
 }
 
-// FormatHumidityWind returns a compact string like "💧 45%   💨 4.5 NW"
+// ConvertWindSpeed converts windSpeed in km/h to the target unit and returns the converted value and its display label.
+func ConvertWindSpeed(windSpeed float64, unit config.WindSpeedUnit) (float64, string) {
+	switch config.NormalizeWindSpeedUnit(unit) {
+	case config.WindSpeedUnitMph:
+		return windSpeed * 0.621371, "mph"
+	case config.WindSpeedUnitKnots:
+		return windSpeed * 0.539957, "knots"
+	default:
+		return windSpeed, "km/h"
+	}
+}
+
+// FormatHumidityWind returns a compact string like "💧 45%   💨 4.5 km/h"
 // suitable for display in a single panel row.
-func FormatHumidityWind(humidity int, windSpeed float64, windDirection int) string {
-	compass := DegreesToCompass(windDirection)
-	return fmt.Sprintf("💧 %d%%   💨 %.1f %s", humidity, windSpeed, compass)
+func FormatHumidityWind(humidity int, windSpeed float64, unit config.WindSpeedUnit) string {
+	convertedSpeed, unitLabel := ConvertWindSpeed(windSpeed, unit)
+	return fmt.Sprintf("💧 %d%%   💨 %.1f %s", humidity, convertedSpeed, unitLabel)
 }
 
 // compassArrows maps 16 cardinal/intercardinal compass points to clean typographic vector arrows.
@@ -171,12 +183,8 @@ func DegreesToArrow(degrees int) string {
 }
 
 // FormatWindGust returns a compact string like "💨 Gust 12.3 km/h".
-// Returns an empty string if gustSpeed is zero (data not available).
 // If lm is non-nil, the label is localized according to the active locale.
-func FormatWindGust(gustSpeed float64, lm *i18n.LocaleManager) string {
-	if gustSpeed == 0 {
-		return ""
-	}
+func FormatWindGust(gustSpeed float64, unit config.WindSpeedUnit, lm *i18n.LocaleManager) string {
 	label := "Gust"
 	if lm != nil {
 		translated := lm.T("weather.gust")
@@ -184,7 +192,8 @@ func FormatWindGust(gustSpeed float64, lm *i18n.LocaleManager) string {
 			label = translated
 		}
 	}
-	return fmt.Sprintf("💨 %s %.1f km/h", label, gustSpeed)
+	convertedSpeed, unitLabel := ConvertWindSpeed(gustSpeed, unit)
+	return fmt.Sprintf("💨 %s %.1f %s", label, convertedSpeed, unitLabel)
 }
 
 // FormatDewPoint returns a compact string like "💧 Dew 8.5°C".

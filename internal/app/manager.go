@@ -277,7 +277,7 @@ func (a *AppManager) onSettingsSave(newCfg *config.Config) error {
 	case settingsSaveActionRerender:
 		// Fast path: re-render from cache, no fetch.
 		fyne.Do(func() {
-			a.ui.RerenderPanels(newCfg.TemperatureUnit)
+			a.ui.RerenderPanels(newCfg.TemperatureUnit, newCfg.WindSpeedUnit)
 		})
 	default:
 		// Normal path: fetch fresh data (covers city changes, provider changes, etc.).
@@ -365,7 +365,7 @@ func (a *AppManager) handleWeatherUpdate(results []weather.WeatherResult) {
 	}
 	log.Printf("dispatching %d data updates to UI panels", len(data))
 	fyne.Do(func() {
-		a.ui.UpdatePanels(data, a.cfg.TemperatureUnit)
+		a.ui.UpdatePanels(data, a.cfg.TemperatureUnit, a.cfg.WindSpeedUnit)
 	})
 }
 
@@ -456,7 +456,7 @@ const (
 // providerChanged must be pre-computed by the caller (it requires access to
 // the current provider state which is not available here).
 func determineSettingsSaveAction(oldCfg, newCfg *config.Config, providerChanged bool) settingsSaveActionType {
-	unitChanged := oldCfg.TemperatureUnit != newCfg.TemperatureUnit
+	unitChanged := oldCfg.TemperatureUnit != newCfg.TemperatureUnit || oldCfg.WindSpeedUnit != newCfg.WindSpeedUnit
 	localeChanged := oldCfg.Locale != newCfg.Locale
 	citiesChanged := len(oldCfg.Cities) != len(newCfg.Cities) || !sameCities(oldCfg.Cities, newCfg.Cities)
 

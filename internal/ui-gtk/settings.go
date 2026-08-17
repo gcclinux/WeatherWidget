@@ -77,7 +77,7 @@ func showSettingsDialog(m *manager) {
 	nb.AppendPage(locationsBox, locationsLabel)
 
 	// --- Widget tab ---
-	widgetBox, getDisplayFields, getTempUnit := buildWidgetTab(m)
+	widgetBox, getDisplayFields, getTempUnit, getWindUnit := buildWidgetTab(m)
 	widgetLabel, _ := gtk.LabelNew(m.t("settings.tab.widget"))
 	nb.AppendPage(widgetBox, widgetLabel)
 
@@ -123,6 +123,7 @@ func showSettingsDialog(m *manager) {
 		newCfg.Locale = getLocale()          // collect selected language
 		newCfg.DisplayFields = getDisplayFields() // collect panel visibility
 		newCfg.TemperatureUnit = getTempUnit()    // collect temperature unit
+		newCfg.WindSpeedUnit = getWindUnit()      // collect wind speed unit
 
 		// Apply live before saving so the user sees the change immediately.
 		m.SetOpacity(opacity)
@@ -606,6 +607,36 @@ func buildWidgetTab(m *manager) (*gtk.Box, func() *config.DisplayFields, func() 
 	hbox.PackStart(fahBtn, false, false, 0)
 	vbox.PackStart(hbox, false, false, 0)
 
+	// ── Wind Speed Unit ──────────────────────────────────────────────────
+	sep2, _ := gtk.SeparatorNew(gtk.ORIENTATION_HORIZONTAL)
+	vbox.PackStart(sep2, false, false, 4)
+
+	windTitle, _ := gtk.LabelNew("")
+	windTitle.SetMarkup("<b>" + m.t("settings.windspeed.title") + "</b>")
+	windTitle.SetHAlign(gtk.ALIGN_START)
+	vbox.PackStart(windTitle, false, false, 0)
+
+	windSubtitle, _ := gtk.LabelNew(m.t("settings.windspeed.subtitle"))
+	windSubtitle.SetHAlign(gtk.ALIGN_START)
+	vbox.PackStart(windSubtitle, false, false, 0)
+
+	hboxWind, _ := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 16)
+	kmhBtn, _ := gtk.RadioButtonNewWithLabel(nil, "km/h")
+	mphBtn, _ := gtk.RadioButtonNewWithLabelFromWidget(kmhBtn, "mph")
+	knotsBtn, _ := gtk.RadioButtonNewWithLabelFromWidget(kmhBtn, "knots")
+	switch m.cfg.WindSpeedUnit {
+	case config.WindSpeedUnitMph:
+		mphBtn.SetActive(true)
+	case config.WindSpeedUnitKnots:
+		knotsBtn.SetActive(true)
+	default:
+		kmhBtn.SetActive(true)
+	}
+	hboxWind.PackStart(kmhBtn, false, false, 0)
+	hboxWind.PackStart(mphBtn, false, false, 0)
+	hboxWind.PackStart(knotsBtn, false, false, 0)
+	vbox.PackStart(hboxWind, false, false, 0)
+
 	getDisplayFields := func() *config.DisplayFields {
 		return &config.DisplayFields{
 			ShowCity:      chkCity.GetActive(),
@@ -630,7 +661,17 @@ func buildWidgetTab(m *manager) (*gtk.Box, func() *config.DisplayFields, func() 
 		return config.TemperatureUnitCelsius
 	}
 
-	return vbox, getDisplayFields, getTempUnit
+	getWindUnit := func() config.WindSpeedUnit {
+		if mphBtn.GetActive() {
+			return config.WindSpeedUnitMph
+		}
+		if knotsBtn.GetActive() {
+			return config.WindSpeedUnitKnots
+		}
+		return config.WindSpeedUnitKmh
+	}
+
+	return vbox, getDisplayFields, getTempUnit, getWindUnit
 }
 
 // buildLocationsTab builds the city management tab.

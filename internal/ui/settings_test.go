@@ -311,3 +311,35 @@ func TestBuildConfigFromUI_CustomPosition(t *testing.T) {
 	}
 }
 
+// TestBuildConfigFromUI_WindSpeedUnit_Mph verifies that selecting mph
+// writes WindSpeedUnitMph to the returned Config.
+func TestBuildConfigFromUI_WindSpeedUnit_Mph(t *testing.T) {
+	state := &settingsState{
+		cities:           []config.CityConfig{{Name: "London", Region: "UK"}},
+		selectedLang:     "en-GB",
+		selectedWindUnit: config.WindSpeedUnitMph,
+	}
+
+	cfg := buildConfigFromUIHelper(t, state)
+
+	if cfg.WindSpeedUnit != config.WindSpeedUnitMph {
+		t.Errorf("WindSpeedUnit = %q, want %q", cfg.WindSpeedUnit, config.WindSpeedUnitMph)
+	}
+}
+
+// TestBuildConfigFromUI_WindSpeedUnit_Knots verifies that selecting knots
+// writes WindSpeedUnitKnots to the returned Config.
+func TestBuildConfigFromUI_WindSpeedUnit_Knots(t *testing.T) {
+	state := &settingsState{
+		cities:           []config.CityConfig{{Name: "London", Region: "UK"}},
+		selectedLang:     "en-GB",
+		selectedWindUnit: config.WindSpeedUnitKnots,
+	}
+
+	cfg := buildConfigFromUIHelper(t, state)
+
+	if cfg.WindSpeedUnit != config.WindSpeedUnitKnots {
+		t.Errorf("WindSpeedUnit = %q, want %q", cfg.WindSpeedUnit, config.WindSpeedUnitKnots)
+	}
+}
+

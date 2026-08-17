@@ -71,6 +71,8 @@
   "settings.language.subtitle": "Kies uw voorkeurstaal.",
   "settings.temperature.title": "Temperatuureenheid",
   "settings.temperature.subtitle": "Kies uw voorkeurseenheid voor temperatuur.",
+  "settings.windspeed.title": "Windsnelheidseenheid",
+  "settings.windspeed.subtitle": "Kies uw voorkeurseenheid voor windsnelheid.",
   "settings.display.title": "Paneel Weergave",
   "settings.display.subtitle": "Kies welke elementen op de widget worden weergegeven.",
   "settings.display.city": "Stadsnaam",

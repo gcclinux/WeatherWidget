@@ -71,6 +71,8 @@
   "settings.language.subtitle": "Tercih ettiğiniz dili seçin.",
   "settings.temperature.title": "Sıcaklık Birimi",
   "settings.temperature.subtitle": "Tercih ettiğiniz sıcaklık birimini seçin.",
+  "settings.windspeed.title": "Rüzgâr Hızı Birimi",
+  "settings.windspeed.subtitle": "Tercih ettiğiniz rüzgâr hızı birimini seçin.",
   "settings.display.title": "Panel Görünümü",
   "settings.display.subtitle": "Widget üzerinde hangi öğelerin gösterileceğini seçin.",
   "settings.display.city": "Şehir Adı",

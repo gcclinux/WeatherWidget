@@ -131,3 +131,17 @@ func TestDetermineSettingsSaveAction_CityCountChange(t *testing.T) {
 		t.Errorf("expected settingsSaveActionFetch when city count changes, got %v", action)
 	}
 }
+
+// TestDetermineSettingsSaveAction_WindSpeedUnitChange verifies that when only the
+// WindSpeedUnit changes (no city or provider change), the action is Rerender.
+func TestDetermineSettingsSaveAction_WindSpeedUnitChange(t *testing.T) {
+	oldCfg := baseConfig()
+	newCfg := baseConfig()
+	newCfg.WindSpeedUnit = config.WindSpeedUnitMph
+
+	action := determineSettingsSaveAction(oldCfg, newCfg, false)
+
+	if action != settingsSaveActionRerender {
+		t.Errorf("expected settingsSaveActionRerender for wind unit-only change, got %v", action)
+	}
+}

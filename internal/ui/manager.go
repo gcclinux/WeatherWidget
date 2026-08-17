@@ -77,16 +77,16 @@ func (u *UIManager) ShowWidget(cities []config.CityConfig) {
 	u.widget.Show()
 }
 
-// UpdatePanels updates each CityPanel with the corresponding weather data and unit.
+// UpdatePanels updates each CityPanel with the corresponding weather data and units.
 // Panels and data are matched by index; extra data entries are ignored.
-func (u *UIManager) UpdatePanels(data []weather.WeatherData, unit config.TemperatureUnit) {
+func (u *UIManager) UpdatePanels(data []weather.WeatherData, tempUnit config.TemperatureUnit, windUnit config.WindSpeedUnit) {
 	log.Printf("UIManager: updating %d panels with %d data entries", len(u.panels), len(data))
 	for i, p := range u.panels {
 		if i >= len(data) {
 			break
 		}
 		d := data[i]
-		p.Update(&d, unit)
+		p.Update(&d, tempUnit, windUnit)
 	}
 }
 
@@ -105,11 +105,11 @@ func (u *UIManager) ApplyDisplayFields(df *config.DisplayFields) {
 	u.widget.Resize(fyne.NewSize(float32(w), float32(h)))
 }
 
-// RerenderPanels re-renders all panels using their cached data with a new unit.
-// Used when only the temperature unit changes, avoiding a new weather fetch.
-func (u *UIManager) RerenderPanels(unit config.TemperatureUnit) {
+// RerenderPanels re-renders all panels using their cached data with new units.
+// Used when only the temperature or wind speed unit changes, avoiding a new weather fetch.
+func (u *UIManager) RerenderPanels(tempUnit config.TemperatureUnit, windUnit config.WindSpeedUnit) {
 	for _, p := range u.panels {
-		p.Rerender(unit)
+		p.Rerender(tempUnit, windUnit)
 	}
 }
 
