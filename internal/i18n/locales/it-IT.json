@@ -26,7 +26,7 @@
   "settings.interval.format": "%d min",
   "settings.startup.title": "Avvio",
   "settings.startup.subtitle": "Avvia automaticamente all'accesso.",
-  "settings.startup.autostart": "Avvia WeatherWidget all'avvio di Windows",
+  "settings.startup.autostart": "Avvia WeatherWidget all'avvio del sistema",
   "settings.provider.title": "Fornitore dati e chiave API",
   "settings.provider.subtitle": "Configura la fonte dei dati meteo.",
   "settings.provider.label": "Fornitore",

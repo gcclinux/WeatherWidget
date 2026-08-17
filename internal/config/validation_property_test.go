@@ -270,16 +270,6 @@ func genMaybeInvalidAPIConfig(t *rapid.T, errs map[string]bool) (*APIConfig, map
 		return nil, errs
 	}
 
-	// API key: sometimes empty
-	invalidKey := rapid.Bool().Draw(t, "invalidAPIKey")
-	var apiKey string
-	if invalidKey {
-		apiKey = ""
-		errs["apiConfig.apiKey"] = true
-	} else {
-		apiKey = rapid.StringMatching(`[a-zA-Z0-9]{8,32}`).Draw(t, "validAPIKey")
-	}
-
 	// Provider: sometimes invalid
 	invalidProvider := rapid.Bool().Draw(t, "invalidProvider")
 	var provider string
@@ -293,6 +283,20 @@ func genMaybeInvalidAPIConfig(t *rapid.T, errs map[string]bool) (*APIConfig, map
 	} else {
 		provIdx := rapid.IntRange(0, len(providers)-1).Draw(t, "validProvIdx")
 		provider = providers[provIdx]
+	}
+
+	// API key: sometimes empty
+	invalidKey := rapid.Bool().Draw(t, "invalidAPIKey")
+	var apiKey string
+	if invalidKey {
+		apiKey = ""
+		// easyweatherwidget works without a key (free mode), so empty key is only
+		// an error for other providers.
+		if provider != "easyweatherwidget" {
+			errs["apiConfig.apiKey"] = true
+		}
+	} else {
+		apiKey = rapid.StringMatching(`[a-zA-Z0-9]{8,32}`).Draw(t, "validAPIKey")
 	}
 
 	return &APIConfig{

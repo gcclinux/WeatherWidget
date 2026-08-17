@@ -26,7 +26,7 @@
   "settings.interval.format": "%d min",
   "settings.startup.title": "Démarrage",
   "settings.startup.subtitle": "Démarrer automatiquement à la connexion.",
-  "settings.startup.autostart": "Lancer WeatherWidget au démarrage de Windows",
+  "settings.startup.autostart": "Lancer WeatherWidget au démarrage du système",
   "settings.provider.title": "Fournisseur de données et clé API",
   "settings.provider.subtitle": "Configurez la source de données météo.",
   "settings.provider.label": "Fournisseur",

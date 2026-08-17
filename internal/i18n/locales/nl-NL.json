@@ -26,7 +26,7 @@
   "settings.interval.format": "%d min",
   "settings.startup.title": "Opstarten",
   "settings.startup.subtitle": "Automatisch starten bij aanmelden.",
-  "settings.startup.autostart": "WeatherWidget starten bij het opstarten van Windows",
+  "settings.startup.autostart": "WeatherWidget starten bij het opstarten van het systeem",
   "settings.provider.title": "Gegevensbron en API-sleutel",
   "settings.provider.subtitle": "Configureer de weerdatabron.",
   "settings.provider.label": "Aanbieder",

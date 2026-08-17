@@ -26,7 +26,7 @@
   "settings.interval.format": "%d dak",
   "settings.startup.title": "Başlangıç",
   "settings.startup.subtitle": "Oturum açıldığında otomatik başlat.",
-  "settings.startup.autostart": "Windows başladığında WeatherWidget'ı başlat",
+  "settings.startup.autostart": "Sistem başladığında WeatherWidget'ı başlat",
   "settings.provider.title": "Veri Sağlayıcı ve API Anahtarı",
   "settings.provider.subtitle": "Hava durumu veri kaynağını yapılandırın.",
   "settings.provider.label": "Sağlayıcı",

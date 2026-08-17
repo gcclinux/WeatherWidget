@@ -26,7 +26,7 @@
   "settings.interval.format": "%d min",
   "settings.startup.title": "Inicio",
   "settings.startup.subtitle": "Iniciar automáticamente al iniciar sesión.",
-  "settings.startup.autostart": "Iniciar WeatherWidget al arrancar Windows",
+  "settings.startup.autostart": "Iniciar WeatherWidget al arrancar el sistema",
   "settings.provider.title": "Proveedor de datos y clave API",
   "settings.provider.subtitle": "Configura la fuente de datos meteorológicos.",
   "settings.provider.label": "Proveedor",

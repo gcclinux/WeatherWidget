@@ -380,6 +380,14 @@ func (m *manager) buildWindow() error {
 	})
 
 	win.ShowAll()
+
+	// Re-apply display field visibility after ShowAll — ShowAll() recursively
+	// shows all children, overriding any Hide() calls made by applyDisplayFields
+	// during panel construction.
+	for _, p := range m.panels {
+		p.applyDisplayFields(m.cfg.GetDisplayFields())
+	}
+
 	return nil
 }
 

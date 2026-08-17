@@ -122,7 +122,7 @@ func validateAPIConfig(api *APIConfig, t TranslateFunc) []ValidationError {
 		})
 		return errs
 	}
-	if api.APIKey == "" {
+	if api.APIKey == "" && api.Provider != "easyweatherwidget" {
 		errs = append(errs, ValidationError{
 			Field:   "apiConfig.apiKey",
 			Message: translate(t, "validation.apiConfig.apiKey.empty", "must not be empty"),

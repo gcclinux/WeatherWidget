@@ -26,7 +26,7 @@
   "settings.interval.format": "%d Min.",
   "settings.startup.title": "Autostart",
   "settings.startup.subtitle": "Automatisch beim Anmelden starten.",
-  "settings.startup.autostart": "WeatherWidget beim Windows-Start starten",
+  "settings.startup.autostart": "WeatherWidget beim Systemstart starten",
   "settings.provider.title": "Datenanbieter und API-Schlüssel",
   "settings.provider.subtitle": "Wetterdatenquelle konfigurieren.",
   "settings.provider.label": "Anbieter",

@@ -507,8 +507,8 @@ func showErrorDialog(parent *gtk.Dialog, msg string) {
 
 // buildWidgetTab creates the Widget tab for controlling panel element visibility
 // and temperature unit — matching the Fyne settings Widget tab layout.
-// Returns the tab box, a getDisplayFields() func, and a getTempUnit() func.
-func buildWidgetTab(m *manager) (*gtk.Box, func() *config.DisplayFields, func() config.TemperatureUnit) {
+// Returns the tab box, a getDisplayFields() func, a getTempUnit() func, and a getWindUnit() func.
+func buildWidgetTab(m *manager) (*gtk.Box, func() *config.DisplayFields, func() config.TemperatureUnit, func() config.WindSpeedUnit) {
 	vbox, _ := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 12)
 	vbox.SetMarginTop(12)
 	vbox.SetMarginStart(8)
