@@ -1115,8 +1115,10 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 		chkTemp.Checked = df.ShowTemp
 		chkDesc := widget.NewCheck(u.t("settings.display.desc"), nil)
 		chkDesc.Checked = df.ShowDesc
-		chkHumidWind := widget.NewCheck(u.t("settings.display.humidWind"), nil)
-		chkHumidWind.Checked = df.ShowHumidWind
+		chkHumidity := widget.NewCheck(u.t("settings.display.humidity"), nil)
+		chkHumidity.Checked = df.ShowHumidity
+		chkWind := widget.NewCheck(u.t("settings.display.wind"), nil)
+		chkWind.Checked = df.ShowWind
 		chkTime := widget.NewCheck(u.t("settings.display.time"), nil)
 		chkTime.Checked = df.ShowTime
 		chkDate := widget.NewCheck(u.t("settings.display.date"), nil)
@@ -1129,12 +1131,10 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 		chkPressure.Checked = df.ShowPressure
 		chkUVIndex := widget.NewCheck(u.t("settings.display.uvIndex"), nil)
 		chkUVIndex.Checked = df.ShowUVIndex
-		chkWindDir := widget.NewCheck(u.t("settings.display.windDir"), nil)
-		chkWindDir.Checked = df.ShowWindDir
 
 		displayChecks := container.NewGridWithColumns(4,
 			chkCity, chkIcon, chkTemp, chkDesc,
-			chkHumidWind, chkTime, chkDate, chkWindDir,
+			chkHumidity, chkWind, chkTime, chkDate,
 			chkWindGust, chkDewPoint, chkPressure, chkUVIndex,
 		)
 
@@ -1157,14 +1157,14 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 				ShowIcon:      chkIcon.Checked,
 				ShowTemp:      chkTemp.Checked,
 				ShowDesc:      chkDesc.Checked,
-				ShowHumidWind: chkHumidWind.Checked,
+				ShowHumidity: chkHumidity.Checked,
+				ShowWind:     chkWind.Checked,
 				ShowTime:      chkTime.Checked,
 				ShowDate:      chkDate.Checked,
 				ShowWindGust:  chkWindGust.Checked,
 				ShowDewPoint:  chkDewPoint.Checked,
 				ShowPressure:  chkPressure.Checked,
 				ShowUVIndex:   chkUVIndex.Checked,
-				ShowWindDir:   chkWindDir.Checked,
 			}
 			state.displayFields = fields
 			for _, p := range appearancePreviewPanels {
@@ -1177,14 +1177,14 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 		chkIcon.OnChanged = func(_ bool) { applyDisplayPreview() }
 		chkTemp.OnChanged = func(_ bool) { applyDisplayPreview() }
 		chkDesc.OnChanged = func(_ bool) { applyDisplayPreview() }
-		chkHumidWind.OnChanged = func(_ bool) { applyDisplayPreview() }
+		chkHumidity.OnChanged = func(_ bool) { applyDisplayPreview() }
+		chkWind.OnChanged = func(_ bool) { applyDisplayPreview() }
 		chkTime.OnChanged = func(_ bool) { applyDisplayPreview() }
 		chkDate.OnChanged = func(_ bool) { applyDisplayPreview() }
 		chkWindGust.OnChanged = func(_ bool) { applyDisplayPreview() }
 		chkDewPoint.OnChanged = func(_ bool) { applyDisplayPreview() }
 		chkPressure.OnChanged = func(_ bool) { applyDisplayPreview() }
 		chkUVIndex.OnChanged = func(_ bool) { applyDisplayPreview() }
-		chkWindDir.OnChanged = func(_ bool) { applyDisplayPreview() }
 
 		// Fetch live weather data for appearance preview panels.
 		go func(cities []config.CityConfig, panels []*panel.CityPanel, tempUnit config.TemperatureUnit, windUnit config.WindSpeedUnit) {

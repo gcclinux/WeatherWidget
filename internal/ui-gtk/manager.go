@@ -109,10 +109,15 @@ type manager struct {
 	win    *gtk.Window // main transparent widget window
 	panels []*cityPanel
 
-	noBackground bool // whether panels show without background
-	noBorder     bool // whether window decorations are hidden
-	opacity      int  // 25 / 50 / 75 / 100
+	noBackground bool   // whether panels show without background
+	noBorder     bool   // whether window decorations are hidden
+	opacity      int    // 25 / 50 / 75 / 100
 	css          string // current CSS applied to the window
+
+	// Font sizes for the three widget sections (px). Zero means use default.
+	fontSizeCityTime   int
+	fontSizeTempIcon   int
+	fontSizeConditions int
 
 	// positioned is set to true once the initial position has been applied.
 	// The drag auto-save is suppressed until this flag is set, preventing
@@ -152,6 +157,9 @@ func (m *manager) start(openSettings bool) error {
 	}
 	m.noBackground = cfg.NoBackground
 	m.noBorder = cfg.NoBorder
+	m.fontSizeCityTime = cfg.GetFontSizeCityTime()
+	m.fontSizeTempIcon = cfg.GetFontSizeTempIcon()
+	m.fontSizeConditions = cfg.GetFontSizeConditions()
 
 	// Locale manager.
 	lm, err := i18n.NewLocaleManager(i18n.LocaleFS)
@@ -254,6 +262,7 @@ func (m *manager) buildWindow() error {
 		}
 		p.setNoBackground(m.noBackground)
 		p.applyDisplayFields(m.cfg.GetDisplayFields())
+		p.iconSize = m.fontSizeTempIcon // initialise icon size from config
 		hbox.PackStart(p.root, false, false, 0)
 		m.panels = append(m.panels, p)
 	}
@@ -391,10 +400,9 @@ func (m *manager) buildWindow() error {
 	return nil
 }
 
-
 // applyCSS loads and applies the GTK CSS that controls panel appearance.
 func (m *manager) applyCSS() {
-	css := buildCSS(m.opacity, m.noBackground)
+	css := buildCSS(m.opacity, m.noBackground, m.fontSizeCityTime, m.fontSizeTempIcon, m.fontSizeConditions)
 	applyCSSToScreen(css)
 }
 
@@ -447,6 +455,22 @@ func (m *manager) openSettings() {
 func (m *manager) SetOpacity(pct int) {
 	m.opacity = pct
 	m.applyCSS()
+}
+
+// SetFontSizes updates all three font size values and immediately refreshes the
+// widget CSS so the user sees a live preview without saving.
+// It also rescales the weather icon on each panel since the icon belongs to
+// the Temperature & Icon section (fsTempIcon).
+func (m *manager) SetFontSizes(cityTime, tempIcon, conditions int) {
+	m.fontSizeCityTime = cityTime
+	m.fontSizeTempIcon = tempIcon
+	m.fontSizeConditions = conditions
+	m.applyCSS()
+	// Rescale icons on all panels to match the new tempIcon size.
+	for _, p := range m.panels {
+		p.iconSize = tempIcon
+		p.applyIconSize(tempIcon)
+	}
 }
 
 // SetNoBackground toggles background-removal mode and refreshes CSS.
@@ -522,6 +546,9 @@ func (m *manager) onSettingsSave(newCfg *config.Config) error {
 		newOpacity = 100
 	}
 	m.opacity = newOpacity
+	m.fontSizeCityTime = newCfg.GetFontSizeCityTime()
+	m.fontSizeTempIcon = newCfg.GetFontSizeTempIcon()
+	m.fontSizeConditions = newCfg.GetFontSizeConditions()
 
 	citiesChanged := len(oldCfg.Cities) != len(newCfg.Cities) || !sameCities(oldCfg.Cities, newCfg.Cities)
 	if citiesChanged {
@@ -529,12 +556,13 @@ func (m *manager) onSettingsSave(newCfg *config.Config) error {
 	} else {
 		m.applyCSS()
 		m.applyPosition()
-		// Apply display field changes to existing panels.
+		// Apply display field changes and icon size to existing panels.
 		for _, p := range m.panels {
 			p.applyDisplayFields(newCfg.GetDisplayFields())
+			p.iconSize = m.fontSizeTempIcon
+			p.applyIconSize(m.fontSizeTempIcon)
 		}
 	}
-
 	m.sched.SetInterval(time.Duration(newCfg.RefreshInterval) * time.Minute)
 	m.sched.SetCities(newCfg.Cities)
 	m.sched.FetchNow()

@@ -158,8 +158,28 @@ func ConvertWindSpeed(windSpeed float64, unit config.WindSpeedUnit) (float64, st
 	}
 }
 
-// FormatHumidityWind returns a compact string like "💧 45%   💨 4.5 km/h"
-// suitable for display in a single panel row.
+// FormatHumidity returns a compact string like "💧 Hum 45%".
+// If lm is non-nil, the label is localized according to the active locale.
+func FormatHumidity(humidity int, lm *i18n.LocaleManager) string {
+	label := "Hum"
+	if lm != nil {
+		translated := lm.T("weather.hum")
+		if translated != "weather.hum" {
+			label = translated
+		}
+	}
+	return fmt.Sprintf("💧 %s %d%%", label, humidity)
+}
+
+// FormatWind returns a compact string like "💨 4.5 km/h"
+// suitable for display on its own panel row.
+func FormatWind(windSpeed float64, unit config.WindSpeedUnit) string {
+	convertedSpeed, unitLabel := ConvertWindSpeed(windSpeed, unit)
+	return fmt.Sprintf("💨 %.1f %s", convertedSpeed, unitLabel)
+}
+
+// FormatHumidityWind returns a compact string like "💧 Hum 45%   💨 4.5 km/h"
+// kept for backward compatibility; prefer FormatHumidity + FormatWind separately.
 func FormatHumidityWind(humidity int, windSpeed float64, unit config.WindSpeedUnit) string {
 	convertedSpeed, unitLabel := ConvertWindSpeed(windSpeed, unit)
 	return fmt.Sprintf("💧 %d%%   💨 %.1f %s", humidity, convertedSpeed, unitLabel)

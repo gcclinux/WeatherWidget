@@ -42,9 +42,33 @@ func paintTransparent(cr *cairo.Context) {
 	cr.Paint()
 }
 
-// buildCSS returns the CSS string for the widget panels based on opacity
-// and no-background settings.
-func buildCSS(opacity int, noBackground bool) string {
+// buildCSS returns the CSS string for the widget panels based on opacity,
+// no-background settings, and the three user-configurable font sizes:
+//   - fsCityTime:   city name and time labels (px)
+//   - fsTempIcon:   temperature label (px)
+//   - fsConditions: description, humidity/wind, and all info rows below temp (px)
+//
+// Pass 0 for any size to use the built-in defaults (14 / 32 / 10).
+func buildCSS(opacity int, noBackground bool, fsCityTime, fsTempIcon, fsConditions int) string {
+	// Apply defaults for zero values (handles old configs and first run).
+	if fsCityTime <= 0 {
+		fsCityTime = 14
+	}
+	if fsTempIcon <= 0 {
+		fsTempIcon = 32
+	}
+	if fsConditions <= 0 {
+		fsConditions = 10
+	}
+
+	// The time label is scaled proportionally: it is ~14% larger than the
+	// city label in the default theme (16px vs 14px).  We maintain that ratio
+	// so both grow/shrink together when the user adjusts the City & Time size.
+	fsTime := int(float64(fsCityTime) * (16.0 / 14.0))
+	if fsTime < 1 {
+		fsTime = 1
+	}
+
 	// Map opacity percent to an alpha value for the panel background.
 	var alpha float64
 	if noBackground {
@@ -64,7 +88,7 @@ func buildCSS(opacity int, noBackground bool) string {
 
 	panelBg := fmt.Sprintf("rgba(20, 20, 20, %.2f)", alpha)
 
-	return `
+	return fmt.Sprintf(`
 window {
     background-color: transparent;
 }
@@ -72,38 +96,38 @@ window {
     background-color: transparent;
 }
 .city-panel {
-    background-color: ` + panelBg + `;
+    background-color: %s;
     border-radius: 10px;
     padding: 10px;
     margin: 2px;
     color: white;
 }
 .city-label {
-    font-size: 14px;
+    font-size: %dpx;
     font-weight: bold;
     color: white;
 }
 .temp-label {
-    font-size: 32px;
+    font-size: %dpx;
     font-weight: bold;
     color: white;
 }
 .desc-label {
-    font-size: 10px;
+    font-size: %dpx;
     font-style: italic;
     color: #cccccc;
 }
 .time-label {
-    font-size: 16px;
+    font-size: %dpx;
     font-weight: bold;
     color: white;
 }
 .date-label {
-    font-size: 10px;
+    font-size: %dpx;
     color: #cccccc;
 }
 .info-label {
-    font-size: 10px;
+    font-size: %dpx;
     color: #cccccc;
 }
 .error-label {
@@ -111,7 +135,7 @@ window {
     color: #ff8888;
     font-style: italic;
 }
-`
+`, panelBg, fsCityTime, fsTempIcon, fsConditions, fsTime, fsConditions, fsConditions)
 }
 
 // applyCSSToScreen loads the given CSS string into the default screen's
@@ -244,5 +268,3 @@ func enableDrag(win *gtk.Window, moveFunc func(x, y int), onMove func(x, y int))
 		return false
 	})
 }
-
-

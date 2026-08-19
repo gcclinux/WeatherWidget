@@ -56,7 +56,7 @@ type Config struct {
 	MonitorIndex    int             `json:"monitorIndex"`    // 0-based monitor index; 0 = primary
 	CustomX         *int            `json:"customX,omitempty"`
 	CustomY         *int            `json:"customY,omitempty"`
-	Opacity         int             `json:"opacity"` // 25, 50, 75, or 100 (percent)
+	Opacity         int             `json:"opacity"`                // 25, 50, 75, or 100 (percent)
 	NoBackground    bool            `json:"noBackground,omitempty"` // remove panel background (GTK Linux)
 	NoBorder        bool            `json:"noBorder,omitempty"`     // remove window decorations (GTK Linux)
 	Locale          string          `json:"locale"`
@@ -65,40 +65,51 @@ type Config struct {
 	DisplayFields   *DisplayFields  `json:"displayFields,omitempty"`
 	APIConfig       *APIConfig      `json:"apiConfig,omitempty"`
 	DatabaseConfig  *DatabaseConfig `json:"databaseConfig,omitempty"`
+
+	// FontSizeCityTime controls the font size (px) for the city name and time row.
+	// Defaults to 14px (city) / 16px (time) when 0.
+	FontSizeCityTime int `json:"fontSizeCityTime,omitempty"`
+	// FontSizeTempIcon controls the font size (px) for the temperature value.
+	// Defaults to 32px when 0.
+	FontSizeTempIcon int `json:"fontSizeTempIcon,omitempty"`
+	// FontSizeConditions controls the font size (px) for weather conditions
+	// (description, humidity, wind, and all rows below temperature).
+	// Defaults to 10px when 0.
+	FontSizeConditions int `json:"fontSizeConditions,omitempty"`
 }
 
 // DisplayFields controls which elements are visible on each city panel.
 // All fields default to true (show everything).
 type DisplayFields struct {
-	ShowCity      bool `json:"showCity"`
-	ShowIcon      bool `json:"showIcon"`
-	ShowTemp      bool `json:"showTemp"`
-	ShowDesc      bool `json:"showDesc"`
-	ShowHumidWind bool `json:"showHumidWind"`
-	ShowTime      bool `json:"showTime"`
-	ShowDate      bool `json:"showDate"`
-	ShowWindGust  bool `json:"showWindGust"`
-	ShowDewPoint  bool `json:"showDewPoint"`
-	ShowPressure  bool `json:"showPressure"`
-	ShowUVIndex   bool `json:"showUVIndex"`
-	ShowWindDir   bool `json:"showWindDir"`
+	ShowCity     bool `json:"showCity"`
+	ShowIcon     bool `json:"showIcon"`
+	ShowTemp     bool `json:"showTemp"`
+	ShowDesc     bool `json:"showDesc"`
+	ShowHumidity bool `json:"showHumidity"`
+	ShowWind     bool `json:"showWind"` // wind speed + wind direction together
+	ShowTime     bool `json:"showTime"`
+	ShowDate     bool `json:"showDate"`
+	ShowWindGust bool `json:"showWindGust"`
+	ShowDewPoint bool `json:"showDewPoint"`
+	ShowPressure bool `json:"showPressure"`
+	ShowUVIndex  bool `json:"showUVIndex"`
 }
 
 // DefaultDisplayFields returns a DisplayFields with all elements visible.
 func DefaultDisplayFields() *DisplayFields {
 	return &DisplayFields{
-		ShowCity:      true,
-		ShowIcon:      true,
-		ShowTemp:      true,
-		ShowDesc:      true,
-		ShowHumidWind: true,
-		ShowTime:      true,
-		ShowDate:      true,
-		ShowWindGust:  false,
-		ShowDewPoint:  false,
-		ShowPressure:  false,
-		ShowUVIndex:   false,
-		ShowWindDir:   false,
+		ShowCity:     true,
+		ShowIcon:     true,
+		ShowTemp:     true,
+		ShowDesc:     true,
+		ShowHumidity: true,
+		ShowWind:     true,
+		ShowTime:     true,
+		ShowDate:     true,
+		ShowWindGust: false,
+		ShowDewPoint: false,
+		ShowPressure: false,
+		ShowUVIndex:  false,
 	}
 }
 
@@ -198,16 +209,44 @@ func IsDefaultCity(city CityConfig) bool {
 // default provider (works without a key for the default cities).
 func DefaultConfig() *Config {
 	return &Config{
-		DataSource:      DataSourceRemoteAPI,
-		Cities:          DefaultCities(),
-		RefreshInterval: 120,
-		CornerPosition:  "bottom-right",
-		Opacity:         100,
-		Locale:          "en-GB",
-		TemperatureUnit: TemperatureUnitCelsius,
-		WindSpeedUnit:   WindSpeedUnitKmh,
+		DataSource:         DataSourceRemoteAPI,
+		Cities:             DefaultCities(),
+		RefreshInterval:    120,
+		CornerPosition:     "bottom-right",
+		Opacity:            100,
+		Locale:             "en-GB",
+		TemperatureUnit:    TemperatureUnitCelsius,
+		WindSpeedUnit:      WindSpeedUnitKmh,
+		FontSizeCityTime:   14,
+		FontSizeTempIcon:   32,
+		FontSizeConditions: 10,
 		APIConfig: &APIConfig{
 			Provider: "easyweatherwidget",
 		},
 	}
+}
+
+// GetFontSizeCityTime returns the city/time font size, falling back to the
+// default 14px when the stored value is zero (e.g. older config files).
+func (c *Config) GetFontSizeCityTime() int {
+	if c.FontSizeCityTime <= 0 {
+		return 14
+	}
+	return c.FontSizeCityTime
+}
+
+// GetFontSizeTempIcon returns the temperature font size, defaulting to 32px.
+func (c *Config) GetFontSizeTempIcon() int {
+	if c.FontSizeTempIcon <= 0 {
+		return 32
+	}
+	return c.FontSizeTempIcon
+}
+
+// GetFontSizeConditions returns the conditions font size, defaulting to 10px.
+func (c *Config) GetFontSizeConditions() int {
+	if c.FontSizeConditions <= 0 {
+		return 10
+	}
+	return c.FontSizeConditions
 }

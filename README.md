@@ -153,6 +153,18 @@ There are two ways to fix this:
 
 ## Changelog
 
+### v1.1.0 — 2026-08-19
+
+- **Font Size controls (GTK Linux)** — New **Font Size** section in the Widget tab lets you independently adjust the text size for three areas of the widget:
+  - **City & Time** — controls city name and clock (range 8–48 px)
+  - **Temperature & Icon** — controls temperature value and weather icon size (range 10–72 px)
+  - **Weather Conditions** — controls description, humidity, wind, and all info rows below temperature (range 6–36 px)
+- **Live font-size preview** — Each row has **▼ / Npx / ▲** buttons that update the widget in real time as you click, with no need to hit Save first
+- **Icon scales with temperature** — The weather icon resizes together with the Temperature & Icon font size so both grow and shrink in proportion
+- **Cancel reverts preview** — Closing the settings dialog with Cancel restores all font sizes to what was last saved, discarding any unsaved live-preview changes
+- **Font sizes persisted** — All three font size values are saved to `config.json` and restored on next launch; existing config files without these keys fall back to the original defaults.
+- **Full i18n coverage** — Font size section title, subtitle, and all three row labels are fully translated across all 9 supported languages (English, German, Spanish, French, Italian, Dutch, Polish, Portuguese, Turkish)
+
 ### v0.6.3 — 2025-06-26
 
 - Added new "heavy rain" weather icon (`heavy_rain.png`) for heavy intensity rain conditions across all providers (OWM, WU, EWW)

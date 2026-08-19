@@ -26,7 +26,8 @@ type CityPanel struct {
 	iconRow       *fyne.Container
 	tempText      *canvas.Text
 	descText      *canvas.Text
-	humidWindText *canvas.Text
+	humidityText  *canvas.Text
+	windText      *canvas.Text
 	cityText      *canvas.Text
 	timeText      *canvas.Text
 	dateText      *canvas.Text
@@ -102,10 +103,15 @@ func NewCityPanel(lm *i18n.LocaleManager) *CityPanel {
 	p.descText.TextStyle = fyne.TextStyle{Italic: true}
 	p.descText.Alignment = fyne.TextAlignCenter
 
-	p.humidWindText = canvas.NewText(p.translate("panel.placeholder.humidWind", "💧 --%   🪁 -- NW"), theme.ForegroundColor())
-	p.humidWindText.TextSize = 12
-	p.humidWindText.TextStyle = fyne.TextStyle{Italic: true}
-	p.humidWindText.Alignment = fyne.TextAlignCenter
+	p.humidityText = canvas.NewText(p.translate("panel.placeholder.humidity", "💧 Hum --%"), theme.ForegroundColor())
+	p.humidityText.TextSize = 12
+	p.humidityText.TextStyle = fyne.TextStyle{Italic: true}
+	p.humidityText.Alignment = fyne.TextAlignCenter
+
+	p.windText = canvas.NewText(p.translate("panel.placeholder.wind", "💨 -- km/h"), theme.ForegroundColor())
+	p.windText.TextSize = 12
+	p.windText.TextStyle = fyne.TextStyle{Italic: true}
+	p.windText.Alignment = fyne.TextAlignCenter
 
 	p.timeText = canvas.NewText(p.translate("panel.placeholder.time", "00:00:00"), theme.ForegroundColor())
 	p.timeText.TextSize = 22
@@ -169,15 +175,12 @@ func (p *CityPanel) buildLayout() fyne.CanvasObject {
 		objects = append(objects, p.descText)
 	}
 
-	if p.displayFields.ShowHumidWind || p.displayFields.ShowWindDir {
-		var rowObjects []fyne.CanvasObject
-		if p.displayFields.ShowHumidWind {
-			rowObjects = append(rowObjects, p.humidWindText)
-		}
-		if p.displayFields.ShowWindDir {
-			rowObjects = append(rowObjects, p.windDirText)
-		}
-		objects = append(objects, container.NewCenter(container.NewHBox(rowObjects...)))
+	if p.displayFields.ShowHumidity {
+		objects = append(objects, container.NewCenter(p.humidityText))
+	}
+
+	if p.displayFields.ShowWind {
+		objects = append(objects, container.NewCenter(container.NewHBox(p.windText, p.windDirText)))
 	}
 
 	// Dynamic sections: only show if fields are visible.
@@ -257,8 +260,11 @@ func (p *CityPanel) Update(data *weather.WeatherData, tempUnit config.Temperatur
 	p.descText.Text = weather.FormatDescription(data.Description, p.lm)
 	p.descText.Refresh()
 
-	p.humidWindText.Text = weather.FormatHumidityWind(data.Humidity, data.WindSpeed, windUnit)
-	p.humidWindText.Refresh()
+	p.humidityText.Text = weather.FormatHumidity(data.Humidity, p.lm)
+	p.humidityText.Refresh()
+
+	p.windText.Text = weather.FormatWind(data.WindSpeed, windUnit)
+	p.windText.Refresh()
 
 	p.cityText.Text = weather.FormatCityRegion(data.CityName, data.Region)
 	p.cityText.Refresh()

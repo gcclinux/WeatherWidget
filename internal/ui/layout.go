@@ -14,7 +14,8 @@ const (
 	heightIcon      = 70 // icon (64) + spacing
 	heightTemp      = 48 // large temperature text + spacing
 	heightDesc      = 18 // description text + spacing
-	heightHumidWind = 18 // humidity/wind row + spacing
+	heightHumidity  = 18 // humidity row + spacing
+	heightWindRow   = 18 // wind speed + direction row + spacing
 	heightTime      = 26 // time text
 	heightDate      = 18 // date text
 	heightSeparator = 8  // separator line + spacing
@@ -49,11 +50,11 @@ func CalculateLayoutWithFields(cityCount int, df *config.DisplayFields) (width, 
 	if df.ShowDesc {
 		h += heightDesc
 	}
-	if df.ShowHumidWind {
-		h += heightHumidWind
+	if df.ShowHumidity {
+		h += heightHumidity
 	}
-	if df.ShowWindDir {
-		h += heightInfoRow
+	if df.ShowWind {
+		h += heightWindRow
 	}
 	if df.ShowWindGust {
 		h += heightInfoRow

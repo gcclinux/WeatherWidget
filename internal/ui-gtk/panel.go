@@ -18,30 +18,33 @@ import (
 
 // cityPanel holds all GTK widgets for a single city's weather display.
 type cityPanel struct {
-	root     *gtk.Box // top-level box, added to the main window's hbox
-	nameBox  *gtk.Box // row: icon + city name
-	icon     *gtk.Image
-	cityLbl  *gtk.Label
-	timeLbl  *gtk.Label
-	dateLbl  *gtk.Label
-	tempLbl  *gtk.Label
-	descLbl  *gtk.Label
-	infoLbl  *gtk.Label // humidity + wind
-	windRowBox *gtk.Box
+	root        *gtk.Box // top-level box, added to the main window's hbox
+	nameBox     *gtk.Box // row: icon + city name
+	icon        *gtk.Image
+	cityLbl     *gtk.Label
+	timeLbl     *gtk.Label
+	dateLbl     *gtk.Label
+	tempLbl     *gtk.Label
+	descLbl     *gtk.Label
+	humidLbl    *gtk.Label // humidity row
+	windLbl     *gtk.Label // wind speed row
+	windRowBox  *gtk.Box
 	windGustLbl *gtk.Label
 	dewPointLbl *gtk.Label
 	pressureLbl *gtk.Label
 	uvIndexLbl  *gtk.Label
 	windDirLbl  *gtk.Label
-	errorLbl *gtk.Label
+	errorLbl    *gtk.Label
 
 	city     string
 	region   string
 	timezone string
 	lm       *i18n.LocaleManager
 
-	lastData *weather.WeatherData
-	lastUnit config.TemperatureUnit
+	lastData     *weather.WeatherData
+	lastUnit     config.TemperatureUnit
+	lastIconCode string // most recently loaded icon code, for resize without re-fetch
+	iconSize     int    // current icon pixel size; 0 means default (32px)
 
 	clockTicker *time.Ticker
 	clockStop   chan struct{}
@@ -133,7 +136,18 @@ func newCityPanel(city, region, timezone string, lm *i18n.LocaleManager) (*cityP
 	p.descLbl = descLbl
 	root.PackStart(descLbl, false, false, 0)
 
-	// ── Humidity / wind row ──────────────────────────────────────────────────
+	// ── Humidity row ─────────────────────────────────────────────────────────
+	humidLbl, err := gtk.LabelNew("")
+	if err != nil {
+		return nil, err
+	}
+	humidLbl.SetHAlign(gtk.ALIGN_CENTER)
+	sc, _ = humidLbl.GetStyleContext()
+	sc.AddClass("info-label")
+	p.humidLbl = humidLbl
+	root.PackStart(humidLbl, false, false, 0)
+
+	// ── Wind / wind-direction row ─────────────────────────────────────────────
 	windRowBox, err := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 4)
 	if err != nil {
 		return nil, err
@@ -141,15 +155,15 @@ func newCityPanel(city, region, timezone string, lm *i18n.LocaleManager) (*cityP
 	windRowBox.SetHAlign(gtk.ALIGN_CENTER)
 	p.windRowBox = windRowBox
 
-	infoLbl, err := gtk.LabelNew("")
+	windLbl, err := gtk.LabelNew("")
 	if err != nil {
 		return nil, err
 	}
-	infoLbl.SetHAlign(gtk.ALIGN_CENTER)
-	sc, _ = infoLbl.GetStyleContext()
+	windLbl.SetHAlign(gtk.ALIGN_CENTER)
+	sc, _ = windLbl.GetStyleContext()
 	sc.AddClass("info-label")
-	p.infoLbl = infoLbl
-	windRowBox.PackStart(infoLbl, false, false, 0)
+	p.windLbl = windLbl
+	windRowBox.PackStart(windLbl, false, false, 0)
 
 	// ── Wind direction ───────────────────────────────────────────────────────
 	windDirLbl, err := gtk.LabelNew("")
@@ -236,16 +250,17 @@ func (p *cityPanel) update(d *weather.WeatherData, tempUnit config.TemperatureUn
 	p.cityLbl.SetText(d.CityName + ", " + d.Region)
 	p.tempLbl.SetText(weather.FormatTemperature(d.Temperature, tempUnit))
 	p.descLbl.SetText(weather.FormatDescription(d.Description, p.lm))
-	p.infoLbl.SetText(weather.FormatHumidityWind(d.Humidity, d.WindSpeed, windUnit))
+	p.humidLbl.SetText(weather.FormatHumidity(d.Humidity, p.lm))
+	p.windLbl.SetText(weather.FormatWind(d.WindSpeed, windUnit))
 	p.windGustLbl.SetText(weather.FormatWindGust(d.WindGust, windUnit, p.lm))
 	p.dewPointLbl.SetText(weather.FormatDewPoint(d.DewPoint, p.lm))
 	p.pressureLbl.SetText(weather.FormatPressure(d.Pressure))
 	p.uvIndexLbl.SetText(weather.FormatUVIndex(d.UVIndex))
 	p.windDirLbl.SetText(weather.FormatWindDir(d.WindDirection))
 
-	// Load weather icon.
+	// Load weather icon at the current icon size.
 	iconCode := weather.MapConditionToIcon(d.IconCode, d.LocalTime)
-	p.loadIcon(iconCode)
+	p.loadIcon(iconCode, p.iconSize)
 }
 
 // showError displays an error state on the panel.
@@ -280,9 +295,10 @@ func (p *cityPanel) applyDisplayFields(df *config.DisplayFields) {
 	setVisible(p.icon, df.ShowIcon)
 	setVisible(p.tempLbl, df.ShowTemp)
 	setVisible(p.descLbl, df.ShowDesc)
-	setVisible(p.infoLbl, df.ShowHumidWind)
-	setVisible(p.windDirLbl, df.ShowWindDir)
-	setVisible(p.windRowBox, df.ShowHumidWind || df.ShowWindDir)
+	setVisible(p.humidLbl, df.ShowHumidity)
+	setVisible(p.windLbl, df.ShowWind)
+	setVisible(p.windDirLbl, df.ShowWind)
+	setVisible(p.windRowBox, df.ShowWind)
 	setVisible(p.windGustLbl, df.ShowWindGust)
 	setVisible(p.dewPointLbl, df.ShowDewPoint)
 	setVisible(p.pressureLbl, df.ShowPressure)
@@ -291,8 +307,13 @@ func (p *cityPanel) applyDisplayFields(df *config.DisplayFields) {
 	setVisible(p.dateLbl, df.ShowDate)
 }
 
-// loadIcon tries to load the weather icon from embedded assets.
-func (p *cityPanel) loadIcon(iconCode string) {
+// loadIcon tries to load the weather icon from embedded assets at the given
+// pixel size. Pass size=0 to use the default 32 px.
+func (p *cityPanel) loadIcon(iconCode string, size int) {
+	if size <= 0 {
+		size = 32
+	}
+	p.lastIconCode = iconCode // remember for live resize
 	data, err := assets.Icons.ReadFile(fmt.Sprintf("icons/%s.png", iconCode))
 	if err != nil {
 		p.icon.Clear()
@@ -316,15 +337,23 @@ func (p *cityPanel) loadIcon(iconCode string) {
 		p.icon.Clear()
 		return
 	}
-	// Scale to 32x32 — if ScaleSimple fails, use the original but constrain the widget.
-	scaled, err := pb.ScaleSimple(32, 32, gdk.INTERP_BILINEAR)
+	// Scale to the requested size; fall back to original on failure.
+	scaled, err := pb.ScaleSimple(size, size, gdk.INTERP_BILINEAR)
 	if err != nil || scaled == nil {
 		p.icon.SetFromPixbuf(pb)
 	} else {
 		p.icon.SetFromPixbuf(scaled)
 	}
-	// Always constrain the image widget size to prevent oversized rendering.
-	p.icon.SetSizeRequest(32, 32)
+	p.icon.SetSizeRequest(size, size)
+}
+
+// applyIconSize rescales the currently displayed icon to a new pixel size.
+// It is called from manager.SetFontSizes for live preview.
+func (p *cityPanel) applyIconSize(size int) {
+	if p.lastIconCode == "" {
+		return
+	}
+	p.loadIcon(p.lastIconCode, size)
 }
 
 // startClock starts the clock ticker that updates the time/date labels every

@@ -51,7 +51,7 @@ func showSettingsDialog(m *manager) {
 	// Don't set transient-for — the main window is a positioned desktop widget
 	// and making the dialog transient causes them to move together.
 	dlg.SetModal(false)
-	dlg.SetDefaultSize(600, 580)
+	dlg.SetDefaultSize(600, 680)
 	dlg.SetPosition(gtk.WIN_POS_CENTER)
 
 	box, _ := dlg.GetContentArea()
@@ -77,7 +77,7 @@ func showSettingsDialog(m *manager) {
 	nb.AppendPage(locationsBox, locationsLabel)
 
 	// --- Widget tab ---
-	widgetBox, getDisplayFields, getTempUnit, getWindUnit := buildWidgetTab(m)
+	widgetBox, getDisplayFields, getTempUnit, getWindUnit, getFontSizes := buildWidgetTab(m)
 	widgetLabel, _ := gtk.LabelNew(m.t("settings.tab.widget"))
 	nb.AppendPage(widgetBox, widgetLabel)
 
@@ -108,6 +108,11 @@ func showSettingsDialog(m *manager) {
 
 	dlg.ShowAll()
 
+	// Snapshot font sizes so Cancel can revert any live-preview changes.
+	origCityTime := m.fontSizeCityTime
+	origTempIcon := m.fontSizeTempIcon
+	origConditions := m.fontSizeConditions
+
 	resp := dlg.Run()
 	if resp == gtk.RESPONSE_OK {
 		opacity := int(opacityScale.GetValue())
@@ -119,11 +124,16 @@ func showSettingsDialog(m *manager) {
 		newCfg.Opacity = opacity
 		newCfg.NoBackground = noBackground
 		newCfg.NoBorder = noBorder
-		newCfg.Cities = getCities()         // collect current city list from the locations tab
-		newCfg.Locale = getLocale()          // collect selected language
+		newCfg.Cities = getCities()               // collect current city list from the locations tab
+		newCfg.Locale = getLocale()               // collect selected language
 		newCfg.DisplayFields = getDisplayFields() // collect panel visibility
 		newCfg.TemperatureUnit = getTempUnit()    // collect temperature unit
 		newCfg.WindSpeedUnit = getWindUnit()      // collect wind speed unit
+
+		fs := getFontSizes()
+		newCfg.FontSizeCityTime = fs.cityTime
+		newCfg.FontSizeTempIcon = fs.tempIcon
+		newCfg.FontSizeConditions = fs.conditions
 
 		// Apply live before saving so the user sees the change immediately.
 		m.SetOpacity(opacity)
@@ -131,6 +141,10 @@ func showSettingsDialog(m *manager) {
 		m.SetNoBorder(noBorder)
 
 		_ = m.onSettingsSave(&newCfg)
+	} else {
+		// User cancelled — revert any live font-size preview back to what was
+		// saved in config before the dialog was opened.
+		m.SetFontSizes(origCityTime, origTempIcon, origConditions)
 	}
 
 	dlg.Destroy()
@@ -505,10 +519,18 @@ func showErrorDialog(parent *gtk.Dialog, msg string) {
 	ed.Destroy()
 }
 
-// buildWidgetTab creates the Widget tab for controlling panel element visibility
-// and temperature unit — matching the Fyne settings Widget tab layout.
-// Returns the tab box, a getDisplayFields() func, a getTempUnit() func, and a getWindUnit() func.
-func buildWidgetTab(m *manager) (*gtk.Box, func() *config.DisplayFields, func() config.TemperatureUnit, func() config.WindSpeedUnit) {
+// fontSizes holds the three live font size values threaded through the Widget tab.
+type fontSizes struct {
+	cityTime   int
+	tempIcon   int
+	conditions int
+}
+
+// buildWidgetTab creates the Widget tab for controlling panel element visibility,
+// temperature unit, wind speed unit, and font sizes for the three widget sections.
+// Returns the tab box, a getDisplayFields() func, a getTempUnit() func, a getWindUnit() func,
+// and a getFontSizes() func.
+func buildWidgetTab(m *manager) (*gtk.Box, func() *config.DisplayFields, func() config.TemperatureUnit, func() config.WindSpeedUnit, func() fontSizes) {
 	vbox, _ := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 12)
 	vbox.SetMarginTop(12)
 	vbox.SetMarginStart(8)
@@ -548,21 +570,21 @@ func buildWidgetTab(m *manager) (*gtk.Box, func() *config.DisplayFields, func() 
 	chkDesc.SetActive(df.ShowDesc)
 	grid.Attach(chkDesc, 3, 0, 1, 1)
 
-	chkHumidWind, _ := gtk.CheckButtonNewWithLabel(m.t("settings.display.humidWind"))
-	chkHumidWind.SetActive(df.ShowHumidWind)
-	grid.Attach(chkHumidWind, 0, 1, 1, 1)
+	chkHumidity, _ := gtk.CheckButtonNewWithLabel(m.t("settings.display.humidity"))
+	chkHumidity.SetActive(df.ShowHumidity)
+	grid.Attach(chkHumidity, 0, 1, 1, 1)
+
+	chkWind, _ := gtk.CheckButtonNewWithLabel(m.t("settings.display.wind"))
+	chkWind.SetActive(df.ShowWind)
+	grid.Attach(chkWind, 1, 1, 1, 1)
 
 	chkTime, _ := gtk.CheckButtonNewWithLabel(m.t("settings.display.time"))
 	chkTime.SetActive(df.ShowTime)
-	grid.Attach(chkTime, 1, 1, 1, 1)
+	grid.Attach(chkTime, 2, 1, 1, 1)
 
 	chkDate, _ := gtk.CheckButtonNewWithLabel(m.t("settings.display.date"))
 	chkDate.SetActive(df.ShowDate)
-	grid.Attach(chkDate, 2, 1, 1, 1)
-
-	chkWindDir, _ := gtk.CheckButtonNewWithLabel(m.t("settings.display.windDir"))
-	chkWindDir.SetActive(df.ShowWindDir)
-	grid.Attach(chkWindDir, 3, 1, 1, 1)
+	grid.Attach(chkDate, 3, 1, 1, 1)
 
 	chkWindGust, _ := gtk.CheckButtonNewWithLabel(m.t("settings.display.windGust"))
 	chkWindGust.SetActive(df.ShowWindGust)
@@ -639,18 +661,18 @@ func buildWidgetTab(m *manager) (*gtk.Box, func() *config.DisplayFields, func() 
 
 	getDisplayFields := func() *config.DisplayFields {
 		return &config.DisplayFields{
-			ShowCity:      chkCity.GetActive(),
-			ShowIcon:      chkIcon.GetActive(),
-			ShowTemp:      chkTemp.GetActive(),
-			ShowDesc:      chkDesc.GetActive(),
-			ShowHumidWind: chkHumidWind.GetActive(),
-			ShowTime:      chkTime.GetActive(),
-			ShowDate:      chkDate.GetActive(),
-			ShowWindGust:  chkWindGust.GetActive(),
-			ShowDewPoint:  chkDewPoint.GetActive(),
-			ShowPressure:  chkPressure.GetActive(),
-			ShowUVIndex:   chkUVIndex.GetActive(),
-			ShowWindDir:   chkWindDir.GetActive(),
+			ShowCity:     chkCity.GetActive(),
+			ShowIcon:     chkIcon.GetActive(),
+			ShowTemp:     chkTemp.GetActive(),
+			ShowDesc:     chkDesc.GetActive(),
+			ShowHumidity: chkHumidity.GetActive(),
+			ShowWind:     chkWind.GetActive(),
+			ShowTime:     chkTime.GetActive(),
+			ShowDate:     chkDate.GetActive(),
+			ShowWindGust: chkWindGust.GetActive(),
+			ShowDewPoint: chkDewPoint.GetActive(),
+			ShowPressure: chkPressure.GetActive(),
+			ShowUVIndex:  chkUVIndex.GetActive(),
 		}
 	}
 
@@ -671,7 +693,104 @@ func buildWidgetTab(m *manager) (*gtk.Box, func() *config.DisplayFields, func() 
 		return config.WindSpeedUnitKmh
 	}
 
-	return vbox, getDisplayFields, getTempUnit, getWindUnit
+	// ── Font Size ─────────────────────────────────────────────────────────
+	sep3, _ := gtk.SeparatorNew(gtk.ORIENTATION_HORIZONTAL)
+	vbox.PackStart(sep3, false, false, 4)
+
+	fontTitle, _ := gtk.LabelNew("")
+	fontTitle.SetMarkup("<b>" + m.t("settings.fontSize.title") + "</b>")
+	fontTitle.SetHAlign(gtk.ALIGN_START)
+	vbox.PackStart(fontTitle, false, false, 0)
+
+	fontSubtitle, _ := gtk.LabelNew(m.t("settings.fontSize.subtitle"))
+	fontSubtitle.SetHAlign(gtk.ALIGN_START)
+	fontSubtitle.SetLineWrap(true)
+	vbox.PackStart(fontSubtitle, false, false, 0)
+
+	// Live values — kept in sync as the user clicks ▲ / ▼.
+	curCityTime := m.fontSizeCityTime
+	curTempIcon := m.fontSizeTempIcon
+	curConditions := m.fontSizeConditions
+
+	// applyLive fires SetFontSizes so the widget updates immediately.
+	applyLive := func() {
+		m.SetFontSizes(curCityTime, curTempIcon, curConditions)
+	}
+
+	// buildFontRow creates one labelled row: label — ▼ — Npx — ▲
+	// labelKey is the i18n key, initial is the starting value, min/max clamp
+	// the range, onChange is called on every change for live preview.
+	buildFontRow := func(labelKey string, initial, minVal, maxVal int, onChange func(int)) (*gtk.Box, func() int) {
+		row, _ := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 8)
+
+		lbl, _ := gtk.LabelNew(m.t(labelKey))
+		lbl.SetHAlign(gtk.ALIGN_START)
+		lbl.SetHExpand(true)
+		row.PackStart(lbl, true, true, 0)
+
+		val := initial
+		sizeLbl, _ := gtk.LabelNew(strconv.Itoa(val) + "px")
+		sizeLbl.SetWidthChars(5)
+
+		decBtn, _ := gtk.ButtonNewWithLabel("▼")
+		incBtn, _ := gtk.ButtonNewWithLabel("▲")
+
+		refresh := func() {
+			sizeLbl.SetText(strconv.Itoa(val) + "px")
+			onChange(val)
+		}
+
+		decBtn.Connect("clicked", func() {
+			if val > minVal {
+				val--
+				refresh()
+			}
+		})
+		incBtn.Connect("clicked", func() {
+			if val < maxVal {
+				val++
+				refresh()
+			}
+		})
+
+		row.PackStart(decBtn, false, false, 0)
+		row.PackStart(sizeLbl, false, false, 0)
+		row.PackStart(incBtn, false, false, 0)
+
+		return row, func() int { return val }
+	}
+
+	rowCT, getCityTime := buildFontRow(
+		"settings.fontSize.cityTime",
+		curCityTime, 8, 48,
+		func(v int) { curCityTime = v; applyLive() },
+	)
+	vbox.PackStart(rowCT, false, false, 0)
+
+	rowTI, getTempIconSize := buildFontRow(
+		"settings.fontSize.tempIcon",
+		curTempIcon, 10, 72,
+		func(v int) { curTempIcon = v; applyLive() },
+	)
+	vbox.PackStart(rowTI, false, false, 0)
+
+	rowCond, getConditionsSize := buildFontRow(
+		"settings.fontSize.conditions",
+		curConditions, 6, 36,
+		func(v int) { curConditions = v; applyLive() },
+	)
+	rowCond.SetMarginBottom(12)
+	vbox.PackStart(rowCond, false, false, 0)
+
+	getFontSizes := func() fontSizes {
+		return fontSizes{
+			cityTime:   getCityTime(),
+			tempIcon:   getTempIconSize(),
+			conditions: getConditionsSize(),
+		}
+	}
+
+	return vbox, getDisplayFields, getTempUnit, getWindUnit, getFontSizes
 }
 
 // buildLocationsTab builds the city management tab.
@@ -1065,10 +1184,10 @@ func lookupTimezone(lat, lon float64) string {
 
 // localeInfo holds display data for a single language option.
 type localeInfo struct {
-	code    string // e.g. "en-GB"
-	badge   string // 2-letter display code
-	name    string // native name
-	color   string // CSS hex colour for the badge
+	code  string // e.g. "en-GB"
+	badge string // 2-letter display code
+	name  string // native name
+	color string // CSS hex colour for the badge
 }
 
 // allLocales lists every supported locale in the same order as the screenshot.
