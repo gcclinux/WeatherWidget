@@ -7,6 +7,7 @@ import (
 	"weatherwidget/internal/config"
 	"weatherwidget/internal/weather"
 
+	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/test"
 )
 
@@ -215,3 +216,92 @@ func TestCityPanel_Rerender_WithCachedData(t *testing.T) {
 		t.Errorf("after Rerender with fahrenheit, tempText = %q, want %q", p.tempText.Text, "68°F")
 	}
 }
+
+func TestCityPanel_DynamicDisplayFields_StartupOrder(t *testing.T) {
+	test.NewApp()
+	p := NewCityPanel(nil)
+
+	// Apply display fields on startup before any weather data has arrived
+	df := &config.DisplayFields{
+		ShowCity:     true,
+		ShowIcon:     true,
+		ShowTemp:     true,
+		ShowDesc:     true,
+		ShowHumidity: true,
+		ShowWind:     false,
+		ShowTime:     true,
+		ShowDate:     false,
+		ShowWindGust: true,
+		ShowDewPoint: true,
+		ShowPressure: true,
+		ShowUVIndex:  true,
+	}
+	p.ApplyDisplayFields(df)
+
+	// Verify that the dynamic objects are present in the container tree
+	foundGust, foundDew, foundPressure, foundUV := false, false, false, false
+	var checkObjects func(obj fyne.CanvasObject)
+	checkObjects = func(obj fyne.CanvasObject) {
+		if obj == p.windGustText {
+			foundGust = true
+		}
+		if obj == p.dewPointText {
+			foundDew = true
+		}
+		if obj == p.pressureText {
+			foundPressure = true
+		}
+		if obj == p.uvIndexText {
+			foundUV = true
+		}
+		if c, ok := obj.(*fyne.Container); ok {
+			for _, child := range c.Objects {
+				checkObjects(child)
+			}
+		}
+	}
+	checkObjects(p.Container())
+
+	if !foundGust {
+		t.Error("expected windGustText to be in container hierarchy on startup")
+	}
+	if !foundDew {
+		t.Error("expected dewPointText to be in container hierarchy on startup")
+	}
+	if !foundPressure {
+		t.Error("expected pressureText to be in container hierarchy on startup")
+	}
+	if !foundUV {
+		t.Error("expected uvIndexText to be in container hierarchy on startup")
+	}
+
+	// Now simulate weather data arrival
+	data := &weather.WeatherData{
+		CityName:      "Broxburn",
+		Region:        "GB",
+		Temperature:   13,
+		Description:   "Broken Clouds",
+		Humidity:      79,
+		WindGust:      15.5,
+		DewPoint:      9.9,
+		Pressure:      1013,
+		UVIndex:       2.1,
+		LocalTime:     time.Now(),
+		FetchedAt:     time.Now(),
+	}
+	p.Update(data, config.TemperatureUnitCelsius, config.WindSpeedUnitKmh)
+
+	if p.windGustText.Text == "" {
+		t.Error("windGustText should be populated after Update")
+	}
+	if p.dewPointText.Text == "" {
+		t.Error("dewPointText should be populated after Update")
+	}
+	if p.pressureText.Text == "" {
+		t.Error("pressureText should be populated after Update")
+	}
+	if p.uvIndexText.Text == "" {
+		t.Error("uvIndexText should be populated after Update")
+	}
+}
+

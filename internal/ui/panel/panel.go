@@ -187,16 +187,16 @@ func (p *CityPanel) buildLayout() fyne.CanvasObject {
 	hasDynamicField := p.displayFields.ShowWindGust || p.displayFields.ShowDewPoint || p.displayFields.ShowPressure || p.displayFields.ShowUVIndex
 	if hasDynamicField {
 		var dynamicObjects []fyne.CanvasObject
-		if p.displayFields.ShowWindGust && p.windGustText.Text != "" {
+		if p.displayFields.ShowWindGust {
 			dynamicObjects = append(dynamicObjects, p.windGustText)
 		}
-		if p.displayFields.ShowDewPoint && p.dewPointText.Text != "" {
+		if p.displayFields.ShowDewPoint {
 			dynamicObjects = append(dynamicObjects, p.dewPointText)
 		}
-		if p.displayFields.ShowPressure && p.pressureText.Text != "" {
+		if p.displayFields.ShowPressure {
 			dynamicObjects = append(dynamicObjects, p.pressureText)
 		}
-		if p.displayFields.ShowUVIndex && p.uvIndexText.Text != "" {
+		if p.displayFields.ShowUVIndex {
 			dynamicObjects = append(dynamicObjects, p.uvIndexText)
 		}
 
