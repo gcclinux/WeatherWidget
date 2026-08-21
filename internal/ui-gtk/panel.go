@@ -314,7 +314,14 @@ func (p *cityPanel) loadIcon(iconCode string, size int) {
 		size = 32
 	}
 	p.lastIconCode = iconCode // remember for live resize
-	data, err := assets.Icons.ReadFile(fmt.Sprintf("icons/%s.png", iconCode))
+	var data []byte
+	var err error
+	for _, ext := range []string{".gif", ".webp", ".png"} {
+		data, err = assets.Icons.ReadFile(fmt.Sprintf("icons/%s%s", iconCode, ext))
+		if err == nil {
+			break
+		}
+	}
 	if err != nil {
 		p.icon.Clear()
 		return
@@ -332,17 +339,23 @@ func (p *cityPanel) loadIcon(iconCode string, size int) {
 		p.icon.Clear()
 		return
 	}
-	pb, err := loader.GetPixbuf()
-	if err != nil || pb == nil {
-		p.icon.Clear()
-		return
-	}
-	// Scale to the requested size; fall back to original on failure.
-	scaled, err := pb.ScaleSimple(size, size, gdk.INTERP_BILINEAR)
-	if err != nil || scaled == nil {
-		p.icon.SetFromPixbuf(pb)
+
+	anim, animErr := loader.GetAnimation()
+	if animErr == nil && anim != nil && !anim.IsStaticImage() {
+		p.icon.SetFromAnimation(anim)
 	} else {
-		p.icon.SetFromPixbuf(scaled)
+		pb, err := loader.GetPixbuf()
+		if err != nil || pb == nil {
+			p.icon.Clear()
+			return
+		}
+		// Scale to the requested size; fall back to original on failure.
+		scaled, err := pb.ScaleSimple(size, size, gdk.INTERP_BILINEAR)
+		if err != nil || scaled == nil {
+			p.icon.SetFromPixbuf(pb)
+		} else {
+			p.icon.SetFromPixbuf(scaled)
+		}
 	}
 	p.icon.SetSizeRequest(size, size)
 }

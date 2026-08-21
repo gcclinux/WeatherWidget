@@ -236,9 +236,9 @@ func mapOWMConditionToIcon(id int) string {
 		return weather.IconFog
 	case id == 800:
 		return weather.IconClear
-	case id == 801 || id == 802:
+	case id >= 801 && id <= 803:
 		return weather.IconPartlyCloudy
-	case id == 803 || id == 804:
+	case id == 804:
 		return weather.IconCloudy
 	default:
 		return weather.IconCloudy
@@ -563,7 +563,7 @@ func (r *RemoteAPIAdapter) testEWW(ctx context.Context) error {
 
 // mapEWWFreeTextToIcon maps EasyWeatherWidget FreeText descriptions to internal icon codes.
 // It performs case-insensitive keyword matching with the following priority order:
-// storm/thunder → snow → rain/drizzle → fog/mist/haze → cloud → clear → default partly_cloudy.
+// storm/thunder → snow → heavy rain → rain/drizzle → fog/mist/haze → partly/scattered/few/broken clouds → cloud/overcast → clear → default partly_cloudy.
 func mapEWWFreeTextToIcon(freeText string) string {
 	lower := strings.ToLower(freeText)
 	switch {
@@ -577,7 +577,9 @@ func mapEWWFreeTextToIcon(freeText string) string {
 		return weather.IconRain
 	case strings.Contains(lower, "fog"), strings.Contains(lower, "mist"), strings.Contains(lower, "haze"):
 		return weather.IconFog
-	case strings.Contains(lower, "cloud"):
+	case strings.Contains(lower, "partly"), strings.Contains(lower, "scattered"), strings.Contains(lower, "few"), strings.Contains(lower, "broken"):
+		return weather.IconPartlyCloudy
+	case strings.Contains(lower, "cloud"), strings.Contains(lower, "overcast"):
 		return weather.IconCloudy
 	case strings.Contains(lower, "clear"):
 		return weather.IconClear

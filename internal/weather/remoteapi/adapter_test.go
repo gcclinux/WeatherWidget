@@ -306,7 +306,7 @@ func TestMapOWMConditionToIcon(t *testing.T) {
 		{800, weather.IconClear},
 		{801, weather.IconPartlyCloudy},
 		{802, weather.IconPartlyCloudy},
-		{803, weather.IconCloudy},
+		{803, weather.IconPartlyCloudy},
 		{804, weather.IconCloudy},
 		{999, weather.IconCloudy}, // unknown defaults to cloudy
 	}
@@ -519,9 +519,16 @@ func TestMapEWWFreeTextToIcon(t *testing.T) {
 		{"Dense Fog", weather.IconFog},
 		{"morning mist", weather.IconFog},
 		{"haze", weather.IconFog},
-		// cloud keyword
-		{"Partly Cloudy", weather.IconCloudy},
+		// partly / scattered / few / broken clouds keywords
+		{"Partly Cloudy", weather.IconPartlyCloudy},
+		{"scattered clouds", weather.IconPartlyCloudy},
+		{"few clouds", weather.IconPartlyCloudy},
+		{"broken clouds", weather.IconPartlyCloudy},
+		{"partly sunny", weather.IconPartlyCloudy},
+		// cloud / overcast keywords
+		{"Cloudy", weather.IconCloudy},
 		{"overcast clouds", weather.IconCloudy},
+		{"overcast", weather.IconCloudy},
 		// clear keyword
 		{"Clear Sky", weather.IconClear},
 		{"mostly clear", weather.IconClear},

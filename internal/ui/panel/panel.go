@@ -2,6 +2,7 @@ package panel
 
 import (
 	"fmt"
+	"image"
 	"log"
 	"sync"
 	"time"
@@ -46,6 +47,7 @@ type CityPanel struct {
 	mu         sync.Mutex
 	timeTicker *time.Ticker
 	stopCh     chan struct{}
+	animStopCh chan struct{}
 }
 
 // translate returns the translated string for the given key using the panel's
@@ -57,14 +59,74 @@ func (p *CityPanel) translate(key, fallback string) string {
 	return fallback
 }
 
-// loadIconFromAssets reads an icon PNG from the embedded assets FS and returns it as a Fyne resource.
+// loadIconFromAssets reads an icon from the embedded assets FS and returns it as a Fyne resource.
 func loadIconFromAssets(iconCode string) fyne.Resource {
-	path := fmt.Sprintf("icons/%s.png", iconCode)
-	data, err := assets.Icons.ReadFile(path)
-	if err != nil {
-		return nil
+	for _, ext := range []string{".gif", ".webp", ".png"} {
+		path := fmt.Sprintf("icons/%s%s", iconCode, ext)
+		data, err := assets.Icons.ReadFile(path)
+		if err == nil {
+			return fyne.NewStaticResource(path, data)
+		}
 	}
-	return fyne.NewStaticResource(path, data)
+	return nil
+}
+
+// updateIcon updates the panel's icon widget, supporting animated motion icons.
+func (p *CityPanel) updateIcon(iconCode string) {
+	p.StopAnimation()
+
+	anim, staticData, staticPath, err := loadIconAsset(iconCode)
+	if err != nil {
+		return
+	}
+
+	if anim != nil && len(anim.frames) > 1 {
+		p.iconWidget.Resource = nil
+		p.iconWidget.File = ""
+		p.iconWidget.Image = anim.frames[0]
+		p.iconWidget.Refresh()
+
+		p.mu.Lock()
+		stopCh := make(chan struct{})
+		p.animStopCh = stopCh
+		p.mu.Unlock()
+
+		go func(frames []image.Image, delays []time.Duration, stopCh chan struct{}) {
+			idx := 0
+			for {
+				delay := delays[idx]
+				select {
+				case <-stopCh:
+					return
+				case <-time.After(delay):
+					idx = (idx + 1) % len(frames)
+					frame := frames[idx]
+					fyne.Do(func() {
+						p.iconWidget.Image = frame
+						p.iconWidget.Refresh()
+					})
+				}
+			}
+		}(anim.frames, anim.delays, stopCh)
+		return
+	}
+
+	if staticData != nil {
+		p.iconWidget.Image = nil
+		p.iconWidget.File = ""
+		p.iconWidget.Resource = fyne.NewStaticResource(staticPath, staticData)
+		p.iconWidget.Refresh()
+	}
+}
+
+// StopAnimation stops any running icon animation loop.
+func (p *CityPanel) StopAnimation() {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.animStopCh != nil {
+		close(p.animStopCh)
+		p.animStopCh = nil
+	}
 }
 
 // NewCityPanel creates a new CityPanel with placeholder content.
@@ -76,10 +138,10 @@ func NewCityPanel(lm *i18n.LocaleManager) *CityPanel {
 	}
 
 	// Weather icon — start with the default cloudy icon.
-	res := loadIconFromAssets(weather.IconCloudy)
-	p.iconWidget = canvas.NewImageFromResource(res)
+	p.iconWidget = canvas.NewImageFromResource(loadIconFromAssets(weather.IconCloudy))
 	p.iconWidget.FillMode = canvas.ImageFillContain
 	p.iconWidget.SetMinSize(fyne.NewSize(64, 64))
+	p.updateIcon(weather.IconCloudy)
 
 	// Error indicator icon — hidden by default.
 	p.errorIcon = canvas.NewImageFromResource(nil)
@@ -245,13 +307,9 @@ func (p *CityPanel) Update(data *weather.WeatherData, tempUnit config.Temperatur
 	p.lastTempUnit = tempUnit
 	p.lastWindUnit = windUnit
 
-	// Update icon from embedded assets.
+	// Update icon from embedded assets (with animated motion support).
 	iconCode := weather.MapConditionToIcon(data.IconCode, data.LocalTime)
-	res := loadIconFromAssets(iconCode)
-	if res != nil {
-		p.iconWidget.Resource = res
-		p.iconWidget.Refresh()
-	}
+	p.updateIcon(iconCode)
 
 	// Update labels.
 	p.tempText.Text = weather.FormatTemperature(data.Temperature, tempUnit)
@@ -362,8 +420,10 @@ func (p *CityPanel) StartClock(timezone string) {
 	}()
 }
 
-// StopClock stops the time ticker goroutine.
+// StopClock stops the time ticker goroutine and any icon animation.
 func (p *CityPanel) StopClock() {
+	p.StopAnimation()
+
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
