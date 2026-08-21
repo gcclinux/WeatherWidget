@@ -156,7 +156,14 @@ func (r *RemoteAPIAdapter) fetchOWM(ctx context.Context, city config.CityConfig)
 	}
 
 	now := time.Now().UTC()
-	localTime := now.Add(time.Duration(owm.Timezone) * time.Second)
+	var localTime time.Time
+	if loc, err := time.LoadLocation(city.Timezone); err == nil && city.Timezone != "" {
+		localTime = now.In(loc)
+	} else if owm.Timezone != 0 {
+		localTime = now.In(time.FixedZone("CityZone", owm.Timezone))
+	} else {
+		localTime = now
+	}
 
 	temp := int(math.Round(owm.Main.Temp))
 	log.Printf("successfully fetched weather for %s from OWM: %d°C, %s", city.Name, temp, owm.Weather[0].Description)
@@ -500,13 +507,27 @@ func (r *RemoteAPIAdapter) fetchEWW(ctx context.Context, city config.CityConfig)
 		return nil, fmt.Errorf("parse EWW response: %w", err)
 	}
 
-	now := time.Now().UTC()
+	loc, err := time.LoadLocation(city.Timezone)
+	if err != nil {
+		loc = time.UTC
+	}
 
-	// Parse ObsTimeLocal as the local observation time.
-	localTime := now
+	now := time.Now()
+	localTime := now.In(loc)
+
+	// Parse ObsTimeLocal as the local observation time if provided.
 	if eww.ObsTimeLocal != "" {
-		if parsed, err := time.Parse("2006-01-02 15:04:05", eww.ObsTimeLocal); err == nil {
-			localTime = parsed
+		for _, layout := range []string{
+			time.RFC3339,
+			time.RFC3339Nano,
+			"2006-01-02 15:04:05",
+			"2006-01-02T15:04:05",
+			"2006-01-02 15:04",
+		} {
+			if parsed, err := time.ParseInLocation(layout, eww.ObsTimeLocal, loc); err == nil {
+				localTime = parsed.In(loc)
+				break
+			}
 		}
 	}
 
@@ -520,7 +541,7 @@ func (r *RemoteAPIAdapter) fetchEWW(ctx context.Context, city config.CityConfig)
 		Description:   eww.FreeText,
 		IconCode:      mapEWWFreeTextToIcon(eww.FreeText),
 		LocalTime:     localTime,
-		FetchedAt:     now,
+		FetchedAt:     now.UTC(),
 		Humidity:      eww.Humidity,
 		WindSpeed:     eww.WindSpeed,
 		WindDirection: eww.WindDir,

@@ -401,6 +401,43 @@ func TestFetchWeather_EWW_Success(t *testing.T) {
 	}
 }
 
+func TestFetchWeather_EWW_RFC3339ObsTimeLocal(t *testing.T) {
+	resp := ewwResponse{
+		Temp:         31.0,
+		Neighborhood: "California",
+		Country:      "US",
+		FreeText:     "Clear Sky",
+		ObsTimeLocal: "2026-08-21T20:37:57Z", // Live UTC RFC3339 timestamp from gateway
+	}
+
+	srv := newEWWServer(t, http.StatusOK, resp)
+	defer srv.Close()
+
+	adapter := NewRemoteAPIAdapter("easyweatherwidget", "test-key")
+	adapter.BaseURL = srv.URL
+
+	city := config.CityConfig{
+		Name:     "California",
+		Region:   "US",
+		Timezone: "America/Chicago",
+	}
+
+	data, err := adapter.FetchWeather(context.Background(), city)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// 20:37 UTC converted to America/Chicago (CDT, UTC-5) is 15:37
+	if data.LocalTime.Hour() != 15 {
+		t.Errorf("LocalTime.Hour() = %d, want 15 (converted from UTC to city timezone)", data.LocalTime.Hour())
+	}
+
+	icon := weather.MapConditionToIcon(data.IconCode, data.LocalTime)
+	if icon != weather.IconClear {
+		t.Errorf("MapConditionToIcon at 15:37 = %q, want %q (daytime clear icon)", icon, weather.IconClear)
+	}
+}
+
 func TestFetchWeather_EWW_URLConstruction(t *testing.T) {
 	var receivedPath string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
