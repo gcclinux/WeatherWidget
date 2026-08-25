@@ -277,7 +277,7 @@ func (a *AppManager) onSettingsSave(newCfg *config.Config) error {
 	case settingsSaveActionRerender:
 		// Fast path: re-render from cache, no fetch.
 		fyne.Do(func() {
-			a.ui.RerenderPanels(newCfg.TemperatureUnit, newCfg.WindSpeedUnit)
+			a.ui.RerenderPanels(newCfg.TemperatureUnit, newCfg.WindSpeedUnit, newCfg.IconTheme)
 		})
 	default:
 		// Normal path: fetch fresh data (covers city changes, provider changes, etc.).
@@ -365,7 +365,7 @@ func (a *AppManager) handleWeatherUpdate(results []weather.WeatherResult) {
 	}
 	log.Printf("dispatching %d data updates to UI panels", len(data))
 	fyne.Do(func() {
-		a.ui.UpdatePanels(data, a.cfg.TemperatureUnit, a.cfg.WindSpeedUnit)
+		a.ui.UpdatePanels(data, a.cfg.TemperatureUnit, a.cfg.WindSpeedUnit, a.cfg.IconTheme)
 	})
 }
 
@@ -443,7 +443,7 @@ func sameCities(a, b []config.CityConfig) bool {
 type settingsSaveActionType int
 
 const (
-	// settingsSaveActionRerender means only the temperature unit changed:
+	// settingsSaveActionRerender means only the temperature unit, wind speed unit, or icon theme changed:
 	// panels should be re-rendered from cache without a new network fetch.
 	settingsSaveActionRerender settingsSaveActionType = iota
 	// settingsSaveActionFetch means a full weather fetch is required
@@ -457,10 +457,11 @@ const (
 // the current provider state which is not available here).
 func determineSettingsSaveAction(oldCfg, newCfg *config.Config, providerChanged bool) settingsSaveActionType {
 	unitChanged := oldCfg.TemperatureUnit != newCfg.TemperatureUnit || oldCfg.WindSpeedUnit != newCfg.WindSpeedUnit
+	iconThemeChanged := oldCfg.IconTheme != newCfg.IconTheme
 	localeChanged := oldCfg.Locale != newCfg.Locale
 	citiesChanged := len(oldCfg.Cities) != len(newCfg.Cities) || !sameCities(oldCfg.Cities, newCfg.Cities)
 
-	if (unitChanged || localeChanged) && !citiesChanged && !providerChanged {
+	if (unitChanged || iconThemeChanged || localeChanged) && !citiesChanged && !providerChanged {
 		return settingsSaveActionRerender
 	}
 	return settingsSaveActionFetch

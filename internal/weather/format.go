@@ -102,31 +102,89 @@ func FormatDescription(desc string, lm *i18n.LocaleManager) string {
 	return strings.Title(desc)
 }
 
-// Known codes are returned as-is. Unknown codes default to "cloudy".
-// When the code is "clear" and localTime falls between 6 PM and 6 AM,
-// the icon is swapped to "moon" to reflect nighttime.
-func MapConditionToIcon(code string, localTime time.Time) string {
-	for _, valid := range AllIconCodes {
-		if code == valid {
-			if isNight(localTime) {
-				switch code {
-				case IconClear:
-					return IconMoon
-				case IconCloudy:
-					return IconCloudyMoon
-				}
-			}
-			return code
-		}
+// NormalizeCondition maps an icon code or condition name into one of the base icon codes.
+func NormalizeCondition(code string) string {
+	code = strings.TrimSpace(strings.ToLower(code))
+	// Strip directory prefixes if present
+	if idx := strings.LastIndex(code, "/"); idx != -1 {
+		code = code[idx+1:]
 	}
-	return IconCloudy
+	// Strip file extension if present
+	if idx := strings.LastIndex(code, "."); idx != -1 {
+		code = code[:idx]
+	}
+	// Strip _day or _night suffix if present
+	code = strings.TrimSuffix(code, "_day")
+	code = strings.TrimSuffix(code, "_night")
+
+	switch code {
+	case IconClear, "sunny", "clear_sky", "fair", IconMoon:
+		return IconClear
+	case IconPartlyCloudy, "partly-cloudy", "partlycloudy", "few_clouds", "scattered_clouds":
+		return IconPartlyCloudy
+	case IconCloudy, "overcast", "broken_clouds", "cloud", IconCloudyMoon:
+		return IconCloudy
+	case IconRain, "light_rain", "moderate_rain", "drizzle", "shower":
+		return IconRain
+	case IconHeavyRain, "heavy-rain", "heavyrain", "extreme_rain", "very_heavy_rain", "shower_rain":
+		return IconHeavyRain
+	case IconSnow, "light_snow", "heavy_snow", "sleet", "flurries":
+		return IconSnow
+	case IconStorm, "thunderstorm", "lightning", "thunder":
+		return IconStorm
+	case IconFog, "mist", "haze", "smoke", "dust", "sand", "ash", "squall", "tornado":
+		return IconFog
+	case IconWind, "windy", "breeze", "gale":
+		return IconWind
+	default:
+		return IconCloudy
+	}
 }
 
-// isNight returns true when the hour component of t is outside the
+// MapConditionToIcon returns the asset icon path (e.g. "day/clear_day" or "night/clear_night")
+// for the given weather condition code based on the city's local time using the default new icon theme.
+// Daytime is defined as 6:00 AM to 5:59 PM (hours 6 to 17); nighttime is 6:00 PM to 5:59 AM.
+func MapConditionToIcon(code string, localTime time.Time) string {
+	return MapConditionToIconWithTheme(code, localTime, config.IconThemeNew)
+}
+
+// MapConditionToIconWithTheme returns the asset icon path for the given weather condition code,
+// local time, and icon theme (e.g. "day/clear_day", "night/clear_night", or "original/clear").
+func MapConditionToIconWithTheme(code string, localTime time.Time, theme config.IconTheme) string {
+	theme = config.NormalizeIconTheme(theme)
+	base := NormalizeCondition(code)
+	night := IsNight(localTime)
+
+	if theme == config.IconThemeOriginal {
+		if night {
+			switch base {
+			case IconClear:
+				return "original/moon"
+			case IconPartlyCloudy, IconCloudy:
+				return "original/cloudy_moon"
+			default:
+				return "original/" + base
+			}
+		}
+		return "original/" + base
+	}
+
+	if night {
+		return "night/" + base + "_night"
+	}
+	return "day/" + base + "_day"
+}
+
+// IsNight returns true when the hour component of t is outside the
 // 6 AM – 6 PM daytime window (i.e. before 6 or at/after 18).
-func isNight(t time.Time) bool {
+func IsNight(t time.Time) bool {
 	h := t.Hour()
 	return h < 6 || h >= 18
+}
+
+// isNight is an alias kept for backward compatibility.
+func isNight(t time.Time) bool {
+	return IsNight(t)
 }
 
 // compassDirections maps 16 cardinal/intercardinal compass points.

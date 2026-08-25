@@ -6,12 +6,24 @@ import (
 	"time"
 
 	"weatherwidget/assets"
+	"weatherwidget/internal/config"
 
 	"pgregory.net/rapid"
 )
 
 // **Feature: windows-weather-widget, Property 8: Weather condition to icon mapping is total**
 // **Validates: Requirements 2.1**
+
+func verifyAssetExists(t *rapid.T, iconPath string) {
+	for _, ext := range []string{".png", ".gif"} {
+		f, err := assets.Icons.Open(fmt.Sprintf("icons/%s%s", iconPath, ext))
+		if err == nil {
+			f.Close()
+			return
+		}
+	}
+	t.Fatalf("Embedded asset not found for icon path %q", iconPath)
+}
 
 func TestProperty8_MapConditionToIcon_ValidCodes(t *testing.T) {
 	rapid.Check(t, func(t *rapid.T) {
@@ -23,32 +35,25 @@ func TestProperty8_MapConditionToIcon_ValidCodes(t *testing.T) {
 		hour := rapid.IntRange(0, 23).Draw(t, "hour")
 		localTime := time.Date(2024, 6, 15, hour, 0, 0, 0, time.UTC)
 
+		// Test default MapConditionToIcon
 		result := MapConditionToIcon(code, localTime)
-
-		// Assert the result is non-empty
 		if result == "" {
 			t.Fatalf("MapConditionToIcon(%q) returned empty string", code)
 		}
+		verifyAssetExists(t, result)
 
-		// Assert the result exists in AllIconCodes (valid icon identifier)
-		found := false
-		for _, valid := range AllIconCodes {
-			if result == valid {
-				found = true
-				break
-			}
-		}
-		if !found {
-			t.Fatalf("MapConditionToIcon(%q) = %q, which is not in AllIconCodes", code, result)
+		// Test MapConditionToIconWithTheme for both New and Original themes
+		themeIdx := rapid.IntRange(0, 1).Draw(t, "themeIndex")
+		theme := config.IconThemeNew
+		if themeIdx == 1 {
+			theme = config.IconThemeOriginal
 		}
 
-		// Verify the corresponding icon file exists in the embedded asset set
-		path := fmt.Sprintf("icons/%s.png", result)
-		f, err := assets.Icons.Open(path)
-		if err != nil {
-			t.Fatalf("MapConditionToIcon(%q) = %q, but embedded asset %q not found: %v", code, result, path, err)
+		themedResult := MapConditionToIconWithTheme(code, localTime, theme)
+		if themedResult == "" {
+			t.Fatalf("MapConditionToIconWithTheme(%q, %v) returned empty string", code, theme)
 		}
-		f.Close()
+		verifyAssetExists(t, themedResult)
 	})
 }
 
@@ -61,31 +66,16 @@ func TestProperty8_MapConditionToIcon_ArbitraryCodes(t *testing.T) {
 		hour := rapid.IntRange(0, 23).Draw(t, "hour")
 		localTime := time.Date(2024, 6, 15, hour, 0, 0, 0, time.UTC)
 
-		result := MapConditionToIcon(code, localTime)
+		themeIdx := rapid.IntRange(0, 1).Draw(t, "themeIndex")
+		theme := config.IconThemeNew
+		if themeIdx == 1 {
+			theme = config.IconThemeOriginal
+		}
 
-		// Assert the result is non-empty
+		result := MapConditionToIconWithTheme(code, localTime, theme)
 		if result == "" {
-			t.Fatalf("MapConditionToIcon(%q) returned empty string", code)
+			t.Fatalf("MapConditionToIconWithTheme(%q, %v) returned empty string", code, theme)
 		}
-
-		// Assert the result exists in AllIconCodes (valid icon identifier)
-		found := false
-		for _, valid := range AllIconCodes {
-			if result == valid {
-				found = true
-				break
-			}
-		}
-		if !found {
-			t.Fatalf("MapConditionToIcon(%q) = %q, which is not in AllIconCodes", code, result)
-		}
-
-		// Verify the corresponding icon file exists in the embedded asset set
-		path := fmt.Sprintf("icons/%s.png", result)
-		f, err := assets.Icons.Open(path)
-		if err != nil {
-			t.Fatalf("MapConditionToIcon(%q) = %q, but embedded asset %q not found: %v", code, result, path, err)
-		}
-		f.Close()
+		verifyAssetExists(t, result)
 	})
 }

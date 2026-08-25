@@ -20,7 +20,21 @@ const (
 	IconSnow         = "snow"
 	IconStorm        = "storm"
 	IconFog          = "fog"
+	IconWind         = "wind"
 )
+
+// BaseIconCodes contains all base condition codes.
+var BaseIconCodes = []string{
+	IconClear,
+	IconPartlyCloudy,
+	IconCloudy,
+	IconRain,
+	IconHeavyRain,
+	IconSnow,
+	IconStorm,
+	IconFog,
+	IconWind,
+}
 
 // AllIconCodes contains all valid icon code values.
 var AllIconCodes = []string{
@@ -34,6 +48,7 @@ var AllIconCodes = []string{
 	IconSnow,
 	IconStorm,
 	IconFog,
+	IconWind,
 }
 
 // WeatherData holds the current weather information for a single city.

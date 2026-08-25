@@ -14,7 +14,7 @@ set -e
 APP_NAME="WeatherWidget"
 BINARY_NAME="weatherwidget"
 GTK_CMD_PATH="./cmd/weatherwidget-gtk/"
-APP_ICON="assets/icons/clear.png"
+APP_ICON="assets/icons/day/clear_day.png"
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"

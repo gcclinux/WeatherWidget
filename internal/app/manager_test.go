@@ -145,3 +145,18 @@ func TestDetermineSettingsSaveAction_WindSpeedUnitChange(t *testing.T) {
 		t.Errorf("expected settingsSaveActionRerender for wind unit-only change, got %v", action)
 	}
 }
+
+// TestDetermineSettingsSaveAction_IconThemeChange verifies that when only the
+// IconTheme changes (no city or provider change), the action is Rerender.
+func TestDetermineSettingsSaveAction_IconThemeChange(t *testing.T) {
+	oldCfg := baseConfig()
+	oldCfg.IconTheme = config.IconThemeNew
+	newCfg := baseConfig()
+	newCfg.IconTheme = config.IconThemeOriginal
+
+	action := determineSettingsSaveAction(oldCfg, newCfg, false)
+
+	if action != settingsSaveActionRerender {
+		t.Errorf("expected settingsSaveActionRerender for icon theme-only change, got %v", action)
+	}
+}

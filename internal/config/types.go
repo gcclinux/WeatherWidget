@@ -39,6 +39,25 @@ func NormalizeWindSpeedUnit(u WindSpeedUnit) WindSpeedUnit {
 	}
 }
 
+// IconTheme represents the icon set/style to display for weather conditions.
+type IconTheme string
+
+const (
+	IconThemeNew      IconTheme = "new"      // Modern day/night icons from assets/icons/day and assets/icons/night
+	IconThemeOriginal IconTheme = "original" // Original icons from assets/icons/original
+)
+
+// NormalizeIconTheme returns the theme unchanged if it is a known value,
+// otherwise returns IconThemeNew as the safe default.
+func NormalizeIconTheme(t IconTheme) IconTheme {
+	switch t {
+	case IconThemeNew, IconThemeOriginal:
+		return t
+	default:
+		return IconThemeNew
+	}
+}
+
 // DataSourceType represents the type of weather data source.
 type DataSourceType string
 
@@ -62,6 +81,7 @@ type Config struct {
 	Locale          string          `json:"locale"`
 	TemperatureUnit TemperatureUnit `json:"temperatureUnit,omitempty"`
 	WindSpeedUnit   WindSpeedUnit   `json:"windSpeedUnit,omitempty"`
+	IconTheme       IconTheme       `json:"iconTheme,omitempty"`
 	DisplayFields   *DisplayFields  `json:"displayFields,omitempty"`
 	APIConfig       *APIConfig      `json:"apiConfig,omitempty"`
 	DatabaseConfig  *DatabaseConfig `json:"databaseConfig,omitempty"`
@@ -217,6 +237,7 @@ func DefaultConfig() *Config {
 		Locale:             "en-GB",
 		TemperatureUnit:    TemperatureUnitCelsius,
 		WindSpeedUnit:      WindSpeedUnitKmh,
+		IconTheme:          IconThemeNew,
 		FontSizeCityTime:   14,
 		FontSizeTempIcon:   32,
 		FontSizeConditions: 10,

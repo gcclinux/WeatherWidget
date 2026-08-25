@@ -1,7 +1,6 @@
 package panel
 
 import (
-	"fmt"
 	"image"
 	"log"
 	"sync"
@@ -13,7 +12,6 @@ import (
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 
-	"weatherwidget/assets"
 	"weatherwidget/internal/config"
 	"weatherwidget/internal/i18n"
 	"weatherwidget/internal/weather"
@@ -42,6 +40,7 @@ type CityPanel struct {
 	lastData      *weather.WeatherData  // cached for re-render on unit change
 	lastTempUnit  config.TemperatureUnit
 	lastWindUnit  config.WindSpeedUnit
+	lastIconTheme config.IconTheme
 	displayFields *config.DisplayFields // current visibility config
 
 	mu         sync.Mutex
@@ -61,12 +60,9 @@ func (p *CityPanel) translate(key, fallback string) string {
 
 // loadIconFromAssets reads an icon from the embedded assets FS and returns it as a Fyne resource.
 func loadIconFromAssets(iconCode string) fyne.Resource {
-	for _, ext := range []string{".gif", ".webp", ".png"} {
-		path := fmt.Sprintf("icons/%s%s", iconCode, ext)
-		data, err := assets.Icons.ReadFile(path)
-		if err == nil {
-			return fyne.NewStaticResource(path, data)
-		}
+	_, staticData, staticPath, err := loadIconAsset(iconCode)
+	if err == nil && staticData != nil {
+		return fyne.NewStaticResource(staticPath, staticData)
 	}
 	return nil
 }
@@ -298,17 +294,22 @@ func (p *CityPanel) Container() *fyne.Container {
 	return p.container
 }
 
-// Update sets the panel content from the given weather data using the specified units.
-func (p *CityPanel) Update(data *weather.WeatherData, tempUnit config.TemperatureUnit, windUnit config.WindSpeedUnit) {
+// Update sets the panel content from the given weather data using the specified units and icon theme.
+func (p *CityPanel) Update(data *weather.WeatherData, tempUnit config.TemperatureUnit, windUnit config.WindSpeedUnit, iconTheme ...config.IconTheme) {
 	if data == nil {
 		return
 	}
 	p.lastData = data // cache for re-render
 	p.lastTempUnit = tempUnit
 	p.lastWindUnit = windUnit
+	if len(iconTheme) > 0 && iconTheme[0] != "" {
+		p.lastIconTheme = iconTheme[0]
+	} else if p.lastIconTheme == "" {
+		p.lastIconTheme = config.IconThemeNew
+	}
 
 	// Update icon from embedded assets (with animated motion support).
-	iconCode := weather.MapConditionToIcon(data.IconCode, data.LocalTime)
+	iconCode := weather.MapConditionToIconWithTheme(data.IconCode, data.LocalTime, p.lastIconTheme)
 	p.updateIcon(iconCode)
 
 	// Update labels.
@@ -346,13 +347,13 @@ func (p *CityPanel) Update(data *weather.WeatherData, tempUnit config.Temperatur
 	p.errorIcon.Hide()
 }
 
-// Rerender re-applies the last cached WeatherData with new units.
+// Rerender re-applies the last cached WeatherData with new units or icon theme.
 // If no data has been cached yet, this is a no-op.
-func (p *CityPanel) Rerender(tempUnit config.TemperatureUnit, windUnit config.WindSpeedUnit) {
+func (p *CityPanel) Rerender(tempUnit config.TemperatureUnit, windUnit config.WindSpeedUnit, iconTheme ...config.IconTheme) {
 	if p.lastData == nil {
 		return
 	}
-	p.Update(p.lastData, tempUnit, windUnit)
+	p.Update(p.lastData, tempUnit, windUnit, iconTheme...)
 }
 
 // ShowError displays an error indicator on the panel.
@@ -394,6 +395,11 @@ func (p *CityPanel) StartClock(timezone string) {
 	p.timeTicker = time.NewTicker(1 * time.Second)
 	p.stopCh = make(chan struct{})
 
+	loc, err := time.LoadLocation(timezone)
+	if err != nil {
+		loc = time.UTC
+	}
+
 	// Set the time immediately before the first tick.
 	now := time.Now()
 	p.timeText.Text = weather.FormatTime(now, timezone, p.lm)
@@ -401,23 +407,38 @@ func (p *CityPanel) StartClock(timezone string) {
 	p.dateText.Text = weather.FormatDate(now, timezone, p.lm)
 	p.dateText.Refresh()
 
-	go func() {
+	lastNight := weather.IsNight(now.In(loc))
+
+	go func(loc *time.Location, initialNight bool) {
+		currentNight := initialNight
 		for {
 			select {
 			case <-p.stopCh:
 				return
 			case t := <-p.timeTicker.C:
+				localNow := t.In(loc)
 				timeStr := weather.FormatTime(t, timezone, p.lm)
 				dateStr := weather.FormatDate(t, timezone, p.lm)
+				isNightNow := weather.IsNight(localNow)
+
 				fyne.Do(func() {
 					p.timeText.Text = timeStr
 					p.timeText.Refresh()
 					p.dateText.Text = dateStr
 					p.dateText.Refresh()
+
+					if isNightNow != currentNight {
+						currentNight = isNightNow
+						if p.lastData != nil {
+							p.lastData.LocalTime = localNow
+							iconCode := weather.MapConditionToIconWithTheme(p.lastData.IconCode, localNow, p.lastIconTheme)
+							p.updateIcon(iconCode)
+						}
+					}
 				})
 			}
 		}
-	}()
+	}(loc, lastNight)
 }
 
 // StopClock stops the time ticker goroutine and any icon animation.

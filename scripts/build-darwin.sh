@@ -8,7 +8,7 @@ APP_NAME="WeatherWidget"
 BINARY_NAME="weatherwidget"
 BUNDLE_ID="com.weatherwidget"
 CMD_PATH="./cmd/weatherwidget/"
-APP_ICON="assets/icons/clear.png"
+APP_ICON="assets/icons/day/clear_day.png"
 VERSION=$(cat release 2>/dev/null | tr -d '[:space:]')
 if [ -z "$VERSION" ]; then
     echo "Error: could not read version from 'release' file"

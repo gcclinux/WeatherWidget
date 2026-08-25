@@ -24,7 +24,14 @@ func (u *UIManager) SetupSystemTray(appDataDir string, onSettings func(), onExit
 	}
 
 	// Load the tray icon from embedded assets.
-	iconData, err := assets.Icons.ReadFile("icons/clear_tray.png")
+	var iconData []byte
+	var err error
+	for _, p := range []string{"icons/original/clear_tray.png", "icons/clear_tray.png", "icons/day/clear_day.png"} {
+		iconData, err = assets.Icons.ReadFile(p)
+		if err == nil {
+			break
+		}
+	}
 	if err != nil {
 		log.Printf("warning: failed to load tray icon: %v, continuing without custom icon", err)
 		return

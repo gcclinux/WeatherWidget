@@ -139,7 +139,14 @@ func prepareTrayIcon() (themeDir string, iconName string) {
 	}
 
 	// Read the embedded tray icon.
-	iconData, err := assets.Icons.ReadFile("icons/clear_tray.png")
+	var iconData []byte
+	var err error
+	for _, p := range []string{"icons/original/clear_tray.png", "icons/clear_tray.png", "icons/day/clear_day.png"} {
+		iconData, err = assets.Icons.ReadFile(p)
+		if err == nil {
+			break
+		}
+	}
 	if err != nil {
 		log.Printf("GTK tray: failed to read embedded tray icon: %v", err)
 		return "", "weather-clear"

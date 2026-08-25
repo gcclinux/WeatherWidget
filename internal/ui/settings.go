@@ -65,15 +65,16 @@ var providerValueToDisplay = map[string]string{
 type settingsState struct {
 	cities           []config.CityConfig
 	window           fyne.Window
-	selectedLang     string                 // locale code selected in the language dropdown
-	selectedUnit     config.TemperatureUnit // temperature unit selected in the appearance tab
-	selectedWindUnit config.WindSpeedUnit   // wind speed unit selected in the widget tab
-	saved            bool                   // true if Save was clicked (suppresses revert on close)
-	previewPanels    []*panel.CityPanel     // live preview panels in the About tab
-	appearancePanels []*panel.CityPanel     // live preview panels in the Appearance tab
-	displayFields    *config.DisplayFields  // current display field checkbox state
-	customX          *int                   // pending custom X position
-	customY          *int                   // pending custom Y position
+	selectedLang      string                 // locale code selected in the language dropdown
+	selectedUnit      config.TemperatureUnit // temperature unit selected in the appearance tab
+	selectedWindUnit  config.WindSpeedUnit   // wind speed unit selected in the widget tab
+	selectedIconTheme config.IconTheme       // icon theme selected in the display tab
+	saved             bool                   // true if Save was clicked (suppresses revert on close)
+	previewPanels     []*panel.CityPanel     // live preview panels in the About tab
+	appearancePanels  []*panel.CityPanel     // live preview panels in the Appearance tab
+	displayFields     *config.DisplayFields  // current display field checkbox state
+	customX           *int                   // pending custom X position
+	customY           *int                   // pending custom Y position
 }
 
 // t is a helper that returns the translated string for the given key.
@@ -121,14 +122,15 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 	win.Resize(fyne.NewSize(winW, winH))
 
 	state := &settingsState{
-		cities:        copyCities(cfg.Cities),
-		window:        win,
-		selectedLang:  cfg.Locale,
-		selectedUnit:  config.NormalizeTemperatureUnit(cfg.TemperatureUnit),
-		selectedWindUnit: config.NormalizeWindSpeedUnit(cfg.WindSpeedUnit),
-		displayFields: cfg.GetDisplayFields(),
-		customX:       cfg.CustomX,
-		customY:       cfg.CustomY,
+		cities:            copyCities(cfg.Cities),
+		window:            win,
+		selectedLang:      cfg.Locale,
+		selectedUnit:      config.NormalizeTemperatureUnit(cfg.TemperatureUnit),
+		selectedWindUnit:  config.NormalizeWindSpeedUnit(cfg.WindSpeedUnit),
+		selectedIconTheme: config.NormalizeIconTheme(cfg.IconTheme),
+		displayFields:     cfg.GetDisplayFields(),
+		customX:           cfg.CustomX,
+		customY:           cfg.CustomY,
 	}
 	if state.selectedLang == "" {
 		state.selectedLang = "en-GB"
@@ -143,6 +145,7 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 	origMonitor := cfg.MonitorIndex
 	origUnit := config.NormalizeTemperatureUnit(cfg.TemperatureUnit)
 	origWindUnit := config.NormalizeWindSpeedUnit(cfg.WindSpeedUnit)
+	origIconTheme := config.NormalizeIconTheme(cfg.IconTheme)
 	origCustomX := cfg.CustomX
 	origCustomY := cfg.CustomY
 
@@ -491,6 +494,43 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 			}
 		}
 
+		// ── Weather Icons ────────────────────────────────────────────────────
+		iconNewOption := u.t("settings.icons.new")
+		iconOriginalOption := u.t("settings.icons.original")
+
+		iconThemeValueMap := map[string]config.IconTheme{
+			iconNewOption:      config.IconThemeNew,
+			iconOriginalOption: config.IconThemeOriginal,
+		}
+		iconThemeLabelMap := map[config.IconTheme]string{
+			config.IconThemeNew:      iconNewOption,
+			config.IconThemeOriginal: iconOriginalOption,
+		}
+
+		iconThemeRadio := widget.NewRadioGroup(
+			[]string{iconNewOption, iconOriginalOption},
+			func(selected string) {
+				state.selectedIconTheme = iconThemeValueMap[selected]
+				// Live preview: re-render main widget panels with the new icon theme immediately.
+				u.RerenderPanels(state.selectedUnit, state.selectedWindUnit, state.selectedIconTheme)
+				// Also re-render preview panels.
+				for _, p := range state.appearancePanels {
+					p.Rerender(state.selectedUnit, state.selectedWindUnit, state.selectedIconTheme)
+				}
+				for _, p := range state.previewPanels {
+					p.Rerender(state.selectedUnit, state.selectedWindUnit, state.selectedIconTheme)
+				}
+			},
+		)
+		iconThemeRadio.Horizontal = true
+
+		normalizedIconTheme := config.NormalizeIconTheme(state.selectedIconTheme)
+		if label, ok := iconThemeLabelMap[normalizedIconTheme]; ok {
+			iconThemeRadio.SetSelected(label)
+		} else {
+			iconThemeRadio.SetSelected(iconNewOption)
+		}
+
 		// ── Temperature unit ─────────────────────────────────────────────────
 		unitCelsiusLabel := "°C (Celsius)"
 		unitFahrenheitLabel := "°F (Fahrenheit)"
@@ -509,10 +549,10 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 			func(selected string) {
 				state.selectedUnit = unitValueMap[selected]
 				// Live preview: re-render main widget panels with the new unit immediately.
-				u.RerenderPanels(state.selectedUnit, state.selectedWindUnit)
+				u.RerenderPanels(state.selectedUnit, state.selectedWindUnit, state.selectedIconTheme)
 				// Also re-render the Widget tab preview panels.
 				for _, p := range state.appearancePanels {
-					p.Rerender(state.selectedUnit, state.selectedWindUnit)
+					p.Rerender(state.selectedUnit, state.selectedWindUnit, state.selectedIconTheme)
 				}
 			},
 		)
@@ -547,10 +587,10 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 			func(selected string) {
 				state.selectedWindUnit = windValueMap[selected]
 				// Live preview: re-render main widget panels with the new unit immediately.
-				u.RerenderPanels(state.selectedUnit, state.selectedWindUnit)
+				u.RerenderPanels(state.selectedUnit, state.selectedWindUnit, state.selectedIconTheme)
 				// Also re-render the Widget tab preview panels.
 				for _, p := range state.appearancePanels {
-					p.Rerender(state.selectedUnit, state.selectedWindUnit)
+					p.Rerender(state.selectedUnit, state.selectedWindUnit, state.selectedIconTheme)
 				}
 			},
 		)
@@ -582,7 +622,10 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 				// Small weather icon instead of position number.
 				iconCodes := []string{"clear", "partly_cloudy", "cloudy", "rain", "snow"}
 				iconCode := iconCodes[idx%len(iconCodes)]
-				iconData, _ := assets.Icons.ReadFile(fmt.Sprintf("icons/%s.png", iconCode))
+				iconData, err := assets.Icons.ReadFile(fmt.Sprintf("icons/day/%s_day.png", iconCode))
+				if err != nil {
+					iconData, _ = assets.Icons.ReadFile(fmt.Sprintf("icons/original/%s.png", iconCode))
+				}
 				var cityIcon *canvas.Image
 				if iconData != nil {
 					res := fyne.NewStaticResource(iconCode+".png", iconData)
@@ -1212,6 +1255,9 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 			sectionBlock(u.t("settings.transparency.title"), u.t("settings.transparency.subtitle"),
 				opacityRadio,
 			),
+			sectionBlock(u.t("settings.icons.title"), u.t("settings.icons.subtitle"),
+				iconThemeRadio,
+			),
 			sectionBlock(u.t("settings.startup.title"), u.t("settings.startup.subtitle"),
 				autoStartCheck,
 			),
@@ -1367,7 +1413,7 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 		// Revert live preview changes if the user closed without saving.
 		if !state.saved {
 			u.SetOpacity(origOpacity)
-			u.RerenderPanels(origUnit, origWindUnit)
+			u.RerenderPanels(origUnit, origWindUnit, origIconTheme)
 			if origCustomX != nil && origCustomY != nil {
 				u.SetPosition(*origCustomX, *origCustomY)
 			} else {
@@ -1448,6 +1494,7 @@ func buildConfigFromUI(
 	}
 	cfg.TemperatureUnit = config.NormalizeTemperatureUnit(state.selectedUnit)
 	cfg.WindSpeedUnit = config.NormalizeWindSpeedUnit(state.selectedWindUnit)
+	cfg.IconTheme = config.NormalizeIconTheme(state.selectedIconTheme)
 	cfg.DisplayFields = state.displayFields
 	provider := providerDisplayToValue[providerSelect.Selected]
 	if provider == "" {

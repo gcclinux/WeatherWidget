@@ -3,7 +3,7 @@ BINARY_NAME=weatherwidget
 APP_NAME=WeatherWidget
 BUNDLE_ID=com.weatherwidget
 CMD_PATH=./cmd/weatherwidget/
-APP_ICON=assets/icons/clear.png
+APP_ICON=assets/icons/day/clear_day.png
 VERSION ?= dev
 
 ifeq ($(shell test -x /usr/local/go/bin/go && echo yes),yes)

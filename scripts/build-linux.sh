@@ -112,7 +112,11 @@ EOF
 
     # Icon
     local icon_src=""
-    if [ -f "$PROJECT_ROOT/assets/icons/clear.png" ]; then
+    if [ -f "$PROJECT_ROOT/assets/icons/day/clear_day.png" ]; then
+        icon_src="$PROJECT_ROOT/assets/icons/day/clear_day.png"
+    elif [ -f "$PROJECT_ROOT/assets/icons/original/clear.png" ]; then
+        icon_src="$PROJECT_ROOT/assets/icons/original/clear.png"
+    elif [ -f "$PROJECT_ROOT/assets/icons/clear.png" ]; then
         icon_src="$PROJECT_ROOT/assets/icons/clear.png"
     elif [ -f "$PROJECT_ROOT/snap/gui/weatherwidget.png" ]; then
         icon_src="$PROJECT_ROOT/snap/gui/weatherwidget.png"
@@ -298,7 +302,11 @@ EOF
 
     # Icon at root of AppDir and standard paths inside AppDir
     local icon_src=""
-    if [ -f "$PROJECT_ROOT/assets/icons/clear.png" ]; then
+    if [ -f "$PROJECT_ROOT/assets/icons/day/clear_day.png" ]; then
+        icon_src="$PROJECT_ROOT/assets/icons/day/clear_day.png"
+    elif [ -f "$PROJECT_ROOT/assets/icons/original/clear.png" ]; then
+        icon_src="$PROJECT_ROOT/assets/icons/original/clear.png"
+    elif [ -f "$PROJECT_ROOT/assets/icons/clear.png" ]; then
         icon_src="$PROJECT_ROOT/assets/icons/clear.png"
     elif [ -f "$PROJECT_ROOT/snap/gui/weatherwidget.png" ]; then
         icon_src="$PROJECT_ROOT/snap/gui/weatherwidget.png"

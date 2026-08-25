@@ -240,8 +240,11 @@ func newCityPanel(city, region, timezone string, lm *i18n.LocaleManager) (*cityP
 	return p, nil
 }
 
-// update refreshes all labels with the given weather data.
-func (p *cityPanel) update(d *weather.WeatherData, tempUnit config.TemperatureUnit, windUnit config.WindSpeedUnit) {
+// update refreshes all displayed fields with new weather data.
+func (p *cityPanel) update(d *weather.WeatherData, tempUnit config.TemperatureUnit, windUnit config.WindSpeedUnit, iconTheme ...config.IconTheme) {
+	if d == nil {
+		return
+	}
 	p.lastData = d
 	p.lastUnit = tempUnit
 
@@ -259,7 +262,11 @@ func (p *cityPanel) update(d *weather.WeatherData, tempUnit config.TemperatureUn
 	p.windDirLbl.SetText(weather.FormatWindDir(d.WindDirection))
 
 	// Load weather icon at the current icon size.
-	iconCode := weather.MapConditionToIcon(d.IconCode, d.LocalTime)
+	theme := config.IconThemeNew
+	if len(iconTheme) > 0 && iconTheme[0] != "" {
+		theme = iconTheme[0]
+	}
+	iconCode := weather.MapConditionToIconWithTheme(d.IconCode, d.LocalTime, theme)
 	p.loadIcon(iconCode, p.iconSize)
 }
 
@@ -314,10 +321,28 @@ func (p *cityPanel) loadIcon(iconCode string, size int) {
 		size = 32
 	}
 	p.lastIconCode = iconCode // remember for live resize
-	var data []byte
-	var err error
-	for _, ext := range []string{".gif", ".webp", ".png"} {
-		data, err = assets.Icons.ReadFile(fmt.Sprintf("icons/%s%s", iconCode, ext))
+	clean := strings.TrimPrefix(iconCode, "icons/")
+	clean = strings.TrimPrefix(clean, "/")
+
+	var candidateBases []string
+	candidateBases = append(candidateBases, clean)
+	if !strings.Contains(clean, "/") {
+		candidateBases = append(candidateBases,
+			"day/"+clean+"_day",
+			"day/"+clean,
+			"night/"+clean+"_night",
+			"night/"+clean,
+			"original/"+clean,
+		)
+	}
+
+	for _, base := range candidateBases {
+		for _, ext := range []string{".gif", ".webp", ".png", ""} {
+			data, err = assets.Icons.ReadFile("icons/" + base + ext)
+			if err == nil {
+				break
+			}
+		}
 		if err == nil {
 			break
 		}

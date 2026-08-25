@@ -433,8 +433,8 @@ func TestFetchWeather_EWW_RFC3339ObsTimeLocal(t *testing.T) {
 	}
 
 	icon := weather.MapConditionToIcon(data.IconCode, data.LocalTime)
-	if icon != weather.IconClear {
-		t.Errorf("MapConditionToIcon at 15:37 = %q, want %q (daytime clear icon)", icon, weather.IconClear)
+	if icon != "day/clear_day" {
+		t.Errorf("MapConditionToIcon at 15:37 = %q, want %q (daytime clear icon)", icon, "day/clear_day")
 	}
 }
 

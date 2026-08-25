@@ -91,7 +91,7 @@ func showSettingsDialog(m *manager) {
 	nb.AppendPage(langBox, langLabel)
 
 	// --- Appearance tab ---
-	appearanceBox, opacityScale, noBgCheck, noBorderCheck := buildAppearanceTab(m)
+	appearanceBox, opacityScale, noBgCheck, noBorderCheck, iconThemeCombo := buildAppearanceTab(m)
 	appearanceLabel, _ := gtk.LabelNew(m.t("settings.tab.appearance"))
 	nb.AppendPage(appearanceBox, appearanceLabel)
 
@@ -129,6 +129,7 @@ func showSettingsDialog(m *manager) {
 		newCfg.DisplayFields = getDisplayFields() // collect panel visibility
 		newCfg.TemperatureUnit = getTempUnit()    // collect temperature unit
 		newCfg.WindSpeedUnit = getWindUnit()      // collect wind speed unit
+		newCfg.IconTheme = config.NormalizeIconTheme(config.IconTheme(iconThemeCombo.GetActiveID()))
 
 		fs := getFontSizes()
 		newCfg.FontSizeCityTime = fs.cityTime
@@ -325,8 +326,7 @@ func buildProviderTab(m *manager, parent *gtk.Dialog) *gtk.Box {
 }
 
 // buildAppearanceTab creates the Appearance settings tab.
-// Returns the tab box, the opacity scale, the no-background checkbox, and the no-border checkbox.
-func buildAppearanceTab(m *manager) (*gtk.Box, *gtk.Scale, *gtk.CheckButton, *gtk.CheckButton) {
+func buildAppearanceTab(m *manager) (*gtk.Box, *gtk.Scale, *gtk.CheckButton, *gtk.CheckButton, *gtk.ComboBoxText) {
 	vbox, _ := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 8)
 	vbox.SetMarginTop(8)
 	vbox.SetMarginStart(4)
@@ -393,7 +393,31 @@ func buildAppearanceTab(m *manager) (*gtk.Box, *gtk.Scale, *gtk.CheckButton, *gt
 	})
 	vbox.PackStart(autostartCheck, false, false, 0)
 
-	// Temperature unit moved to Widget tab — matches the Fyne settings layout.
+	// ── Weather Icons ────────────────────────────────────────────────────────
+	iconSep, _ := gtk.SeparatorNew(gtk.ORIENTATION_HORIZONTAL)
+	vbox.PackStart(iconSep, false, false, 4)
+
+	iconTitle, _ := gtk.LabelNew("")
+	iconTitle.SetMarkup("<b>" + m.t("settings.icons.title") + "</b>")
+	iconTitle.SetHAlign(gtk.ALIGN_START)
+	vbox.PackStart(iconTitle, false, false, 0)
+
+	iconSubtitle, _ := gtk.LabelNew(m.t("settings.icons.subtitle"))
+	iconSubtitle.SetHAlign(gtk.ALIGN_START)
+	iconSubtitle.SetLineWrap(true)
+	vbox.PackStart(iconSubtitle, false, false, 0)
+
+	iconCombo, _ := gtk.ComboBoxTextNew()
+	iconCombo.Append("new", m.t("settings.icons.new"))
+	iconCombo.Append("original", m.t("settings.icons.original"))
+
+	currentIconTheme := config.NormalizeIconTheme(m.cfg.IconTheme)
+	if currentIconTheme == config.IconThemeOriginal {
+		iconCombo.SetActiveID("original")
+	} else {
+		iconCombo.SetActiveID("new")
+	}
+	vbox.PackStart(iconCombo, false, false, 0)
 
 	// ── Widget Position ─────────────────────────────────────────────────────
 	posSep, _ := gtk.SeparatorNew(gtk.ORIENTATION_HORIZONTAL)
@@ -509,7 +533,7 @@ func buildAppearanceTab(m *manager) (*gtk.Box, *gtk.Scale, *gtk.CheckButton, *gt
 		moveAndSave(x, y+nudge)
 	})
 
-	return vbox, opacityScale, noBgCheck, noBorderCheck
+	return vbox, opacityScale, noBgCheck, noBorderCheck, iconCombo
 }
 
 // showErrorDialog shows a simple error message dialog.

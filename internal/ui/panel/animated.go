@@ -7,6 +7,7 @@ import (
 	"image/draw"
 	"image/gif"
 	_ "image/png"
+	"strings"
 	"time"
 
 	"weatherwidget/assets"
@@ -94,23 +95,44 @@ func cloneRGBA(src *image.RGBA) *image.RGBA {
 }
 
 // loadIconAsset searches for the given icon in priority order (.gif -> .webp -> .png).
+// It tests candidate path patterns to support day/night folders ("day/clear_day"),
+// direct condition names ("clear"), and legacy/original icons.
 // If an animated GIF is found with > 1 frame, it returns animatedFrames.
 // Otherwise, it returns the raw static bytes and file path.
 func loadIconAsset(iconCode string) (anim *animatedFrames, staticData []byte, staticPath string, err error) {
-	for _, ext := range []string{".gif", ".webp", ".png"} {
-		path := fmt.Sprintf("icons/%s%s", iconCode, ext)
-		data, readErr := assets.Icons.ReadFile(path)
-		if readErr != nil {
-			continue
-		}
+	clean := strings.TrimPrefix(iconCode, "icons/")
+	clean = strings.TrimPrefix(clean, "/")
 
-		if ext == ".gif" {
-			if a, decErr := decodeGIF(data); decErr == nil && len(a.frames) > 1 {
-				return a, nil, path, nil
+	var candidateBases []string
+	candidateBases = append(candidateBases, clean)
+
+	// If clean doesn't contain a directory separator, add day/night/original variations
+	if !strings.Contains(clean, "/") {
+		candidateBases = append(candidateBases,
+			"day/"+clean+"_day",
+			"day/"+clean,
+			"night/"+clean+"_night",
+			"night/"+clean,
+			"original/"+clean,
+		)
+	}
+
+	for _, base := range candidateBases {
+		for _, ext := range []string{".gif", ".webp", ".png", ""} {
+			path := "icons/" + base + ext
+			data, readErr := assets.Icons.ReadFile(path)
+			if readErr != nil {
+				continue
 			}
-		}
 
-		return nil, data, path, nil
+			if strings.HasSuffix(path, ".gif") {
+				if a, decErr := decodeGIF(data); decErr == nil && len(a.frames) > 1 {
+					return a, nil, path, nil
+				}
+			}
+
+			return nil, data, path, nil
+		}
 	}
 
 	return nil, nil, "", fmt.Errorf("icon not found for %s", iconCode)
