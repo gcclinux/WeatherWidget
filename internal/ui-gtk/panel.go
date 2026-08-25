@@ -3,7 +3,7 @@
 package uitk
 
 import (
-	"fmt"
+	"strings"
 	"time"
 
 	"github.com/gotk3/gotk3/gdk"
@@ -44,7 +44,7 @@ type cityPanel struct {
 	lastData     *weather.WeatherData
 	lastUnit     config.TemperatureUnit
 	lastIconCode string // most recently loaded icon code, for resize without re-fetch
-	iconSize     int    // current icon pixel size; 0 means default (32px)
+	iconSize     int    // current icon pixel size; 0 means default (96px)
 
 	clockTicker *time.Ticker
 	clockStop   chan struct{}
@@ -83,8 +83,9 @@ func newCityPanel(city, region, timezone string, lm *i18n.LocaleManager) (*cityP
 	p.cityLbl = cityLbl
 
 	iconWidget, _ := gtk.ImageNew()
-	iconWidget.SetSizeRequest(32, 32)
+	iconWidget.SetSizeRequest(96, 96)
 	iconWidget.SetHAlign(gtk.ALIGN_CENTER)
+	iconWidget.SetVAlign(gtk.ALIGN_CENTER)
 	p.icon = iconWidget
 
 	nameBox.PackStart(cityLbl, false, false, 0)
@@ -318,7 +319,7 @@ func (p *cityPanel) applyDisplayFields(df *config.DisplayFields) {
 // pixel size. Pass size=0 to use the default 32 px.
 func (p *cityPanel) loadIcon(iconCode string, size int) {
 	if size <= 0 {
-		size = 32
+		size = 96
 	}
 	p.lastIconCode = iconCode // remember for live resize
 	clean := strings.TrimPrefix(iconCode, "icons/")
@@ -336,21 +337,26 @@ func (p *cityPanel) loadIcon(iconCode string, size int) {
 		)
 	}
 
+	var data []byte
+	var found bool
 	for _, base := range candidateBases {
 		for _, ext := range []string{".gif", ".webp", ".png", ""} {
-			data, err = assets.Icons.ReadFile("icons/" + base + ext)
-			if err == nil {
+			d, readErr := assets.Icons.ReadFile("icons/" + base + ext)
+			if readErr == nil {
+				data = d
+				found = true
 				break
 			}
 		}
-		if err == nil {
+		if found {
 			break
 		}
 	}
-	if err != nil {
+	if !found {
 		p.icon.Clear()
 		return
 	}
+
 	loader, err := gdk.PixbufLoaderNew()
 	if err != nil {
 		p.icon.Clear()
@@ -365,24 +371,55 @@ func (p *cityPanel) loadIcon(iconCode string, size int) {
 		return
 	}
 
+	// Try animation path first (for animated GIFs).
 	anim, animErr := loader.GetAnimation()
-	if animErr == nil && anim != nil && !anim.IsStaticImage() {
-		p.icon.SetFromAnimation(anim)
-	} else {
-		pb, err := loader.GetPixbuf()
-		if err != nil || pb == nil {
-			p.icon.Clear()
+	if animErr == nil && anim != nil {
+		// GetStaticImage returns the static frame; if the animation is truly
+		// animated, SetFromAnimation will play it. For static images we fall
+		// through to the pixbuf path for proper scaling.
+		staticPb := anim.GetStaticImage()
+		if staticPb == nil {
+			// Truly animated — let GTK handle playback.
+			p.icon.SetFromAnimation(anim)
+			p.icon.SetSizeRequest(size, size)
+			p.icon.SetVAlign(gtk.ALIGN_CENTER)
 			return
 		}
-		// Scale to the requested size; fall back to original on failure.
-		scaled, err := pb.ScaleSimple(size, size, gdk.INTERP_BILINEAR)
-		if err != nil || scaled == nil {
-			p.icon.SetFromPixbuf(pb)
+	}
+
+	// Static image path — scale to requested size preserving aspect ratio.
+	pb, err := loader.GetPixbuf()
+	if err != nil || pb == nil {
+		p.icon.Clear()
+		return
+	}
+	origW := pb.GetWidth()
+	origH := pb.GetHeight()
+	targetW := size
+	targetH := size
+	if origW > 0 && origH > 0 {
+		// Scale so the largest dimension fits within `size`, preserving ratio.
+		if origW >= origH {
+			targetH = int(float64(origH) * float64(size) / float64(origW))
 		} else {
-			p.icon.SetFromPixbuf(scaled)
+			targetW = int(float64(origW) * float64(size) / float64(origH))
+		}
+		if targetW < 1 {
+			targetW = 1
+		}
+		if targetH < 1 {
+			targetH = 1
 		}
 	}
+	scaled, err := pb.ScaleSimple(targetW, targetH, gdk.INTERP_BILINEAR)
+	if err != nil || scaled == nil {
+		p.icon.SetFromPixbuf(pb)
+	} else {
+		p.icon.SetFromPixbuf(scaled)
+	}
+	// Always reserve a fixed square area so all panels align vertically.
 	p.icon.SetSizeRequest(size, size)
+	p.icon.SetVAlign(gtk.ALIGN_CENTER)
 }
 
 // applyIconSize rescales the currently displayed icon to a new pixel size.

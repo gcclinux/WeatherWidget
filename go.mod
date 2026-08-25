@@ -5,6 +5,8 @@ go 1.25.0
 require (
 	fyne.io/fyne/v2 v2.7.3
 	github.com/bradfitz/latlong v0.0.0-20170410180902-f3db6d0dff40
+	github.com/godbus/dbus/v5 v5.1.0
+	github.com/gotk3/gotk3 v0.6.3
 	github.com/jackc/pgx/v5 v5.9.1
 	golang.org/x/sys v0.43.0
 	pgregory.net/rapid v1.2.0
@@ -24,8 +26,6 @@ require (
 	github.com/go-gl/glfw/v3.3/glfw v0.0.0-20240506104042-037f3cc74f2a // indirect
 	github.com/go-text/render v0.2.0 // indirect
 	github.com/go-text/typesetting v0.3.3 // indirect
-	github.com/godbus/dbus/v5 v5.1.0 // indirect
-	github.com/gotk3/gotk3 v0.6.3 // indirect
 	github.com/hack-pad/go-indexeddb v0.3.2 // indirect
 	github.com/hack-pad/safejs v0.1.0 // indirect
 	github.com/jackc/pgpassfile v1.0.0 // indirect

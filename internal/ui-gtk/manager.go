@@ -262,7 +262,7 @@ func (m *manager) buildWindow() error {
 		}
 		p.setNoBackground(m.noBackground)
 		p.applyDisplayFields(m.cfg.GetDisplayFields())
-		p.iconSize = m.fontSizeTempIcon // initialise icon size from config
+		p.iconSize = 96
 		hbox.PackStart(p.root, false, false, 0)
 		m.panels = append(m.panels, p)
 	}
@@ -466,11 +466,6 @@ func (m *manager) SetFontSizes(cityTime, tempIcon, conditions int) {
 	m.fontSizeTempIcon = tempIcon
 	m.fontSizeConditions = conditions
 	m.applyCSS()
-	// Rescale icons on all panels to match the new tempIcon size.
-	for _, p := range m.panels {
-		p.iconSize = tempIcon
-		p.applyIconSize(tempIcon)
-	}
 }
 
 // SetNoBackground toggles background-removal mode and refreshes CSS.
@@ -556,11 +551,9 @@ func (m *manager) onSettingsSave(newCfg *config.Config) error {
 	} else {
 		m.applyCSS()
 		m.applyPosition()
-		// Apply display field changes and icon size to existing panels.
+		// Apply display field changes to existing panels.
 		for _, p := range m.panels {
 			p.applyDisplayFields(newCfg.GetDisplayFields())
-			p.iconSize = m.fontSizeTempIcon
-			p.applyIconSize(m.fontSizeTempIcon)
 		}
 	}
 	m.sched.SetInterval(time.Duration(newCfg.RefreshInterval) * time.Minute)
