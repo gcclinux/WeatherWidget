@@ -8,7 +8,7 @@ for the Weather Widget application.
 | Format | Platform | Use Case | Script |
 |--------|----------|----------|--------|
 | **PKG** | macOS | Standard macOS installer wizard | `build-pkg.sh` |
-| **MSI** | Windows | Traditional Windows installer | `build-msi.ps1` |
+| **MSI + setup.exe** | Windows | Traditional Windows installer | `build-msi.ps1` |
 | **MSIX** | Windows | Microsoft Store submission | `build-msix.ps1` |
 
 ---
@@ -89,7 +89,7 @@ calls).
 
 ---
 
-## Windows MSI Installer
+## Windows MSI and setup.exe Installer
 
 ### Prerequisites
 
@@ -101,6 +101,7 @@ calls).
 3. **WiX Toolset v4+**:
    ```powershell
    dotnet tool install --global wix
+   wix extension add -g WixToolset.BootstrapperApplications.wixext
    ```
 4. **A code signing certificate**
 
@@ -116,6 +117,11 @@ calls).
 # Signed with a .pfx file:
 .\installer\build-msi.ps1 -Version "1.0.6" -CertPath "cert.pfx" -CertPassword "pass"
 ```
+
+Each build creates both `build/WeatherWidget-<version>.msi` and the
+standard double-click installer `build/WeatherWidget-<version>-Setup.exe`.
+The setup executable bundles the MSI and is the recommended file to distribute
+to end users.
 
 ---
 

@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  WiX Burn bootstrapper for the traditional setup.exe installer.
+  The MSI remains the actual package; this bundle provides the familiar
+  setup.exe entry point for distribution.
+-->
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
+     xmlns:bal="http://wixtoolset.org/schemas/v4/wxs/bal">
+  <Bundle Name="Weather Widget"
+          Manufacturer="Ricardo Wagemaker"
+          Version="$(var.Version)"
+          UpgradeCode="F5A6B7C8-D9E0-4F12-AB34-56789CDEF012">
+    <BootstrapperApplication>
+      <bal:WixStandardBootstrapperApplication Theme="hyperlinkLicense"
+                                             LicenseUrl="" />
+    </BootstrapperApplication>
+
+    <Chain>
+      <MsiPackage SourceFile="$(var.MsiPath)" />
+    </Chain>
+  </Bundle>
+</Wix>

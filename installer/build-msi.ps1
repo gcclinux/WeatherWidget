@@ -1,5 +1,5 @@
 # ============================================================================
-# Weather Widget - MSI Package Builder (Microsoft Store / Sideload)
+# Weather Widget - Windows Installer Builder (MSI + traditional setup.exe)
 # ============================================================================
 # Usage:
 #   # Sign with certificate from Windows certificate store (by thumbprint):
@@ -14,7 +14,8 @@
 # Prerequisites:
 #   - Go 1.25+ with CGO enabled (for Fyne)
 #   - go-winres: go install github.com/tc-hib/go-winres@latest
-#   - WiX v4+: dotnet tool install --global wix  (or WiX v7 via winget)
+#   - WiX v4+ with the BootstrapperApplications extension:
+#     wix extension add -g WixToolset.BootstrapperApplications.wixext
 #   - signtool.exe (from Windows SDK)
 #   - Code signing certificate (installed in cert store or as .pfx file)
 # ============================================================================
@@ -82,10 +83,11 @@ Push-Location $ProjectRoot
 try {
     $BuildDir = ".\build"
     $OutputMsi = ".\build\WeatherWidget-$Version.msi"
+    $OutputSetupExe = ".\build\WeatherWidget-$Version-Setup.exe"
 
     Write-Host ""
     Write-Host "============================================" -ForegroundColor Cyan
-    Write-Host "  Weather Widget MSI Builder v$Version" -ForegroundColor Cyan
+    Write-Host "  Weather Widget Windows Installer Builder v$Version" -ForegroundColor Cyan
     Write-Host "  Sign mode: $SignMode" -ForegroundColor Cyan
     Write-Host "============================================" -ForegroundColor Cyan
     Write-Host ""
@@ -93,7 +95,7 @@ try {
     # -------------------------------------------------------------------------
     # Step 1: Clean previous build
     # -------------------------------------------------------------------------
-    Write-Host "[1/5] Cleaning previous build..." -ForegroundColor Yellow
+    Write-Host "[1/6] Cleaning previous build..." -ForegroundColor Yellow
     if (Test-Path $BuildDir) { Remove-Item -Recurse -Force $BuildDir }
     New-Item -ItemType Directory -Path $BuildDir -Force | Out-Null
     Write-Host "       Done." -ForegroundColor Green
@@ -102,7 +104,7 @@ try {
     # Step 2: Generate Windows resources
     # -------------------------------------------------------------------------
     if (-not $SkipBuild) {
-        Write-Host "[2/5] Generating Windows resources..." -ForegroundColor Yellow
+        Write-Host "[2/6] Generating Windows resources..." -ForegroundColor Yellow
 
         # Update version in winres.json before generating
         $winresJson = Get-Content ".\winres\winres.json" -Raw | ConvertFrom-Json
@@ -119,7 +121,7 @@ try {
         # ---------------------------------------------------------------------
         # Step 3: Build the executable
         # ---------------------------------------------------------------------
-        Write-Host "[3/5] Building weatherwidget.exe..." -ForegroundColor Yellow
+        Write-Host "[3/6] Building weatherwidget.exe..." -ForegroundColor Yellow
         $env:GOOS = "windows"
         $env:GOARCH = "amd64"
         $env:CGO_ENABLED = "1"
@@ -129,8 +131,8 @@ try {
         if ($LASTEXITCODE -ne 0) { throw "Go build failed" }
         Write-Host "       Done. Output: $BuildDir\weatherwidget.exe" -ForegroundColor Green
     } else {
-        Write-Host "[2/5] Skipping (SkipBuild)." -ForegroundColor DarkGray
-        Write-Host "[3/5] Skipping (SkipBuild)." -ForegroundColor DarkGray
+        Write-Host "[2/6] Skipping (SkipBuild)." -ForegroundColor DarkGray
+        Write-Host "[3/6] Skipping (SkipBuild)." -ForegroundColor DarkGray
         if (-not (Test-Path "$BuildDir\weatherwidget.exe")) {
             throw "No existing exe found at $BuildDir\weatherwidget.exe. Remove -SkipBuild flag."
         }
@@ -140,17 +142,17 @@ try {
     # Step 4: Sign the executable
     # -------------------------------------------------------------------------
     if ($SignMode -ne "none") {
-        Write-Host "[4/5] Signing executable..." -ForegroundColor Yellow
+        Write-Host "[4/6] Signing executable..." -ForegroundColor Yellow
         Sign-File -FilePath "$BuildDir\weatherwidget.exe" -Description "Weather Widget"
         Write-Host "       Done." -ForegroundColor Green
     } else {
-        Write-Host "[4/5] Skipping signing." -ForegroundColor DarkGray
+        Write-Host "[4/6] Skipping signing." -ForegroundColor DarkGray
     }
 
     # -------------------------------------------------------------------------
     # Step 5: Build MSI with WiX
     # -------------------------------------------------------------------------
-    Write-Host "[5/5] Building MSI with WiX..." -ForegroundColor Yellow
+    Write-Host "[5/6] Building MSI with WiX..." -ForegroundColor Yellow
 
     # Resolve wix.exe — check PATH first, then known install locations
     $wixExe = (Get-Command "wix" -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Source)
@@ -179,10 +181,25 @@ try {
         Write-Host "       MSI signed." -ForegroundColor Green
     }
 
+    # -------------------------------------------------------------------------
+    # Step 6: Build the traditional setup.exe bootstrapper
+    # -------------------------------------------------------------------------
+    Write-Host "[6/6] Building setup.exe with WiX Burn..." -ForegroundColor Yellow
+    & $wixExe build .\installer\Bundle.wxs -ext WixToolset.BootstrapperApplications.wixext -d MsiPath=$OutputMsi -d Version=$Version -o $OutputSetupExe
+    if ($LASTEXITCODE -ne 0) { throw "WiX Burn build failed" }
+    Write-Host "       Setup.exe created." -ForegroundColor Green
+
+    if ($SignMode -ne "none") {
+        Write-Host "       Signing setup.exe..." -ForegroundColor Yellow
+        Sign-File -FilePath $OutputSetupExe -Description "Weather Widget Setup"
+        Write-Host "       Setup.exe signed." -ForegroundColor Green
+    }
+
     Write-Host ""
     Write-Host "============================================" -ForegroundColor Green
     Write-Host "  BUILD SUCCESSFUL" -ForegroundColor Green
-    Write-Host "  Output: $OutputMsi" -ForegroundColor Green
+    Write-Host "  MSI:      $OutputMsi" -ForegroundColor Green
+    Write-Host "  Setup EXE: $OutputSetupExe" -ForegroundColor Green
     Write-Host "============================================" -ForegroundColor Green
     Write-Host ""
 
