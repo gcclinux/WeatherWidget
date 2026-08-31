@@ -1084,31 +1084,15 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 				flagBox := container.NewStack(flagImg, flagBorder)
 
 				// Native name title
-				var titleObj fyne.CanvasObject
-				if loc.Code == "ta-IN" {
-					iconName := "icons/lang_ta_normal.png"
-					if isSelected {
-						iconName = "icons/lang_ta_selected.png"
-					}
-					if data, err := assets.Icons.ReadFile(iconName); err == nil && len(data) > 0 {
-						imgRes := fyne.NewStaticResource("lang_ta.png", data)
-						titleImg := canvas.NewImageFromResource(imgRes)
-						titleImg.FillMode = canvas.ImageFillContain
-						titleImg.SetMinSize(fyne.NewSize(42, 17))
-						titleObj = container.NewHBox(titleImg)
-					}
+				var nameText *canvas.Text
+				if isSelected {
+					nameText = canvas.NewText(loc.NativeName, color.NRGBA{R: 56, G: 189, B: 248, A: 255})
+				} else {
+					nameText = canvas.NewText(loc.NativeName, color.NRGBA{R: 248, G: 250, B: 252, A: 255})
 				}
-				if titleObj == nil {
-					var nameText *canvas.Text
-					if isSelected {
-						nameText = canvas.NewText(loc.NativeName, color.NRGBA{R: 56, G: 189, B: 248, A: 255})
-					} else {
-						nameText = canvas.NewText(loc.NativeName, color.NRGBA{R: 248, G: 250, B: 252, A: 255})
-					}
-					nameText.TextSize = 14
-					nameText.TextStyle = fyne.TextStyle{Bold: true}
-					titleObj = nameText
-				}
+				nameText.TextSize = 14
+				nameText.TextStyle = fyne.TextStyle{Bold: true}
+				var titleObj fyne.CanvasObject = nameText
 
 				// Subtitle text (English)
 				subText := canvas.NewText(loc.EnglishName, color.NRGBA{R: 148, G: 163, B: 184, A: 255})
@@ -1146,6 +1130,10 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 						_ = u.lm.SetLocale(loc.Code)
 					}
 					SetLocaleFont(loc.Code)
+					// Invalidate Fyne's cached font faces so the new locale
+					// font is actually used; otherwise complex scripts (e.g.
+					// Tamil) render as tofu boxes on Windows.
+					RefreshFontCache(u.app)
 					selectedTabIndex = 4 // stay on the Language tab after rebuild
 					win.SetTitle(u.t("settings.title"))
 					buildSettingsUI()

@@ -164,6 +164,28 @@ func SetLocaleFont(locale string) {
 	}
 }
 
+// RefreshFontCache forces Fyne to drop its internal font-face cache and
+// re-resolve faces from the current theme.
+//
+// Fyne caches rendered font faces keyed only by text style (not by the font
+// resource), and it never re-resolves them on its own after startup. When the
+// locale font changes via SetLocaleFont, previously-cached faces (e.g. the
+// Latin Segoe UI face, which has no Tamil glyphs) would otherwise keep being
+// used for new text — producing tofu (□/◇) boxes for complex scripts such as
+// Tamil, most visibly on Windows.
+//
+// Re-applying the theme triggers Fyne's settings listener, which calls
+// painter.ClearFontCache() internally and re-applies faces across all windows.
+// This is the only public mechanism to invalidate that cache.
+//
+// Call this after SetLocaleFont on the Fyne main goroutine.
+func RefreshFontCache(app fyne.App) {
+	if app == nil {
+		return
+	}
+	app.Settings().SetTheme(NewWidgetTheme(theme.DefaultTheme()))
+}
+
 // SetTransparencyActive switches the background color key on or off.
 func SetTransparencyActive(active bool) {
 	if active {

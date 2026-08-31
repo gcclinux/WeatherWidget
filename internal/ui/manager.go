@@ -43,6 +43,14 @@ func (u *UIManager) Window() fyne.Window {
 	return u.widget
 }
 
+// RefreshFontCache invalidates Fyne's cached font faces so that a locale font
+// change (via SetLocaleFont) takes effect. Without this, previously-cached
+// faces keep being used and complex scripts such as Tamil render as tofu
+// boxes, most visibly on Windows. Safe to call on the Fyne main goroutine.
+func (u *UIManager) RefreshFontCache() {
+	RefreshFontCache(u.app)
+}
+
 // ApplyWin32Styles applies platform-specific window styles.
 // On Windows this sets WS_EX_TOOLWINDOW and HWND_TOPMOST.
 // Must be called after the window is shown so the HWND exists.

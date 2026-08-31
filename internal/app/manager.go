@@ -79,6 +79,11 @@ func (a *AppManager) Run() error {
 	// 3. Create UI manager.
 	a.ui = ui.NewUIManager(a.app, a.localeMgr)
 
+	// 3b. Invalidate Fyne's font-face cache now that the locale font is set,
+	// so the correct font is used from the first render. This prevents complex
+	// scripts (e.g. Tamil) from rendering as tofu boxes on Windows.
+	a.ui.RefreshFontCache()
+
 	// 4. Setup system tray.
 	a.ui.SetupSystemTray(
 		a.appDataDir,
@@ -242,6 +247,7 @@ func (a *AppManager) onSettingsSave(newCfg *config.Config) error {
 	if oldCfg.Locale != newCfg.Locale && a.localeMgr != nil {
 		_ = a.localeMgr.SetLocale(newCfg.Locale)
 		ui.SetLocaleFont(newCfg.Locale)
+		a.ui.RefreshFontCache()
 		a.ui.SetupSystemTray(
 			a.appDataDir,
 			func() { a.openSettings() },
