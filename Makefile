@@ -114,10 +114,18 @@ build-darwin-app: build-darwin
 # Wrap the .app in a distributable .dmg (requires build-darwin-app first)
 build-darwin-dmg: build-darwin-app
 	@echo "==> Creating $(APP_NAME)-$(VERSION).dmg..."
-	@hdiutil create -volname "$(APP_NAME) $(VERSION)" \
+	@rm -f $(APP_NAME)-$(VERSION).dmg $(APP_NAME)-$(VERSION)-tmp.dmg
+	# Size the writable image from the bundle footprint + 50MB slack so hdiutil's
+	# auto-sizer can't under-allocate (avoids "No space left on device").
+	@SIZE=$$(du -sm $(APP_NAME)-$(VERSION).app | awk '{print $$1 + 50}'); \
+	hdiutil create -volname "$(APP_NAME) $(VERSION)" \
 		-srcfolder $(APP_NAME)-$(VERSION).app \
-		-ov -format UDZO \
+		-fs HFS+ -format UDRW -size $${SIZE}m \
+		-ov $(APP_NAME)-$(VERSION)-tmp.dmg
+	@hdiutil convert $(APP_NAME)-$(VERSION)-tmp.dmg \
+		-format UDZO \
 		-o $(APP_NAME)-$(VERSION).dmg
+	@rm -f $(APP_NAME)-$(VERSION)-tmp.dmg
 	@echo "==> Done: $(APP_NAME)-$(VERSION).dmg"
 
 # Build a macOS .pkg installer (requires build-darwin-app first)

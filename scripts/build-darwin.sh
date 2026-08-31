@@ -117,11 +117,21 @@ mkdir -p "$DMG_STAGE"
 cp -R "$APP_BUNDLE" "$DMG_STAGE/"
 ln -s /Applications "$DMG_STAGE/Applications"
 
+DMG_TMP="$BUILD_DIR/$APP_NAME-$VERSION-tmp.dmg"
+rm -f "$DMG_TMP"
+
+# Size the writable image from the staged content footprint + 50MB slack so
+# hdiutil's auto-sizer can't under-allocate (avoids "No space left on device").
+DMG_SIZE=$(du -sm "$DMG_STAGE" | awk '{print $1 + 50}')
+
 hdiutil create -volname "$APP_NAME $VERSION" \
     -srcfolder "$DMG_STAGE" \
-    -ov -format UDZO \
-    -o "$DMG_NAME"
+    -fs HFS+ -format UDRW -size "${DMG_SIZE}m" \
+    -ov "$DMG_TMP"
 
+hdiutil convert "$DMG_TMP" -format UDZO -o "$DMG_NAME"
+
+rm -f "$DMG_TMP"
 rm -rf "$DMG_STAGE"
 
 echo ""
