@@ -71,6 +71,7 @@ func (a *AppManager) Run() error {
 	} else {
 		if cfg.Locale != "" {
 			_ = lm.SetLocale(cfg.Locale)
+			ui.SetLocaleFont(cfg.Locale)
 		}
 		a.localeMgr = lm
 	}
@@ -240,6 +241,12 @@ func (a *AppManager) onSettingsSave(newCfg *config.Config) error {
 	// Update locale if it changed.
 	if oldCfg.Locale != newCfg.Locale && a.localeMgr != nil {
 		_ = a.localeMgr.SetLocale(newCfg.Locale)
+		ui.SetLocaleFont(newCfg.Locale)
+		a.ui.SetupSystemTray(
+			a.appDataDir,
+			func() { a.openSettings() },
+			func() { a.Shutdown() },
+		)
 	}
 
 	// Switch weather provider if data source / credentials changed.

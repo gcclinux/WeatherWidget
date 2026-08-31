@@ -59,13 +59,43 @@ func TestValidate_CitiesLength(t *testing.T) {
 		t.Error("expected error for empty cities")
 	}
 
-	// Six cities
+	// Free tier (openweathermap): 3 cities is valid, 4 cities is invalid
 	cfg.Cities = []CityConfig{
-		{Name: "A"}, {Name: "B"}, {Name: "C"}, {Name: "D"}, {Name: "E"}, {Name: "F"},
+		{Name: "A", Region: "R1", Timezone: "UTC"},
+		{Name: "B", Region: "R2", Timezone: "UTC"},
+		{Name: "C", Region: "R3", Timezone: "UTC"},
 	}
 	errs = Validate(cfg, nil)
+	if hasError(errs, "cities") {
+		t.Errorf("expected 3 cities to be valid in free tier, got errors: %v", errs)
+	}
+
+	cfg.Cities = append(cfg.Cities, CityConfig{Name: "D", Region: "R4", Timezone: "UTC"})
+	errs = Validate(cfg, nil)
 	if !hasError(errs, "cities") {
-		t.Error("expected error for 6 cities")
+		t.Error("expected error for 4 cities in free tier")
+	}
+
+	// Pro tier (easyweatherwidget with API key): up to 5 cities is valid, 6 cities is invalid
+	proCfg := validRemoteConfig()
+	proCfg.APIConfig = &APIConfig{Provider: "easyweatherwidget", APIKey: "eww-key-123"}
+	proCfg.RefreshInterval = 10
+	proCfg.Cities = []CityConfig{
+		{Name: "A", Region: "R1", Timezone: "UTC"},
+		{Name: "B", Region: "R2", Timezone: "UTC"},
+		{Name: "C", Region: "R3", Timezone: "UTC"},
+		{Name: "D", Region: "R4", Timezone: "UTC"},
+		{Name: "E", Region: "R5", Timezone: "UTC"},
+	}
+	errs = Validate(proCfg, nil)
+	if hasError(errs, "cities") {
+		t.Errorf("expected 5 cities to be valid in pro tier, got errors: %v", errs)
+	}
+
+	proCfg.Cities = append(proCfg.Cities, CityConfig{Name: "F", Region: "R6", Timezone: "UTC"})
+	errs = Validate(proCfg, nil)
+	if !hasError(errs, "cities") {
+		t.Error("expected error for 6 cities in pro tier")
 	}
 }
 

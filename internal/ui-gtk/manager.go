@@ -534,6 +534,7 @@ func (m *manager) onSettingsSave(newCfg *config.Config) error {
 
 	if m.lm != nil && oldCfg.Locale != newCfg.Locale {
 		_ = m.lm.SetLocale(newCfg.Locale)
+		m.updateTrayMenu()
 	}
 
 	newOpacity := newCfg.Opacity

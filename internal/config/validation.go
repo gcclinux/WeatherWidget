@@ -42,9 +42,15 @@ func availableLocaleCodes() map[string]bool {
 func Validate(cfg *Config, t TranslateFunc) []ValidationError {
 	var errs []ValidationError
 
-	// Cities length 1–5
-	if len(cfg.Cities) < 1 || len(cfg.Cities) > 5 {
-		tmpl := translate(t, "validation.cities.count", "must contain 1 to 5 cities, got %d")
+	// Cities length based on tier (Free: 1-3, Pro: 1-5)
+	maxCities := cfg.MaxCities()
+	if len(cfg.Cities) < 1 || len(cfg.Cities) > maxCities {
+		var tmpl string
+		if maxCities == MaxCitiesPro {
+			tmpl = translate(t, "validation.cities.count", "must contain 1 to 5 cities, got %d")
+		} else {
+			tmpl = translate(t, "validation.cities.count.free", "must contain 1 to 3 cities for Free tier (subscribe to Pro in Data Provider tab for up to 5 cities), got %d")
+		}
 		errs = append(errs, ValidationError{
 			Field:   "cities",
 			Message: fmt.Sprintf(tmpl, len(cfg.Cities)),

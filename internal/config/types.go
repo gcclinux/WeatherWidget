@@ -166,6 +166,26 @@ type DatabaseConfig struct {
 	Query    string `json:"query"`
 }
 
+const (
+	// MaxCitiesFree is the maximum number of cities allowed in Free mode (OpenWeatherMap / default).
+	MaxCitiesFree = 3
+	// MaxCitiesPro is the maximum number of cities allowed in Pro mode (EasyWeatherWidget gateway).
+	MaxCitiesPro = 5
+)
+
+// IsPro returns true if the config uses EasyWeatherWidget Pro with a valid API key.
+func (c *Config) IsPro() bool {
+	return c.APIConfig != nil && c.APIConfig.Provider == "easyweatherwidget" && c.APIConfig.APIKey != ""
+}
+
+// MaxCities returns the maximum number of cities allowed based on the active tier.
+func (c *Config) MaxCities() int {
+	if c.IsPro() {
+		return MaxCitiesPro
+	}
+	return MaxCitiesFree
+}
+
 // HasLicense returns true if the config has a valid API key or database config.
 // When false, only the default cities will work.
 func (c *Config) HasLicense() bool {

@@ -16,9 +16,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/gotk3/gotk3/gdk"
 	"github.com/gotk3/gotk3/glib"
 	"github.com/gotk3/gotk3/gtk"
 
+	"weatherwidget/assets"
 	"weatherwidget/internal/config"
 )
 
@@ -51,7 +53,7 @@ func showSettingsDialog(m *manager) {
 	// Don't set transient-for — the main window is a positioned desktop widget
 	// and making the dialog transient causes them to move together.
 	dlg.SetModal(false)
-	dlg.SetDefaultSize(600, 680)
+	dlg.SetDefaultSize(600, 748)
 	dlg.SetPosition(gtk.WIN_POS_CENTER)
 
 	box, _ := dlg.GetContentArea()
@@ -72,7 +74,9 @@ func showSettingsDialog(m *manager) {
 	// --- Locations tab ---
 	cities := make([]config.CityConfig, len(m.cfg.Cities))
 	copy(cities, m.cfg.Cities)
-	locationsBox, getCities := buildLocationsTab(m, dlg, cities)
+	locationsBox, getCities := buildLocationsTab(m, dlg, cities, func() {
+		nb.SetCurrentPage(0)
+	})
 	locationsLabel, _ := gtk.LabelNew(m.t("settings.tab.locations"))
 	nb.AppendPage(locationsBox, locationsLabel)
 
@@ -104,7 +108,7 @@ func showSettingsDialog(m *manager) {
 
 	// ── Action buttons ────────────────────────────────────────────────────
 	dlg.AddButton(m.t("settings.save"), gtk.RESPONSE_OK)
-	dlg.AddButton("Cancel", gtk.RESPONSE_CANCEL)
+	dlg.AddButton(m.t("settings.cancel"), gtk.RESPONSE_CANCEL)
 
 	dlg.ShowAll()
 
@@ -398,7 +402,7 @@ func buildAppearanceTab(m *manager) (*gtk.Box, *gtk.Scale, *gtk.CheckButton, *gt
 	vbox.PackStart(iconSep, false, false, 4)
 
 	iconTitle, _ := gtk.LabelNew("")
-	iconTitle.SetMarkup("<b>" + m.t("settings.icons.title") + "</b>")
+	iconTitle.SetMarkup("<b>" + glib.MarkupEscapeText(m.t("settings.icons.title")) + "</b>")
 	iconTitle.SetHAlign(gtk.ALIGN_START)
 	vbox.PackStart(iconTitle, false, false, 0)
 
@@ -543,6 +547,174 @@ func showErrorDialog(parent *gtk.Dialog, msg string) {
 	ed.Destroy()
 }
 
+// showProUpgradeDialog displays an eye-candy modal dialog highlighting the benefits of Pro tier.
+func showProUpgradeDialog(parent *gtk.Dialog, m *manager, onGoToProvider func()) {
+	dlg, err := gtk.DialogNew()
+	if err != nil {
+		return
+	}
+	dlg.SetTransientFor(parent)
+	dlg.SetModal(true)
+	dlg.SetTitle(m.t("dialog.pro.title"))
+	dlg.SetDefaultSize(480, -1)
+	dlg.SetResizable(false)
+
+	contentArea, err := dlg.GetContentArea()
+	if err != nil {
+		return
+	}
+
+	mainBox, _ := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 14)
+	mainBox.SetMarginTop(18)
+	mainBox.SetMarginBottom(18)
+	mainBox.SetMarginStart(20)
+	mainBox.SetMarginEnd(20)
+
+	// CSS for eye-candy styling
+	proCSS := `
+.pro-header-badge {
+    border-radius: 20px;
+    padding: 4px 14px;
+    background: linear-gradient(135deg, #f59e0b, #d97706);
+    color: #ffffff;
+    font-weight: bold;
+    font-size: 11px;
+}
+.pro-feature-item {
+    background: rgba(30, 41, 59, 0.75);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 10px;
+    padding: 10px 14px;
+    transition: all 0.15s ease-in-out;
+}
+.pro-feature-item:hover {
+    background: rgba(51, 65, 85, 0.85);
+    border-color: rgba(56, 189, 248, 0.35);
+}
+.pro-cta-button {
+    background: linear-gradient(135deg, #0284c7, #0369a1);
+    color: #ffffff;
+    font-weight: bold;
+    font-size: 13px;
+    border-radius: 8px;
+    padding: 10px 18px;
+    border: none;
+}
+.pro-cta-button:hover {
+    background: linear-gradient(135deg, #0ea5e9, #0284c7);
+}
+.pro-dismiss-button {
+    background: rgba(255, 255, 255, 0.06);
+    color: #94a3b8;
+    border-radius: 8px;
+    padding: 10px 16px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+.pro-dismiss-button:hover {
+    background: rgba(255, 255, 255, 0.12);
+    color: #f8fafc;
+}
+`
+	cssProvider, _ := gtk.CssProviderNew()
+	cssProvider.LoadFromData(proCSS)
+
+	// Top Badge & Title Box
+	headerBox, _ := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 6)
+	headerBox.SetHAlign(gtk.ALIGN_CENTER)
+
+	badgeLbl, _ := gtk.LabelNew("⭐ PRO UPGRADE")
+	badgeSc, _ := badgeLbl.GetStyleContext()
+	badgeSc.AddProvider(cssProvider, gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
+	badgeSc.AddClass("pro-header-badge")
+	headerBox.PackStart(badgeLbl, false, false, 0)
+
+	titleLbl, _ := gtk.LabelNew("")
+	titleLbl.SetMarkup(fmt.Sprintf("<span font_size='15000' font_weight='bold' foreground='#38bdf8'>%s</span>", glib.MarkupEscapeText(m.t("dialog.pro.title"))))
+	titleLbl.SetHAlign(gtk.ALIGN_CENTER)
+	headerBox.PackStart(titleLbl, false, false, 0)
+
+	subtitleLbl, _ := gtk.LabelNew("")
+	subtitleLbl.SetMarkup(fmt.Sprintf("<span font_size='9500' foreground='#94a3b8'>%s</span>", glib.MarkupEscapeText(m.t("dialog.pro.subtitle"))))
+	subtitleLbl.SetLineWrap(true)
+	subtitleLbl.SetHAlign(gtk.ALIGN_CENTER)
+	subtitleLbl.SetJustify(gtk.JUSTIFY_CENTER)
+	headerBox.PackStart(subtitleLbl, false, false, 0)
+
+	mainBox.PackStart(headerBox, false, false, 0)
+
+	// Features list
+	featuresBox, _ := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 8)
+	features := []struct {
+		icon  string
+		title string
+		desc  string
+	}{
+		{"🏙️", m.t("dialog.pro.feature1"), m.t("dialog.pro.feature1_desc")},
+		{"⚡", m.t("dialog.pro.feature2"), m.t("dialog.pro.feature2_desc")},
+		{"📊", m.t("dialog.pro.feature3"), m.t("dialog.pro.feature3_desc")},
+	}
+
+	for _, f := range features {
+		fBox, _ := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 12)
+		fSc, _ := fBox.GetStyleContext()
+		fSc.AddProvider(cssProvider, gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
+		fSc.AddClass("pro-feature-item")
+
+		iconLbl, _ := gtk.LabelNew("")
+		iconLbl.SetMarkup(fmt.Sprintf("<span font_size='16000'>%s</span>", f.icon))
+		fBox.PackStart(iconLbl, false, false, 0)
+
+		textVBox, _ := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 2)
+		fTitle, _ := gtk.LabelNew("")
+		fTitle.SetMarkup(fmt.Sprintf("<span font_weight='bold' font_size='10500' foreground='#f8fafc'>%s</span>", glib.MarkupEscapeText(f.title)))
+		fTitle.SetHAlign(gtk.ALIGN_START)
+		textVBox.PackStart(fTitle, false, false, 0)
+
+		fDesc, _ := gtk.LabelNew("")
+		fDesc.SetMarkup(fmt.Sprintf("<span font_size='8500' foreground='#cbd5e1'>%s</span>", glib.MarkupEscapeText(f.desc)))
+		fDesc.SetHAlign(gtk.ALIGN_START)
+		fDesc.SetLineWrap(true)
+		textVBox.PackStart(fDesc, false, false, 0)
+
+		fBox.PackStart(textVBox, true, true, 0)
+		featuresBox.PackStart(fBox, false, false, 0)
+	}
+
+	mainBox.PackStart(featuresBox, false, false, 0)
+
+	// Action buttons
+	btnBox, _ := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 10)
+	btnBox.SetHAlign(gtk.ALIGN_FILL)
+	btnBox.SetMarginTop(8)
+
+	dismissBtn, _ := gtk.ButtonNewWithLabel(m.t("dialog.pro.dismiss"))
+	dismissSc, _ := dismissBtn.GetStyleContext()
+	dismissSc.AddProvider(cssProvider, gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
+	dismissSc.AddClass("pro-dismiss-button")
+	dismissBtn.Connect("clicked", func() {
+		dlg.Destroy()
+	})
+	btnBox.PackStart(dismissBtn, true, true, 0)
+
+	ctaBtn, _ := gtk.ButtonNew()
+	ctaBtn.SetLabel("🚀  " + m.t("dialog.pro.cta"))
+	ctaSc, _ := ctaBtn.GetStyleContext()
+	ctaSc.AddProvider(cssProvider, gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
+	ctaSc.AddClass("pro-cta-button")
+	ctaBtn.Connect("clicked", func() {
+		dlg.Destroy()
+		if onGoToProvider != nil {
+			onGoToProvider()
+		}
+	})
+	btnBox.PackStart(ctaBtn, true, true, 0)
+
+	mainBox.PackStart(btnBox, false, false, 0)
+
+	contentArea.Add(mainBox)
+	dlg.ShowAll()
+}
+
 // fontSizes holds the three live font size values threaded through the Widget tab.
 type fontSizes struct {
 	cityTime   int
@@ -562,7 +734,7 @@ func buildWidgetTab(m *manager) (*gtk.Box, func() *config.DisplayFields, func() 
 
 	// ── Panel Display ─────────────────────────────────────────────────────
 	displayTitle, _ := gtk.LabelNew("")
-	displayTitle.SetMarkup("<b>" + m.t("settings.display.title") + "</b>")
+	displayTitle.SetMarkup("<b>" + glib.MarkupEscapeText(m.t("settings.display.title")) + "</b>")
 	displayTitle.SetHAlign(gtk.ALIGN_START)
 	vbox.PackStart(displayTitle, false, false, 0)
 
@@ -633,7 +805,7 @@ func buildWidgetTab(m *manager) (*gtk.Box, func() *config.DisplayFields, func() 
 	vbox.PackStart(sep, false, false, 4)
 
 	tempTitle, _ := gtk.LabelNew("")
-	tempTitle.SetMarkup("<b>" + m.t("settings.temperature.title") + "</b>")
+	tempTitle.SetMarkup("<b>" + glib.MarkupEscapeText(m.t("settings.temperature.title")) + "</b>")
 	tempTitle.SetHAlign(gtk.ALIGN_START)
 	vbox.PackStart(tempTitle, false, false, 0)
 
@@ -658,7 +830,7 @@ func buildWidgetTab(m *manager) (*gtk.Box, func() *config.DisplayFields, func() 
 	vbox.PackStart(sep2, false, false, 4)
 
 	windTitle, _ := gtk.LabelNew("")
-	windTitle.SetMarkup("<b>" + m.t("settings.windspeed.title") + "</b>")
+	windTitle.SetMarkup("<b>" + glib.MarkupEscapeText(m.t("settings.windspeed.title")) + "</b>")
 	windTitle.SetHAlign(gtk.ALIGN_START)
 	vbox.PackStart(windTitle, false, false, 0)
 
@@ -722,7 +894,7 @@ func buildWidgetTab(m *manager) (*gtk.Box, func() *config.DisplayFields, func() 
 	vbox.PackStart(sep3, false, false, 4)
 
 	fontTitle, _ := gtk.LabelNew("")
-	fontTitle.SetMarkup("<b>" + m.t("settings.fontSize.title") + "</b>")
+	fontTitle.SetMarkup("<b>" + glib.MarkupEscapeText(m.t("settings.fontSize.title")) + "</b>")
 	fontTitle.SetHAlign(gtk.ALIGN_START)
 	vbox.PackStart(fontTitle, false, false, 0)
 
@@ -820,7 +992,7 @@ func buildWidgetTab(m *manager) (*gtk.Box, func() *config.DisplayFields, func() 
 // buildLocationsTab builds the city management tab.
 // Returns the tab widget and a getCities() func that returns the current list
 // at the time of calling (used by the Save button in showSettingsDialog).
-func buildLocationsTab(m *manager, dlg *gtk.Dialog, initialCities []config.CityConfig) (*gtk.Box, func() []config.CityConfig) {
+func buildLocationsTab(m *manager, dlg *gtk.Dialog, initialCities []config.CityConfig, onGoToProvider func()) (*gtk.Box, func() []config.CityConfig) {
 	cities := make([]config.CityConfig, len(initialCities))
 	copy(cities, initialCities)
 
@@ -833,13 +1005,37 @@ func buildLocationsTab(m *manager, dlg *gtk.Dialog, initialCities []config.CityC
 
 	// ── Saved Cities section ──────────────────────────────────────────────
 	savedTitle, _ := gtk.LabelNew("")
-	savedTitle.SetMarkup("<b>" + m.t("settings.locations.savedTitle") + "</b>")
+	savedTitle.SetMarkup("<b>" + glib.MarkupEscapeText(m.t("settings.locations.savedTitle")) + "</b>")
 	savedTitle.SetHAlign(gtk.ALIGN_START)
 	outer.PackStart(savedTitle, false, false, 0)
 
 	subTitle, _ := gtk.LabelNew(m.t("settings.locations.savedSubtitle"))
 	subTitle.SetHAlign(gtk.ALIGN_START)
 	outer.PackStart(subTitle, false, false, 0)
+
+	// Callout box for Pro note
+	proBox, _ := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 8)
+	proBox.SetMarginTop(2)
+	proBox.SetMarginBottom(6)
+	proBoxSc, _ := proBox.GetStyleContext()
+	proNoteCSS, _ := gtk.CssProviderNew()
+	proNoteCSS.LoadFromData(`
+.pro-note-box {
+    border-radius: 8px;
+    padding: 8px 12px;
+    background: rgba(14, 165, 233, 0.1);
+    border: 1px solid rgba(56, 189, 248, 0.35);
+}
+`)
+	proBoxSc.AddProvider(proNoteCSS, gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
+	proBoxSc.AddClass("pro-note-box")
+
+	proNote, _ := gtk.LabelNew("")
+	proNote.SetMarkup(fmt.Sprintf("<span foreground='#38bdf8' font_size='9500'>%s</span>", glib.MarkupEscapeText(m.t("settings.locations.proNote"))))
+	proNote.SetHAlign(gtk.ALIGN_START)
+	proNote.SetLineWrap(true)
+	proBox.PackStart(proNote, true, true, 0)
+	outer.PackStart(proBox, false, false, 0)
 
 	// Scrollable city list.
 	scroll, _ := gtk.ScrolledWindowNew(nil, nil)
@@ -929,7 +1125,7 @@ func buildLocationsTab(m *manager, dlg *gtk.Dialog, initialCities []config.CityC
 	outer.PackStart(sep, false, false, 4)
 
 	addTitle, _ := gtk.LabelNew("")
-	addTitle.SetMarkup("<b>" + m.t("settings.locations.addTitle") + "</b>")
+	addTitle.SetMarkup("<b>" + glib.MarkupEscapeText(m.t("settings.locations.addTitle")) + "</b>")
 	addTitle.SetHAlign(gtk.ALIGN_START)
 	outer.PackStart(addTitle, false, false, 0)
 
@@ -1168,9 +1364,25 @@ func buildLocationsTab(m *manager, dlg *gtk.Dialog, initialCities []config.CityC
 			newCity.Longitude = lon
 		}
 
-		result, err := config.AddCity(cities, newCity, nil)
+		maxCities := config.MaxCitiesFree
+		if m.cfg.IsPro() {
+			maxCities = config.MaxCitiesPro
+		}
+		if !m.cfg.IsPro() && len(cities) >= config.MaxCitiesFree {
+			showProUpgradeDialog(dlg, m, onGoToProvider)
+			return
+		}
+		var tFunc config.TranslateFunc
+		if m.lm != nil {
+			tFunc = m.lm.T
+		}
+		result, err := config.AddCityWithLimit(cities, newCity, maxCities, tFunc)
 		if err != nil {
-			showErrorDialog(dlg, err.Error())
+			if !m.cfg.IsPro() && len(cities) >= config.MaxCitiesFree {
+				showProUpgradeDialog(dlg, m, onGoToProvider)
+			} else {
+				showErrorDialog(dlg, err.Error())
+			}
 			return
 		}
 		cities = result
@@ -1206,38 +1418,28 @@ func lookupTimezone(lat, lon float64) string {
 	return gtkLookupTimezone(lat, lon)
 }
 
-// localeInfo holds display data for a single language option.
-type localeInfo struct {
-	code  string // e.g. "en-GB"
-	badge string // 2-letter display code
-	name  string // native name
-	color string // CSS hex colour for the badge
+// gtkLocaleInfo holds display data for a single language option in GTK settings.
+type gtkLocaleInfo struct {
+	code       string // e.g. "en-GB"
+	nativeName string // "English"
+	subName    string // "English"
+	flagFile   string // "icons/flags/en-GB.png"
 }
 
-// allLocales lists every supported locale in the same order as the screenshot.
-var allLocales = []localeInfo{
-	{"de-DE", "DE", "Deutsch", "#3c3c3c"},
-	{"en-GB", "EN", "#0052a5", "English"}, // placeholder — reordered below
-	{"es-ES", "ES", "Español", "#c69214"},
-	{"fr-FR", "FR", "Français", "#002395"},
-	{"it-IT", "IT", "Italiano", "#b4783c"},
-	{"nl-NL", "NL", "Nederlands", "#ff7a00"},
-	{"pl-PL", "PL", "Polski", "#e30a17"},
-	{"pt-BR", "PT", "Português", "#009c3b"},
-	{"tr-TR", "TR", "Türkçe", "#009e9e"},
-}
-
-// localeData is the corrected, ordered locale list used at runtime.
-var localeData = []localeInfo{
-	{"de-DE", "DE", "Deutsch", "#3c3c3c"},
-	{"en-GB", "EN", "English", "#0052a5"},
-	{"es-ES", "ES", "Español", "#c69214"},
-	{"fr-FR", "FR", "Français", "#002395"},
-	{"it-IT", "IT", "Italiano", "#b4783c"},
-	{"nl-NL", "NL", "Nederlands", "#ff7a00"},
-	{"pl-PL", "PL", "Polski", "#e30a17"},
-	{"pt-BR", "PT", "Português", "#009c3b"},
-	{"tr-TR", "TR", "Türkçe", "#009e9e"},
+// gtkLocaleData is the 2-column ordered list of supported languages.
+var gtkLocaleData = []gtkLocaleInfo{
+	{"en-GB", "English", "English", "icons/flags/en-GB.png"},
+	{"es-ES", "Español", "Spanish", "icons/flags/es-ES.png"},
+	{"fr-FR", "Français", "French", "icons/flags/fr-FR.png"},
+	{"de-DE", "Deutsch", "German", "icons/flags/de-DE.png"},
+	{"it-IT", "Italiano", "Italian", "icons/flags/it-IT.png"},
+	{"pt-BR", "Português", "Português (BR)", "icons/flags/pt-BR.png"},
+	{"nl-NL", "Nederlands", "Dutch", "icons/flags/nl-NL.png"},
+	{"pl-PL", "Polski", "Polish", "icons/flags/pl-PL.png"},
+	{"tr-TR", "Türkçe", "Turkish", "icons/flags/tr-TR.png"},
+	{"ta-IN", "தமிழ்", "Tamil", "icons/flags/ta-IN.png"},
+	{"ja-JP", "日本語", "Japanese", "icons/flags/ja-JP.png"},
+	{"zh-CN", "中文", "Chinese", "icons/flags/zh-CN.png"},
 }
 
 // buildLanguageTab builds the language selection tab.
@@ -1249,86 +1451,163 @@ func buildLanguageTab(m *manager, initialLocale string) (*gtk.Box, func() string
 		selected = "en-GB"
 	}
 
-	outer, _ := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 12)
+	outer, _ := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 10)
 	outer.SetMarginTop(12)
-	outer.SetMarginStart(8)
-	outer.SetMarginEnd(8)
+	outer.SetMarginStart(12)
+	outer.SetMarginEnd(12)
+	outer.SetMarginBottom(12)
+
+	// ── Top Header Row ─────────────────────────────────────────
+	headerBox, _ := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 8)
+
+	titleLeft, _ := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 6)
+	globeLbl, _ := gtk.LabelNew("")
+	globeLbl.SetMarkup("<span font_size='14000' foreground='#38bdf8'>🌐</span>")
+	titleLeft.PackStart(globeLbl, false, false, 0)
 
 	titleLbl, _ := gtk.LabelNew("")
-	titleLbl.SetMarkup("<b>" + m.t("settings.language.title") + "</b>")
-	titleLbl.SetHAlign(gtk.ALIGN_START)
-	outer.PackStart(titleLbl, false, false, 0)
+	titleLbl.SetMarkup(fmt.Sprintf("<span font_size='12500' font_weight='bold' foreground='#f8fafc'>%s</span>", glib.MarkupEscapeText(m.t("settings.language.title"))))
+	titleLeft.PackStart(titleLbl, false, false, 0)
+	headerBox.PackStart(titleLeft, false, false, 0)
 
-	subLbl, _ := gtk.LabelNew(m.t("settings.language.subtitle"))
-	subLbl.SetHAlign(gtk.ALIGN_START)
-	outer.PackStart(subLbl, false, false, 0)
+	badgeLbl, _ := gtk.LabelNew(fmt.Sprintf("%d LANGUAGES", len(gtkLocaleData)))
+	badgeSc, _ := badgeLbl.GetStyleContext()
+	badgeSc.AddClass("lang-badge")
+	headerBox.PackEnd(badgeLbl, false, false, 0)
+
+	outer.PackStart(headerBox, false, false, 0)
+
+	sep, _ := gtk.SeparatorNew(gtk.ORIENTATION_HORIZONTAL)
+	outer.PackStart(sep, false, false, 4)
 
 	// CSS for language buttons — badges and selection highlight.
 	langCSS := `
-.lang-btn {
-    border-radius: 8px;
-    padding: 8px;
-    border: 2px solid transparent;
-    background: rgba(255,255,255,0.05);
-    min-width: 120px;
-    min-height: 70px;
+.lang-pill {
+    border-radius: 10px;
+    padding: 6px 12px;
+    border: 1.5px solid rgba(255, 255, 255, 0.08);
+    background: rgba(30, 41, 59, 0.75);
+    min-width: 175px;
+    min-height: 48px;
+    transition: all 0.15s ease-in-out;
 }
-.lang-btn-selected {
-    border: 2px solid #4a90d9;
-    background: rgba(74,144,217,0.15);
+.lang-pill:hover {
+    background: rgba(51, 65, 85, 0.85);
+    border-color: rgba(255, 255, 255, 0.25);
+}
+.lang-pill-selected {
+    border: 2px solid #38bdf8;
+    background: rgba(14, 165, 233, 0.18);
+}
+.lang-pill-selected:hover {
+    background: rgba(14, 165, 233, 0.25);
+    border-color: #38bdf8;
+}
+.lang-badge {
+    border-radius: 12px;
+    padding: 3px 10px;
+    background: rgba(14, 165, 233, 0.15);
+    border: 1px solid rgba(56, 189, 248, 0.4);
+    color: #38bdf8;
+    font-weight: bold;
+    font-size: 11px;
 }
 `
 	langProvider, _ := gtk.CssProviderNew()
 	langProvider.LoadFromData(langCSS)
 
-	// 3-column grid using a gtk.Grid.
+	// Apply CSS to badge
+	badgeSc.AddProvider(langProvider, gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
+
+	// 2-column grid using a gtk.Grid.
 	grid, _ := gtk.GridNew()
 	grid.SetRowSpacing(8)
-	grid.SetColumnSpacing(8)
-	grid.SetHAlign(gtk.ALIGN_CENTER)
+	grid.SetColumnSpacing(10)
+	grid.SetHExpand(true)
 
 	// Keep a reference to every button so we can toggle selection CSS.
 	type btnRef struct {
-		btn  *gtk.Button
-		code string
+		btn      *gtk.Button
+		nameLbl  *gtk.Label
+		checkLbl *gtk.Label
+		code     string
+		native   string
 	}
 	var buttons []btnRef
 
 	var rebuildSelection func()
 
-	for i, loc := range localeData {
+	for i, loc := range gtkLocaleData {
 		loc := loc // capture
-		col := i % 3
-		row := i / 3
+		col := i % 2
+		row := i / 2
 
 		btn, _ := gtk.ButtonNew()
 		btn.SetRelief(gtk.RELIEF_NONE)
+		btn.SetHExpand(true)
 
-		// Inner vertical box: coloured badge + language name.
-		vbox, _ := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 4)
-		vbox.SetHAlign(gtk.ALIGN_CENTER)
-		vbox.SetVAlign(gtk.ALIGN_CENTER)
+		// Inner horizontal layout
+		hbox, _ := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 10)
+		hbox.SetMarginStart(4)
+		hbox.SetMarginEnd(4)
+		hbox.SetMarginTop(4)
+		hbox.SetMarginBottom(4)
 
-		// Badge label with inline CSS background colour.
-		badgeLbl, _ := gtk.LabelNew("")
-		badgeLbl.SetMarkup(fmt.Sprintf(
-			`<span background="%s" foreground="white" font_weight="bold" font_size="large"> %s </span>`,
-			loc.color, loc.badge,
-		))
-		vbox.PackStart(badgeLbl, false, false, 0)
+		// Flag image
+		flagImg, _ := gtk.ImageNew()
+		flagBytes, err := assets.Icons.ReadFile(loc.flagFile)
+		if err == nil && len(flagBytes) > 0 {
+			loader, err := gdk.PixbufLoaderNew()
+			if err == nil {
+				loader.Write(flagBytes)
+				loader.Close()
+				pb, err := loader.GetPixbuf()
+				if err == nil && pb != nil {
+					scaled, err := pb.ScaleSimple(34, 22, gdk.INTERP_BILINEAR)
+					if err == nil && scaled != nil {
+						flagImg.SetFromPixbuf(scaled)
+					} else {
+						flagImg.SetFromPixbuf(pb)
+					}
+				}
+			}
+		}
+		hbox.PackStart(flagImg, false, false, 0)
 
-		// Language name.
-		nameLbl, _ := gtk.LabelNew(loc.name)
+		// Text vertical box
+		vbox, _ := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 1)
+		vbox.SetHAlign(gtk.ALIGN_START)
+
+		nameLbl, _ := gtk.LabelNew("")
+		nameLbl.SetHAlign(gtk.ALIGN_START)
 		vbox.PackStart(nameLbl, false, false, 0)
 
-		btn.Add(vbox)
+		subLbl, _ := gtk.LabelNew("")
+		subLbl.SetMarkup(fmt.Sprintf("<span font_size='8500' foreground='#94a3b8'>%s</span>", glib.MarkupEscapeText(loc.subName)))
+		subLbl.SetHAlign(gtk.ALIGN_START)
+		vbox.PackStart(subLbl, false, false, 0)
+
+		hbox.PackStart(vbox, true, true, 0)
+
+		// Checkmark label on right
+		checkLbl, _ := gtk.LabelNew("")
+		checkLbl.SetHAlign(gtk.ALIGN_END)
+		hbox.PackEnd(checkLbl, false, false, 0)
+
+		btn.Add(hbox)
 
 		// Apply base CSS class.
 		sc, _ := btn.GetStyleContext()
 		sc.AddProvider(langProvider, gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
-		sc.AddClass("lang-btn")
+		sc.AddClass("lang-pill")
 
-		buttons = append(buttons, btnRef{btn: btn, code: loc.code})
+		buttons = append(buttons, btnRef{
+			btn:      btn,
+			nameLbl:  nameLbl,
+			checkLbl: checkLbl,
+			code:     loc.code,
+			native:   loc.nativeName,
+		})
 
 		btnCode := loc.code
 		btn.Connect("clicked", func() {
@@ -1339,14 +1618,18 @@ func buildLanguageTab(m *manager, initialLocale string) (*gtk.Box, func() string
 		grid.Attach(btn, col, row, 1, 1)
 	}
 
-	// rebuildSelection updates the CSS selected class on all buttons.
+	// rebuildSelection updates the CSS selected class and label styles on all buttons.
 	rebuildSelection = func() {
 		for _, ref := range buttons {
 			sc, _ := ref.btn.GetStyleContext()
 			if ref.code == selected {
-				sc.AddClass("lang-btn-selected")
+				sc.AddClass("lang-pill-selected")
+				ref.nameLbl.SetMarkup(fmt.Sprintf("<span font_weight='bold' font_size='11000' foreground='#38bdf8'>%s</span>", glib.MarkupEscapeText(ref.native)))
+				ref.checkLbl.SetMarkup("<span font_weight='bold' font_size='13000' foreground='#38bdf8'>✓</span>")
 			} else {
-				sc.RemoveClass("lang-btn-selected")
+				sc.RemoveClass("lang-pill-selected")
+				ref.nameLbl.SetMarkup(fmt.Sprintf("<span font_weight='bold' font_size='11000' foreground='#f8fafc'>%s</span>", glib.MarkupEscapeText(ref.native)))
+				ref.checkLbl.SetMarkup("")
 			}
 		}
 	}
@@ -1366,7 +1649,7 @@ func buildAboutTab(m *manager) *gtk.Box {
 
 	// App name heading.
 	appNameLbl, _ := gtk.LabelNew("")
-	appNameLbl.SetMarkup("<span font_size='xx-large' font_weight='bold'>" + m.t("settings.about.appName") + "</span>")
+	appNameLbl.SetMarkup("<span font_size='xx-large' font_weight='bold'>" + glib.MarkupEscapeText(m.t("settings.about.appName")) + "</span>")
 	appNameLbl.SetHAlign(gtk.ALIGN_START)
 	vbox.PackStart(appNameLbl, false, false, 0)
 

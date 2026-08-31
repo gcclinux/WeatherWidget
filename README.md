@@ -8,7 +8,7 @@ A compact weather widget for your desktop.
 
 ![Win32 Task Manager Menu](images/win32-taskmanager-menu.png)
 
-**Opacity / background transparency** - (1-5 Cities)
+**Opacity / background transparency** - (Up to 3 Cities on Free, Up to 5 Cities on Pro)
 
 ![Win32 Transparent Background](images/win32-transparent-background.png)
 
@@ -152,6 +152,28 @@ There are two ways to fix this:
 *Note: A `-software` flag is also available (`.\weatherwidget.exe -software`) which instructs the Fyne framework to prefer software rendering, but this still requires basic OpenGL driver availability at the OS level.*
 
 ## Changelog
+
+### v1.1.2 — 2026-08-31
+
+- **Expanded to 12 Languages & Native Font Support**:
+  - Added support for 3 new major languages:
+    - 🇮🇳 **Tamil (`ta-IN` / தமிழ்)**
+    - 🇯🇵 **Japanese (`ja-JP` / 日本語)**
+    - 🇨🇳 **Simplified Chinese (`zh-CN` / 中文)**
+  - Total 12 supported languages with full translation coverage across all UI tabs, settings, dialogs, and weather condition strings.
+  - **Dynamic Script & Font Fallback**: Bundled high-fidelity font resources (`NotoSansTamil` for Tamil, `DroidSansFallback` / CJK fonts for Chinese & Japanese, `Segoe UI` for Western languages) and integrated cross-platform system font discovery (Windows, Linux, macOS) ensuring native characters render crisply with zero encoding issues or missing glyph boxes ("tofu").
+- **Comprehensive UI & Taskbar/Tray Menu Localization**:
+  - **Cancel Button**: Added full localized translations (`settings.cancel`) across all 12 languages for both GTK and Fyne settings dialogs.
+  - **Live Taskbar & System Tray Menu Translation**: Both GTK AppIndicator tray menu and Fyne desktop system tray now dynamically re-render all action items ("Show Widget", "Hide Widget", "Settings", "Quit") whenever the language is switched, keeping the taskbar menu perfectly in sync with the active UI locale.
+- **Redesigned Language Settings Tab (Fyne & GTK)**:
+  - **Modern Card Layout**: Upgraded from simple badge squares to sleek 2-column language cards featuring crisp national flag icons, native language titles, and English subtitles.
+  - **Active Selection & Glow**: Selected language card features a bright cyan border, glow highlight, and a `✓` checkmark indicator.
+  - **Header & Badge**: Added a top header bar with globe icon (`🌐`), translated title, and a `12 LANGUAGES` counter badge.
+- **Tier-based City Limits (Free vs Pro)**:
+  - **Free Tier (OpenWeatherMap / Default)**: Restricted to a maximum of 3 cities.
+  - **Pro Tier (EasyWeatherWidget Gateway)**: Allows up to 5 cities when configured with a valid Pro API key.
+  - **Locations UI Callout Banner**: Styled note in the Locations tab across all 12 languages highlighting 5 cities, 10-minute refresh rate, and extended weather data with a direct path to subscribe.
+  - **Eye-Candy Pro Upgrade Dialog**: Modern, styled modal highlighting key Pro value propositions (Up to 5 cities, 10-minute rapid refresh, extended data & insights) with direct 1-click navigation to the Data Provider tab.
 
 ### v1.1.0 — 2026-08-19
 

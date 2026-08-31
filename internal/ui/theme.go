@@ -2,7 +2,10 @@ package ui
 
 import (
 	"image/color"
+	"os"
 	"runtime"
+	"strings"
+	"sync"
 	"sync/atomic"
 
 	"fyne.io/fyne/v2"
@@ -24,22 +27,140 @@ var transparencyActive atomic.Int32
 var linuxBgShade atomic.Int32
 
 var (
+	fontMu      sync.RWMutex
 	fontRegular fyne.Resource
 	fontBold    fyne.Resource
 	fontItalic  fyne.Resource
+	currentFontLocale string
 )
 
 func init() {
 	linuxBgShade.Store(30) // default: dark background
+	SetLocaleFont("en-GB")
+}
 
-	if data, err := assets.Fonts.ReadFile("fonts/segoeui.ttf"); err == nil {
-		fontRegular = fyne.NewStaticResource("segoeui.ttf", data)
+// loadFirstAvailableFont tries loading from embedded assets first, falling back to system paths.
+func loadFirstAvailableFont(assetPath string, systemPaths ...string) []byte {
+	if assetPath != "" {
+		if data, err := assets.Fonts.ReadFile(assetPath); err == nil && len(data) > 0 {
+			return data
+		}
 	}
-	if data, err := assets.Fonts.ReadFile("fonts/segoeuib.ttf"); err == nil {
-		fontBold = fyne.NewStaticResource("segoeuib.ttf", data)
+	for _, p := range systemPaths {
+		if p == "" {
+			continue
+		}
+		if data, err := os.ReadFile(p); err == nil && len(data) > 0 {
+			return data
+		}
 	}
-	if data, err := assets.Fonts.ReadFile("fonts/segoeuii.ttf"); err == nil {
-		fontItalic = fyne.NewStaticResource("segoeuii.ttf", data)
+	return nil
+}
+
+// SetLocaleFont updates the active font resources based on the active locale script:
+// - Tamil ("ta-IN"): Loads Noto Sans Tamil / Nirmala UI / Tamil Sangam font
+// - Chinese ("zh-CN"): Loads CJK font (Droid Sans Fallback / Noto Sans CJK / Microsoft YaHei / PingFang)
+// - Japanese ("ja-JP"): Loads CJK/Japanese font (Droid Sans Fallback / Noto Sans CJK / Yu Gothic / Meiryo)
+// - Others (Latin/Western): Loads Segoe UI (or Segoe UI Bold / Italic)
+func SetLocaleFont(locale string) {
+	fontMu.Lock()
+	defer fontMu.Unlock()
+
+	currentFontLocale = locale
+
+	switch {
+	case strings.HasPrefix(locale, "ta"):
+		// Tamil script
+		regData := loadFirstAvailableFont(
+			"fonts/notosanstamil.ttf",
+			"/usr/share/fonts/truetype/noto/NotoSansTamil-Regular.ttf",
+			"/usr/share/fonts/truetype/noto/NotoSansTamilUI-Regular.ttf",
+			`C:\Windows\Fonts\Nirmala.ttf`,
+			"/System/Library/Fonts/Supplemental/Tamil Sangam MN.ttc",
+		)
+		boldData := loadFirstAvailableFont(
+			"fonts/notosanstamilb.ttf",
+			"/usr/share/fonts/truetype/noto/NotoSansTamil-Bold.ttf",
+			"/usr/share/fonts/truetype/noto/NotoSansTamilUI-Bold.ttf",
+			`C:\Windows\Fonts\NirmalaB.ttf`,
+		)
+		if regData != nil {
+			fontRegular = fyne.NewStaticResource("notosanstamil.ttf", regData)
+		}
+		if boldData != nil {
+			fontBold = fyne.NewStaticResource("notosanstamilb.ttf", boldData)
+		} else if regData != nil {
+			fontBold = fontRegular
+		}
+		fontItalic = nil
+
+	case strings.HasPrefix(locale, "zh"):
+		// Simplified Chinese script
+		regData := loadFirstAvailableFont(
+			"fonts/droidsansfallback.ttf",
+			"/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
+			"/usr/share/fonts/truetype/droid/DroidSansFallbackFull.ttf",
+			"/usr/share/fonts/truetype/wqy/wqy-microhei.ttc",
+			`C:\Windows\Fonts\msyh.ttc`,
+			`C:\Windows\Fonts\msyh.ttf`,
+			`C:\Windows\Fonts\simsun.ttc`,
+			"/System/Library/Fonts/PingFang.ttc",
+			"/System/Library/Fonts/STHeiti Light.ttc",
+		)
+		boldData := loadFirstAvailableFont(
+			"fonts/droidsansfallback.ttf",
+			"/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc",
+			`C:\Windows\Fonts\msyhbd.ttc`,
+			`C:\Windows\Fonts\msyhbd.ttf`,
+		)
+		if regData != nil {
+			fontRegular = fyne.NewStaticResource("cjk_regular.ttf", regData)
+		}
+		if boldData != nil {
+			fontBold = fyne.NewStaticResource("cjk_bold.ttf", boldData)
+		} else if regData != nil {
+			fontBold = fontRegular
+		}
+		fontItalic = nil
+
+	case strings.HasPrefix(locale, "ja"):
+		// Japanese script
+		regData := loadFirstAvailableFont(
+			"fonts/droidsansfallback.ttf",
+			"/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
+			"/usr/share/fonts/truetype/droid/DroidSansFallbackFull.ttf",
+			`C:\Windows\Fonts\YuGothM.ttc`,
+			`C:\Windows\Fonts\meiryo.ttc`,
+			`C:\Windows\Fonts\msgothic.ttc`,
+			"/System/Library/Fonts/Hiragino Sans GB.ttc",
+		)
+		boldData := loadFirstAvailableFont(
+			"fonts/droidsansfallback.ttf",
+			"/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc",
+			`C:\Windows\Fonts\YuGothB.ttc`,
+			`C:\Windows\Fonts\meiryob.ttc`,
+		)
+		if regData != nil {
+			fontRegular = fyne.NewStaticResource("cjk_jp_regular.ttf", regData)
+		}
+		if boldData != nil {
+			fontBold = fyne.NewStaticResource("cjk_jp_bold.ttf", boldData)
+		} else if regData != nil {
+			fontBold = fontRegular
+		}
+		fontItalic = nil
+
+	default:
+		// Latin / Western languages: use Segoe UI
+		if data, err := assets.Fonts.ReadFile("fonts/segoeui.ttf"); err == nil {
+			fontRegular = fyne.NewStaticResource("segoeui.ttf", data)
+		}
+		if data, err := assets.Fonts.ReadFile("fonts/segoeuib.ttf"); err == nil {
+			fontBold = fyne.NewStaticResource("segoeuib.ttf", data)
+		}
+		if data, err := assets.Fonts.ReadFile("fonts/segoeuii.ttf"); err == nil {
+			fontItalic = fyne.NewStaticResource("segoeuii.ttf", data)
+		}
 	}
 }
 
@@ -138,6 +259,9 @@ func (t *widgetTheme) Color(name fyne.ThemeColorName, variant fyne.ThemeVariant)
 }
 
 func (t *widgetTheme) Font(style fyne.TextStyle) fyne.Resource {
+	fontMu.RLock()
+	defer fontMu.RUnlock()
+
 	if style.Bold && fontBold != nil {
 		return fontBold
 	}
@@ -147,7 +271,10 @@ func (t *widgetTheme) Font(style fyne.TextStyle) fyne.Resource {
 	if fontRegular != nil {
 		return fontRegular
 	}
-	return t.base.Font(style)
+	if t.base != nil {
+		return t.base.Font(style)
+	}
+	return theme.DefaultTheme().Font(style)
 }
 
 func (t *widgetTheme) Icon(name fyne.ThemeIconName) fyne.Resource {

@@ -18,13 +18,27 @@ func translate(t TranslateFunc, key, fallback string) string {
 	return t(key)
 }
 
-// AddCity appends a city to the list. Returns an error if the list already has 5 cities.
-// The t parameter is an optional translation function; pass nil to use default English messages.
-func AddCity(cities []CityConfig, city CityConfig, t TranslateFunc) ([]CityConfig, error) {
-	if len(cities) >= 5 {
+// AddCityWithLimit appends a city to the list if len(cities) < maxCities.
+// If maxCities <= 0, MaxCitiesPro (5) is used as default.
+// When limit is reached, it returns a localized error (error.cities.maxFree for free tier <= 3 cities,
+// or error.cities.max for pro tier).
+func AddCityWithLimit(cities []CityConfig, city CityConfig, maxCities int, t TranslateFunc) ([]CityConfig, error) {
+	if maxCities <= 0 {
+		maxCities = MaxCitiesPro
+	}
+	if len(cities) >= maxCities {
+		if maxCities <= MaxCitiesFree {
+			return cities, errors.New(translate(t, "error.cities.maxFree", "maximum of 3 cities reached. To get additional cities, subscribe to Pro in the Data Provider tab"))
+		}
 		return cities, errors.New(translate(t, "error.cities.max", "maximum of 5 cities reached"))
 	}
 	return append(cities, city), nil
+}
+
+// AddCity appends a city to the list using the default Pro limit (5 cities).
+// The t parameter is an optional translation function; pass nil to use default English messages.
+func AddCity(cities []CityConfig, city CityConfig, t TranslateFunc) ([]CityConfig, error) {
+	return AddCityWithLimit(cities, city, MaxCitiesPro, t)
 }
 
 // RemoveCity removes the city at the given index. Returns an error if the list has only 1 city

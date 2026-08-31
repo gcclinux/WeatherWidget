@@ -23,3 +23,6 @@ overlay/
 *.snap
 .local
 weatherwidget-gtk
+
+.craft/
+.kiro/

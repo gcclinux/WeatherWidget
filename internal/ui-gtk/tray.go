@@ -200,11 +200,24 @@ func setupTray(m *manager) {
 		return
 	}
 
-	// Build the context menu.
+	activeIndicator = ind
+	menu := m.buildTrayMenu()
+	if menu != nil {
+		C.setIndicatorMenu(ind, (*C.GtkWidget)(unsafe.Pointer(menu.Native())))
+		C.setIndicatorActive(ind, 1)
+	}
+
+	log.Println("GTK tray: AppIndicator tray installed")
+}
+
+var activeIndicator *C.AppIndicator
+
+// buildTrayMenu creates a new context menu for the tray indicator with current localized labels.
+func (m *manager) buildTrayMenu() *gtk.Menu {
 	menu, err := gtk.MenuNew()
 	if err != nil {
 		log.Printf("GTK tray: failed to create menu: %v", err)
-		return
+		return nil
 	}
 
 	showItem, _ := gtk.MenuItemNewWithLabel(m.t("tray.showWidget"))
@@ -250,10 +263,16 @@ func setupTray(m *manager) {
 	menu.Append(quitItem)
 
 	menu.ShowAll()
+	return menu
+}
 
-	// Attach menu to the indicator.
-	C.setIndicatorMenu(ind, (*C.GtkWidget)(unsafe.Pointer(menu.Native())))
-	C.setIndicatorActive(ind, 1)
-
-	log.Println("GTK tray: AppIndicator tray installed")
+// updateTrayMenu rebuilds and re-attaches the tray context menu so all labels reflect the current locale.
+func (m *manager) updateTrayMenu() {
+	if activeIndicator == nil {
+		return
+	}
+	menu := m.buildTrayMenu()
+	if menu != nil {
+		C.setIndicatorMenu(activeIndicator, (*C.GtkWidget)(unsafe.Pointer(menu.Native())))
+	}
 }

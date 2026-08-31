@@ -49,6 +49,46 @@ func TestAddCity_AllowsUpToFive(t *testing.T) {
 	}
 }
 
+func TestAddCityWithLimit_FreeTier(t *testing.T) {
+	cities := []CityConfig{city("A", "R1"), city("B", "R2"), city("C", "R3")}
+	_, err := AddCityWithLimit(cities, city("D", "R4"), MaxCitiesFree, nil)
+	if err == nil {
+		t.Fatal("expected error when adding 4th city in free tier")
+	}
+	if err.Error() != "maximum of 3 cities reached. To get additional cities, subscribe to Pro in the Data Provider tab" {
+		t.Errorf("unexpected error message: %v", err)
+	}
+
+	// 2 cities can add 1 more to reach 3
+	twoCities := []CityConfig{city("A", "R1"), city("B", "R2")}
+	res, err := AddCityWithLimit(twoCities, city("C", "R3"), MaxCitiesFree, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(res) != 3 {
+		t.Errorf("expected 3 cities, got %d", len(res))
+	}
+}
+
+func TestAddCityWithLimit_ProTier(t *testing.T) {
+	cities := []CityConfig{city("A", "R1"), city("B", "R2"), city("C", "R3"), city("D", "R4")}
+	res, err := AddCityWithLimit(cities, city("E", "R5"), MaxCitiesPro, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(res) != 5 {
+		t.Errorf("expected 5 cities, got %d", len(res))
+	}
+
+	_, err = AddCityWithLimit(res, city("F", "R6"), MaxCitiesPro, nil)
+	if err == nil {
+		t.Fatal("expected error when adding 6th city in pro tier")
+	}
+	if err.Error() != "maximum of 5 cities reached" {
+		t.Errorf("unexpected error message: %v", err)
+	}
+}
+
 // --- RemoveCity tests ---
 
 func TestRemoveCity_RemovesAtIndex(t *testing.T) {

@@ -25,7 +25,6 @@ import (
 
 	"weatherwidget/assets"
 	"weatherwidget/internal/config"
-	"weatherwidget/internal/i18n"
 	"weatherwidget/internal/ui/panel"
 	"weatherwidget/internal/weather/remoteapi"
 )
@@ -112,9 +111,9 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 	if float32(screenW) < winW {
 		winW = float32(screenW) * 0.9
 	}
-	winH := float32(screenH) * 0.55
-	if winH < 560 {
-		winH = 560
+	winH := float32(screenH) * 0.605
+	if winH < 616 {
+		winH = 616
 	}
 	if winH > float32(screenH)*0.9 {
 		winH = float32(screenH) * 0.9
@@ -155,6 +154,8 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 	selectedTabIndex := 0 // tracks the active tab across rebuilds
 	var buildSettingsUI func()
 	buildSettingsUI = func() {
+		var tabs *container.AppTabs
+
 		// ── API config ───────────────────────────────────────────────────────
 		providerSelect := widget.NewSelect([]string{"OpenWeatherMap (Free)", "EasyWeatherWidget (Pro)"}, nil)
 		if cfg.APIConfig != nil && cfg.APIConfig.Provider != "" {
@@ -766,9 +767,36 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 				}
 				newCity.Longitude = v
 			}
-			result, err := config.AddCity(state.cities, newCity, nil)
+			currentProvider := providerDisplayToValue[providerSelect.Selected]
+			apiKey := strings.TrimSpace(apiKeyEntry.Text)
+			isPro := currentProvider == "easyweatherwidget" && apiKey != ""
+			maxCities := config.MaxCitiesFree
+			if isPro {
+				maxCities = config.MaxCitiesPro
+			}
+			if !isPro && len(state.cities) >= config.MaxCitiesFree {
+				u.showProUpgradeDialog(win, func() {
+					if tabs != nil {
+						tabs.SelectIndex(2)
+					}
+				})
+				return
+			}
+			var tFunc config.TranslateFunc
+			if u.lm != nil {
+				tFunc = u.lm.T
+			}
+			result, err := config.AddCityWithLimit(state.cities, newCity, maxCities, tFunc)
 			if err != nil {
-				dialog.ShowError(err, win)
+				if !isPro && len(state.cities) >= config.MaxCitiesFree {
+					u.showProUpgradeDialog(win, func() {
+						if tabs != nil {
+							tabs.SelectIndex(2)
+						}
+					})
+				} else {
+					dialog.ShowError(err, win)
+				}
 				return
 			}
 			state.cities = result
@@ -982,140 +1010,130 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 			}
 		}
 
-		// ── Language card grid ───────────────────────────────────────────────
-		// Each locale gets a card with a coloured badge (2-letter code) and
-		// the full language name. Clicking a card switches the locale and
-		// rebuilds the UI. The active card is highlighted with an accent border.
-
-		// badgeColor returns a distinct accent colour per locale code.
-		badgeColor := func(code string) color.Color {
-			switch code {
-			case "en-GB":
-				return color.NRGBA{R: 0, G: 82, B: 165, A: 255} // blue
-			case "pt-BR":
-				return color.NRGBA{R: 0, G: 156, B: 59, A: 255} // green
-			case "de-DE":
-				return color.NRGBA{R: 60, G: 60, B: 60, A: 255} // dark grey
-			case "es-ES":
-				return color.NRGBA{R: 198, G: 146, B: 20, A: 255} // golden yellow
-			case "nl-NL":
-				return color.NRGBA{R: 255, G: 122, B: 0, A: 255} // Dutch orange
-			case "pl-PL":
-				return color.NRGBA{R: 227, G: 10, B: 23, A: 255} // Turkish red (swapped)
-			case "fr-FR":
-				return color.NRGBA{R: 0, G: 35, B: 149, A: 255} // French blue
-			case "it-IT":
-				return color.NRGBA{R: 180, G: 120, B: 60, A: 255} // warm light brown
-			case "tr-TR":
-				return color.NRGBA{R: 0, G: 158, B: 158, A: 255} // teal
-			default:
-				return color.NRGBA{R: 100, G: 100, B: 100, A: 255}
-			}
+		// ── Modern Language Cards ───────────────────────────────────────────
+		type languageCardInfo struct {
+			Code        string
+			NativeName  string
+			EnglishName string
+			FlagFile    string
 		}
 
-		// badgeCode returns the 2-letter display code for a locale.
-		badgeCode := func(code string) string {
-			switch code {
-			case "en-GB":
-				return "EN"
-			case "pt-BR":
-				return "PT"
-			case "de-DE":
-				return "DE"
-			case "es-ES":
-				return "ES"
-			case "nl-NL":
-				return "NL"
-			case "pl-PL":
-				return "PL"
-			case "fr-FR":
-				return "FR"
-			case "it-IT":
-				return "IT"
-			case "tr-TR":
-				return "TR"
-			default:
-				if len(code) >= 2 {
-					return strings.ToUpper(code[:2])
-				}
-				return code
-			}
+		supportedLangCards := []languageCardInfo{
+			{"en-GB", "English", "English", "icons/flags/en-GB.png"},
+			{"es-ES", "Español", "Spanish", "icons/flags/es-ES.png"},
+			{"fr-FR", "Français", "French", "icons/flags/fr-FR.png"},
+			{"de-DE", "Deutsch", "German", "icons/flags/de-DE.png"},
+			{"it-IT", "Italiano", "Italian", "icons/flags/it-IT.png"},
+			{"pt-BR", "Português", "Português (BR)", "icons/flags/pt-BR.png"},
+			{"nl-NL", "Nederlands", "Dutch", "icons/flags/nl-NL.png"},
+			{"pl-PL", "Polski", "Polish", "icons/flags/pl-PL.png"},
+			{"tr-TR", "Türkçe", "Turkish", "icons/flags/tr-TR.png"},
+			{"ta-IN", "தமிழ்", "Tamil", "icons/flags/ta-IN.png"},
+			{"ja-JP", "日本語", "Japanese", "icons/flags/ja-JP.png"},
+			{"zh-CN", "中文", "Chinese", "icons/flags/zh-CN.png"},
 		}
 
-		// langNativeName returns the language name without the country code suffix.
-		langNativeName := func(displayName string) string {
-			// Strip " (XX)" suffix if present — the badge already shows the code.
-			if idx := strings.Index(displayName, " ("); idx != -1 {
-				return displayName[:idx]
-			}
-			return displayName
-		}
-
-		var langLocales []i18n.LocaleInfo
-		if u.lm != nil {
-			langLocales = u.lm.AvailableLocales()
-		}
-
-		// buildLangCard creates a single language card. It is a function so it
-		// can be called again when the selection changes to refresh all cards.
 		var langCardObjects []fyne.CanvasObject
 		var rebuildLangCards func()
 		rebuildLangCards = func() {
 			langCardObjects = nil
-			for _, loc := range langLocales {
+			for _, loc := range supportedLangCards {
 				loc := loc // capture
 				isSelected := loc.Code == state.selectedLang
-				accent := badgeColor(loc.Code)
 
-				// Badge: coloured rounded rectangle with bold 2-letter code.
-				badgeRect := canvas.NewRectangle(accent)
-				badgeRect.CornerRadius = 6
-				badgeRect.SetMinSize(fyne.NewSize(52, 36))
-
-				badgeLabel := canvas.NewText(badgeCode(loc.Code), color.White)
-				badgeLabel.TextSize = 16
-				badgeLabel.TextStyle = fyne.TextStyle{Bold: true}
-				badgeLabel.Alignment = fyne.TextAlignCenter
-
-				badge := container.NewStack(badgeRect, container.NewCenter(badgeLabel))
-
-				// Language name label.
-				nameLabel := widget.NewLabel(langNativeName(loc.DisplayName))
-				nameLabel.Alignment = fyne.TextAlignCenter
-				nameLabel.TextStyle = fyne.TextStyle{Bold: isSelected}
-
-				// Card background: accent tint when selected, default otherwise.
+				// Card background
 				var cardBg *canvas.Rectangle
 				if isSelected {
-					r, g, b, _ := accent.RGBA()
-					cardBg = canvas.NewRectangle(color.NRGBA{
-						R: uint8(r>>8) / 5,
-						G: uint8(g>>8) / 5,
-						B: uint8(b>>8) / 5,
-						A: 60,
-					})
+					cardBg = canvas.NewRectangle(color.NRGBA{R: 14, G: 165, B: 233, A: 35})
 				} else {
-					cardBg = canvas.NewRectangle(color.NRGBA{R: 0, G: 0, B: 0, A: 0})
+					cardBg = canvas.NewRectangle(color.NRGBA{R: 30, G: 41, B: 59, A: 160})
 				}
-				cardBg.CornerRadius = 8
+				cardBg.CornerRadius = 10
 
-				// Border rectangle: accent colour when selected, muted otherwise.
+				// Border rectangle
 				var borderColor color.Color
+				var borderWidth float32 = 1.0
 				if isSelected {
-					borderColor = accent
+					borderColor = color.NRGBA{R: 56, G: 189, B: 248, A: 255}
+					borderWidth = 2.0
 				} else {
-					borderColor = color.NRGBA{R: 100, G: 100, B: 100, A: 80}
+					borderColor = color.NRGBA{R: 255, G: 255, B: 255, A: 25}
+					borderWidth = 1.0
 				}
 				borderRect := canvas.NewRectangle(color.Transparent)
 				borderRect.StrokeColor = borderColor
-				borderRect.StrokeWidth = 2
-				borderRect.CornerRadius = 8
+				borderRect.StrokeWidth = borderWidth
+				borderRect.CornerRadius = 10
 
-				inner := container.NewVBox(
-					container.NewCenter(badge),
-					container.NewCenter(nameLabel),
+				// Flag Image
+				flagData, _ := assets.Icons.ReadFile(loc.FlagFile)
+				var flagImg *canvas.Image
+				if flagData != nil {
+					res := fyne.NewStaticResource(loc.Code+".png", flagData)
+					flagImg = canvas.NewImageFromResource(res)
+				} else {
+					flagImg = canvas.NewImageFromResource(theme.FileIcon())
+				}
+				flagImg.FillMode = canvas.ImageFillContain
+				flagImg.SetMinSize(fyne.NewSize(36, 24))
+
+				flagBorder := canvas.NewRectangle(color.Transparent)
+				flagBorder.StrokeColor = color.NRGBA{R: 255, G: 255, B: 255, A: 40}
+				flagBorder.StrokeWidth = 1
+				flagBorder.CornerRadius = 4
+				flagBox := container.NewStack(flagImg, flagBorder)
+
+				// Native name title
+				var titleObj fyne.CanvasObject
+				if loc.Code == "ta-IN" {
+					iconName := "icons/lang_ta_normal.png"
+					if isSelected {
+						iconName = "icons/lang_ta_selected.png"
+					}
+					if data, err := assets.Icons.ReadFile(iconName); err == nil && len(data) > 0 {
+						imgRes := fyne.NewStaticResource("lang_ta.png", data)
+						titleImg := canvas.NewImageFromResource(imgRes)
+						titleImg.FillMode = canvas.ImageFillContain
+						titleImg.SetMinSize(fyne.NewSize(42, 17))
+						titleObj = container.NewHBox(titleImg)
+					}
+				}
+				if titleObj == nil {
+					var nameText *canvas.Text
+					if isSelected {
+						nameText = canvas.NewText(loc.NativeName, color.NRGBA{R: 56, G: 189, B: 248, A: 255})
+					} else {
+						nameText = canvas.NewText(loc.NativeName, color.NRGBA{R: 248, G: 250, B: 252, A: 255})
+					}
+					nameText.TextSize = 14
+					nameText.TextStyle = fyne.TextStyle{Bold: true}
+					titleObj = nameText
+				}
+
+				// Subtitle text (English)
+				subText := canvas.NewText(loc.EnglishName, color.NRGBA{R: 148, G: 163, B: 184, A: 255})
+				subText.TextSize = 11
+
+				textBox := container.NewVBox(titleObj, subText)
+
+				// Checkmark icon on the right
+				var checkText *canvas.Text
+				if isSelected {
+					checkText = canvas.NewText("✓", color.NRGBA{R: 56, G: 189, B: 248, A: 255})
+					checkText.TextStyle = fyne.TextStyle{Bold: true}
+					checkText.TextSize = 16
+				} else {
+					checkText = canvas.NewText("", color.Transparent)
+				}
+				checkContainer := container.NewCenter(checkText)
+
+				rowContent := container.NewBorder(
+					nil, nil,
+					container.NewHBox(flagBox, canvas.NewRectangle(color.Transparent)),
+					checkContainer,
+					textBox,
 				)
-				padded := container.NewPadded(inner)
+				padded := container.NewPadded(rowContent)
 				card := container.NewStack(cardBg, borderRect, padded)
 
 				// Wrap in a tappable object.
@@ -1127,7 +1145,8 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 					if u.lm != nil {
 						_ = u.lm.SetLocale(loc.Code)
 					}
-					selectedTabIndex = 3 // stay on the Language tab after rebuild
+					SetLocaleFont(loc.Code)
+					selectedTabIndex = 4 // stay on the Language tab after rebuild
 					win.SetTitle(u.t("settings.title"))
 					buildSettingsUI()
 				})
@@ -1280,11 +1299,34 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 		widgetTab := container.NewTabItemWithIcon(u.t("settings.tab.widget"), theme.ComputerIcon(), widgetContent)
 
 		// ── Language tab ──────────────────────────────────────────────────────
-		langGrid := container.NewGridWithColumns(3, langCardObjects...)
+		globeIcon := canvas.NewText("🌐", color.NRGBA{R: 56, G: 189, B: 248, A: 255})
+		globeIcon.TextSize = 18
+		globeIcon.TextStyle = fyne.TextStyle{Bold: true}
+
+		langHeaderTitle := canvas.NewText(u.t("settings.language.title"), color.NRGBA{R: 248, G: 250, B: 252, A: 255})
+		langHeaderTitle.TextSize = 16
+		langHeaderTitle.TextStyle = fyne.TextStyle{Bold: true}
+
+		langHeaderLeft := container.NewHBox(globeIcon, langHeaderTitle)
+
+		badgeBg := canvas.NewRectangle(color.NRGBA{R: 14, G: 165, B: 233, A: 30})
+		badgeBg.CornerRadius = 12
+		badgeBorder := canvas.NewRectangle(color.Transparent)
+		badgeBorder.StrokeColor = color.NRGBA{R: 56, G: 189, B: 248, A: 120}
+		badgeBorder.StrokeWidth = 1
+		badgeBorder.CornerRadius = 12
+		badgeText := canvas.NewText(fmt.Sprintf("%d LANGUAGES", len(supportedLangCards)), color.NRGBA{R: 56, G: 189, B: 248, A: 255})
+		badgeText.TextSize = 10
+		badgeText.TextStyle = fyne.TextStyle{Bold: true}
+		langBadge := container.NewStack(badgeBg, badgeBorder, container.NewPadded(badgeText))
+
+		langHeaderRow := container.NewBorder(nil, nil, langHeaderLeft, langBadge)
+
+		langGrid := container.NewGridWithColumns(2, langCardObjects...)
 		languageContent := container.NewPadded(container.NewVScroll(container.NewVBox(
-			sectionBlock(u.t("settings.language.title"), u.t("settings.language.subtitle"),
-				langGrid,
-			),
+			langHeaderRow,
+			widget.NewSeparator(),
+			langGrid,
 		)))
 		languageTab := container.NewTabItemWithIcon(u.t("settings.tab.language"), theme.MailComposeIcon(), languageContent)
 
@@ -1295,10 +1337,23 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 		)))
 		providerTab := container.NewTabItemWithIcon(u.t("settings.tab.provider"), theme.SettingsIcon(), providerContent)
 
+		proNoteBg := canvas.NewRectangle(color.NRGBA{R: 14, G: 165, B: 233, A: 25})
+		proNoteBg.CornerRadius = 8
+		proNoteBorder := canvas.NewRectangle(color.Transparent)
+		proNoteBorder.StrokeColor = color.NRGBA{R: 56, G: 189, B: 248, A: 100}
+		proNoteBorder.StrokeWidth = 1
+		proNoteBorder.CornerRadius = 8
+		proNoteLabel := widget.NewLabel(u.t("settings.locations.proNote"))
+		proNoteLabel.Wrapping = fyne.TextWrapWord
+		proNoteCard := container.NewStack(proNoteBg, proNoteBorder, container.NewPadded(proNoteLabel))
+
 		locationsContent := container.NewPadded(
 			container.NewBorder(
 				nil,
-				widget.NewCard(u.t("settings.locations.addTitle"), "", addForm),
+				container.NewVBox(
+					proNoteCard,
+					widget.NewCard(u.t("settings.locations.addTitle"), "", addForm),
+				),
 				nil,
 				nil,
 				widget.NewCard(u.t("settings.locations.savedTitle"), u.t("settings.locations.savedSubtitle"), cityListScroll),
@@ -1359,7 +1414,7 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 		)))
 		aboutTab := container.NewTabItemWithIcon(u.t("settings.tab.about"), theme.InfoIcon(), aboutContent)
 
-		tabs := container.NewAppTabs(appearanceTab, widgetTab, providerTab, locationsTab, languageTab, aboutTab)
+		tabs = container.NewAppTabs(appearanceTab, widgetTab, providerTab, locationsTab, languageTab, aboutTab)
 		tabs.SetTabLocation(container.TabLocationLeading)
 		if selectedTabIndex > 0 && selectedTabIndex < len(tabs.Items) {
 			tabs.SelectIndex(selectedTabIndex)
@@ -1388,13 +1443,20 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 			dialog.ShowInformation(u.t("settings.dialog.saved"), u.t("settings.dialog.savedMsg"), win)
 		})
 
+		cancelBtn := widget.NewButton(u.t("settings.cancel"), func() {
+			win.Close()
+		})
+		cancelBtnSizer := canvas.NewRectangle(color.Transparent)
+		cancelBtnSizer.SetMinSize(fyne.NewSize(120, 0))
+		cancelBtnContainer := container.NewMax(cancelBtnSizer, cancelBtn)
+
 		saveBtnSizer := canvas.NewRectangle(color.Transparent)
 		saveBtnSizer.SetMinSize(fyne.NewSize(160, 0))
 		saveBtnContainer := container.NewMax(saveBtnSizer, saveBtn)
 
 		saveBar := container.NewBorder(
 			widget.NewSeparator(), nil, nil, nil,
-			container.NewPadded(container.NewPadded(container.NewHBox(layout.NewSpacer(), saveBtnContainer))),
+			container.NewPadded(container.NewPadded(container.NewHBox(layout.NewSpacer(), saveBtnContainer, cancelBtnContainer))),
 		)
 
 		win.SetContent(container.NewBorder(nil, saveBar, nil, nil, tabs))
@@ -1545,3 +1607,88 @@ func (t *tappableContainer) Tapped(_ *fyne.PointEvent) {
 }
 
 func (t *tappableContainer) TappedSecondary(_ *fyne.PointEvent) {}
+
+// showProUpgradeDialog displays an eye-candy custom dialog with Pro features and benefits.
+func (u *UIManager) showProUpgradeDialog(win fyne.Window, onGoToProvider func()) {
+	badgeBg := canvas.NewRectangle(color.NRGBA{R: 245, G: 158, B: 11, A: 255})
+	badgeBg.CornerRadius = 12
+	badgeText := canvas.NewText("⭐ PRO UPGRADE", color.White)
+	badgeText.TextSize = 10
+	badgeText.TextStyle = fyne.TextStyle{Bold: true}
+	badge := container.NewStack(badgeBg, container.NewPadded(container.NewCenter(badgeText)))
+
+	titleText := canvas.NewText(u.t("dialog.pro.title"), color.NRGBA{R: 56, G: 189, B: 248, A: 255})
+	titleText.TextSize = 16
+	titleText.TextStyle = fyne.TextStyle{Bold: true}
+
+	subLabel := widget.NewLabel(u.t("dialog.pro.subtitle"))
+	subLabel.Wrapping = fyne.TextWrapWord
+	subLabel.Alignment = fyne.TextAlignCenter
+
+	buildFeatureRow := func(icon, title, desc string) fyne.CanvasObject {
+		iconText := canvas.NewText(icon, color.White)
+		iconText.TextSize = 18
+
+		tText := canvas.NewText(title, color.NRGBA{R: 248, G: 250, B: 252, A: 255})
+		tText.TextSize = 13
+		tText.TextStyle = fyne.TextStyle{Bold: true}
+
+		dText := canvas.NewText(desc, color.NRGBA{R: 203, G: 213, B: 225, A: 255})
+		dText.TextSize = 10
+
+		rowBg := canvas.NewRectangle(color.NRGBA{R: 30, G: 41, B: 59, A: 180})
+		rowBg.CornerRadius = 8
+		rowBorder := canvas.NewRectangle(color.Transparent)
+		rowBorder.StrokeColor = color.NRGBA{R: 255, G: 255, B: 255, A: 25}
+		rowBorder.StrokeWidth = 1
+		rowBorder.CornerRadius = 8
+
+		inner := container.NewBorder(
+			nil, nil,
+			container.NewHBox(container.NewCenter(iconText), canvas.NewRectangle(color.Transparent)),
+			nil,
+			container.NewVBox(tText, dText),
+		)
+		return container.NewStack(rowBg, rowBorder, container.NewPadded(inner))
+	}
+
+	feat1 := buildFeatureRow("🏙️", u.t("dialog.pro.feature1"), u.t("dialog.pro.feature1_desc"))
+	feat2 := buildFeatureRow("⚡", u.t("dialog.pro.feature2"), u.t("dialog.pro.feature2_desc"))
+	feat3 := buildFeatureRow("📊", u.t("dialog.pro.feature3"), u.t("dialog.pro.feature3_desc"))
+
+	featuresList := container.NewVBox(feat1, feat2, feat3)
+
+	var d dialog.Dialog
+
+	dismissBtn := widget.NewButton(u.t("dialog.pro.dismiss"), func() {
+		if d != nil {
+			d.Hide()
+		}
+	})
+
+	ctaBtn := widget.NewButton("🚀  "+u.t("dialog.pro.cta"), func() {
+		if d != nil {
+			d.Hide()
+		}
+		if onGoToProvider != nil {
+			onGoToProvider()
+		}
+	})
+	ctaBtn.Importance = widget.HighImportance
+
+	buttons := container.NewGridWithColumns(2, dismissBtn, ctaBtn)
+
+	dialogContent := container.NewVBox(
+		container.NewCenter(badge),
+		container.NewCenter(titleText),
+		subLabel,
+		widget.NewSeparator(),
+		featuresList,
+		canvas.NewRectangle(color.Transparent),
+		buttons,
+	)
+
+	d = dialog.NewCustomWithoutButtons(u.t("dialog.pro.title"), dialogContent, win)
+	d.Resize(fyne.NewSize(460, 360))
+	d.Show()
+}

@@ -65,19 +65,41 @@ func TestProperty2_InvalidConfigsProduceExactErrors(t *testing.T) {
 func genMaybeInvalidConfig(t *rapid.T) (*Config, map[string]bool) {
 	expectedErrors := make(map[string]bool)
 
+	// --- Data source and source-specific config ---
+	// Generate the data source and its config BEFORE cities and refresh interval,
+	// because valid city count and interval depend on the data source and provider.
+	dsIdx := rapid.IntRange(0, 1).Draw(t, "dsIdx")
+	var ds DataSourceType
+	var apiCfg *APIConfig
+	var dbCfg *DatabaseConfig
+
+	if dsIdx == 0 {
+		ds = DataSourceRemoteAPI
+		apiCfg, expectedErrors = genMaybeInvalidAPIConfig(t, expectedErrors)
+	} else {
+		ds = DataSourceLocalDatabase
+		dbCfg, expectedErrors = genMaybeInvalidDBConfig(t, expectedErrors)
+	}
+
+	isPro := ds == DataSourceRemoteAPI && apiCfg != nil && apiCfg.Provider == "easyweatherwidget" && apiCfg.APIKey != ""
+	maxValidCities := MaxCitiesFree
+	if isPro {
+		maxValidCities = MaxCitiesPro
+	}
+
 	// --- Cities count: sometimes invalid ---
 	invalidCitiesCount := rapid.Bool().Draw(t, "invalidCitiesCount")
 	var cityCount int
 	if invalidCitiesCount {
-		// Pick 0 or 6-10 cities
+		// Pick 0 or (maxValidCities+1)–10 cities
 		if rapid.Bool().Draw(t, "zeroCities") {
 			cityCount = 0
 		} else {
-			cityCount = rapid.IntRange(6, 10).Draw(t, "tooManyCities")
+			cityCount = rapid.IntRange(maxValidCities+1, 10).Draw(t, "tooManyCities")
 		}
 		expectedErrors["cities"] = true
 	} else {
-		cityCount = rapid.IntRange(1, 5).Draw(t, "validCityCount")
+		cityCount = rapid.IntRange(1, maxValidCities).Draw(t, "validCityCount")
 	}
 
 	// --- Generate cities (each may have violations) ---
@@ -104,22 +126,6 @@ func genMaybeInvalidConfig(t *rapid.T) (*Config, map[string]bool) {
 	} else {
 		cpIdx := rapid.IntRange(0, len(cornerPositions)-1).Draw(t, "validCornerIdx")
 		cornerPos = cornerPositions[cpIdx]
-	}
-
-	// --- Data source and source-specific config ---
-	// Generate the data source and its config BEFORE the refresh interval,
-	// because for remote_api the valid interval range depends on the provider.
-	dsIdx := rapid.IntRange(0, 1).Draw(t, "dsIdx")
-	var ds DataSourceType
-	var apiCfg *APIConfig
-	var dbCfg *DatabaseConfig
-
-	if dsIdx == 0 {
-		ds = DataSourceRemoteAPI
-		apiCfg, expectedErrors = genMaybeInvalidAPIConfig(t, expectedErrors)
-	} else {
-		ds = DataSourceLocalDatabase
-		dbCfg, expectedErrors = genMaybeInvalidDBConfig(t, expectedErrors)
 	}
 
 	// --- Refresh interval: sometimes invalid ---
@@ -441,8 +447,12 @@ func TestProperty5_EWW_Interval30to120_NoRefreshError(t *testing.T) {
 // RefreshInterval, which the caller is expected to override. The config uses
 // DataSource=remote_api with the given provider.
 func genValidRemoteAPIConfig(rt *rapid.T, provider string) *Config {
-	// Generate 1–5 valid cities
-	cityCount := rapid.IntRange(1, 5).Draw(rt, "cityCount")
+	maxCities := MaxCitiesFree
+	if provider == "easyweatherwidget" {
+		maxCities = MaxCitiesPro
+	}
+	// Generate 1–maxCities valid cities
+	cityCount := rapid.IntRange(1, maxCities).Draw(rt, "cityCount")
 	cities := make([]CityConfig, cityCount)
 	for i := 0; i < cityCount; i++ {
 		cities[i] = genCityConfig(rt, fmt.Sprintf("city%d", i))

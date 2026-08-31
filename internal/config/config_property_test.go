@@ -72,22 +72,12 @@ func genConfig(t *rapid.T) *Config {
 		ds = DataSourceLocalDatabase
 	}
 
-	// Generate 1-5 cities
-	cityCount := rapid.IntRange(1, 5).Draw(t, "cityCount")
-	cities := make([]CityConfig, cityCount)
-	for i := 0; i < cityCount; i++ {
-		cities[i] = genCityConfig(t, "city"+string(rune('0'+i)))
-	}
-
-	// Corner position
-	cpIdx := rapid.IntRange(0, len(cornerPositions)-1).Draw(t, "cornerPosIdx")
-	cornerPos := cornerPositions[cpIdx]
-
 	// Generate source-specific config and provider-appropriate refresh interval
 	var refreshInterval int
 	var apiCfg *APIConfig
 	var dbCfg *DatabaseConfig
 
+	maxValidCities := MaxCitiesFree
 	if ds == DataSourceRemoteAPI {
 		provIdx := rapid.IntRange(0, len(providers)-1).Draw(t, "providerIdx")
 		provider := providers[provIdx]
@@ -95,6 +85,9 @@ func genConfig(t *rapid.T) *Config {
 		apiCfg = &APIConfig{
 			Provider: provider,
 			APIKey:   apiKey,
+		}
+		if provider == "easyweatherwidget" && apiKey != "" {
+			maxValidCities = MaxCitiesPro
 		}
 		// Provider-dependent refresh intervals:
 		// OWM: exactly 120 (min=120, max=120)
@@ -109,6 +102,17 @@ func genConfig(t *rapid.T) *Config {
 		// Non-remote_api: 1–60
 		refreshInterval = rapid.IntRange(1, 60).Draw(t, "refreshInterval")
 	}
+
+	// Generate 1-maxValidCities cities
+	cityCount := rapid.IntRange(1, maxValidCities).Draw(t, "cityCount")
+	cities := make([]CityConfig, cityCount)
+	for i := 0; i < cityCount; i++ {
+		cities[i] = genCityConfig(t, "city"+string(rune('0'+i)))
+	}
+
+	// Corner position
+	cpIdx := rapid.IntRange(0, len(cornerPositions)-1).Draw(t, "cornerPosIdx")
+	cornerPos := cornerPositions[cpIdx]
 
 	cfg := &Config{
 		DataSource:      ds,
