@@ -15,7 +15,7 @@
   -->
   <Identity Name="47955afa-afc7-46ee-abc1-02ab2632b4ad"
             Publisher="CN=47955afa-afc7-46ee-abc1-02ab2632b4ad"
-            Version="1.1.1.0"
+            Version="1.2.0.0"
             ProcessorArchitecture="x64" />
 
   <Properties>

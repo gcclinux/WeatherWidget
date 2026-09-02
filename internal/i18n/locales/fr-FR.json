@@ -76,7 +76,7 @@
   "settings.cancel": "Annuler",
   "settings.dialog.saved": "Enregistré",
   "settings.dialog.savedMsg": "Paramètres enregistrés avec succès !",
-  "settings.about.version": "**Version :** 1.1.1",
+  "settings.about.version": "**Version :** 1.2.0",
   "settings.about.description": "Un widget de bureau compact et transparent affichant l'heure et la météo.\nSuivez jusqu'à 5 villes en un coup d'œil grâce à une superposition toujours visible.",
   "settings.about.websiteLabel": "Site web :",
   "settings.about.manualLabel": "Manuel :",
