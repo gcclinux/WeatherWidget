@@ -82,9 +82,10 @@ type Config struct {
 	TemperatureUnit TemperatureUnit `json:"temperatureUnit,omitempty"`
 	WindSpeedUnit   WindSpeedUnit   `json:"windSpeedUnit,omitempty"`
 	IconTheme       IconTheme       `json:"iconTheme,omitempty"`
-	DisplayFields   *DisplayFields  `json:"displayFields,omitempty"`
-	APIConfig       *APIConfig      `json:"apiConfig,omitempty"`
-	DatabaseConfig  *DatabaseConfig `json:"databaseConfig,omitempty"`
+	DisplayFields   *DisplayFields   `json:"displayFields,omitempty"`
+	PollutionFields *PollutionFields `json:"pollutionFields,omitempty"`
+	APIConfig       *APIConfig       `json:"apiConfig,omitempty"`
+	DatabaseConfig  *DatabaseConfig  `json:"databaseConfig,omitempty"`
 
 	// FontSizeCityTime controls the font size (px) for the city name and time row.
 	// Defaults to 14px (city) / 16px (time) when 0.
@@ -139,6 +140,42 @@ func (c *Config) GetDisplayFields() *DisplayFields {
 		return c.DisplayFields
 	}
 	return DefaultDisplayFields()
+}
+
+// PollutionFields controls which air quality and pollution metrics are visible.
+type PollutionFields struct {
+	ShowCO   bool `json:"showCO"`
+	ShowNO   bool `json:"showNO"`
+	ShowNO2  bool `json:"showNO2"`
+	ShowO3   bool `json:"showO3"`
+	ShowSO2  bool `json:"showSO2"`
+	ShowNH3  bool `json:"showNH3"`
+	ShowPM25 bool `json:"showPM25"`
+	ShowPM10 bool `json:"showPM10"`
+	ShowAQI  bool `json:"showAQI,omitempty"`
+}
+
+// DefaultPollutionFields returns a PollutionFields with all metrics initially off.
+func DefaultPollutionFields() *PollutionFields {
+	return &PollutionFields{
+		ShowCO:   false,
+		ShowNO:   false,
+		ShowNO2:  false,
+		ShowO3:   false,
+		ShowSO2:  false,
+		ShowNH3:  false,
+		ShowPM25: false,
+		ShowPM10: false,
+		ShowAQI:  false,
+	}
+}
+
+// GetPollutionFields returns the config's PollutionFields, or defaults if nil.
+func (c *Config) GetPollutionFields() *PollutionFields {
+	if c.PollutionFields != nil {
+		return c.PollutionFields
+	}
+	return DefaultPollutionFields()
 }
 
 // CityConfig holds the configuration for a single city.

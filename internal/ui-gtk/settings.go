@@ -81,7 +81,7 @@ func showSettingsDialog(m *manager) {
 	nb.AppendPage(locationsBox, locationsLabel)
 
 	// --- Widget tab ---
-	widgetBox, getDisplayFields, getTempUnit, getWindUnit, getFontSizes := buildWidgetTab(m)
+	widgetBox, getDisplayFields, getPollutionFields, getTempUnit, getWindUnit := buildWidgetTab(m)
 	widgetLabel, _ := gtk.LabelNew(m.t("settings.tab.widget"))
 	nb.AppendPage(widgetBox, widgetLabel)
 
@@ -100,7 +100,7 @@ func showSettingsDialog(m *manager) {
 	nb.AppendPage(appearanceBox, appearanceLabel)
 
 	// --- About tab ---
-	aboutBox := buildAboutTab(m)
+	aboutBox, getFontSizes := buildAboutTab(m)
 	aboutLabel, _ := gtk.LabelNew(m.t("settings.tab.about"))
 	nb.AppendPage(aboutBox, aboutLabel)
 
@@ -128,11 +128,12 @@ func showSettingsDialog(m *manager) {
 		newCfg.Opacity = opacity
 		newCfg.NoBackground = noBackground
 		newCfg.NoBorder = noBorder
-		newCfg.Cities = getCities()               // collect current city list from the locations tab
-		newCfg.Locale = getLocale()               // collect selected language
-		newCfg.DisplayFields = getDisplayFields() // collect panel visibility
-		newCfg.TemperatureUnit = getTempUnit()    // collect temperature unit
-		newCfg.WindSpeedUnit = getWindUnit()      // collect wind speed unit
+		newCfg.Cities = getCities()                     // collect current city list from the locations tab
+		newCfg.Locale = getLocale()                     // collect selected language
+		newCfg.DisplayFields = getDisplayFields()       // collect panel visibility
+		newCfg.PollutionFields = getPollutionFields()   // collect pollution metrics
+		newCfg.TemperatureUnit = getTempUnit()          // collect temperature unit
+		newCfg.WindSpeedUnit = getWindUnit()            // collect wind speed unit
 		newCfg.IconTheme = config.NormalizeIconTheme(config.IconTheme(iconThemeCombo.GetActiveID()))
 
 		fs := getFontSizes()
@@ -723,10 +724,10 @@ type fontSizes struct {
 }
 
 // buildWidgetTab creates the Widget tab for controlling panel element visibility,
-// temperature unit, wind speed unit, and font sizes for the three widget sections.
-// Returns the tab box, a getDisplayFields() func, a getTempUnit() func, a getWindUnit() func,
-// and a getFontSizes() func.
-func buildWidgetTab(m *manager) (*gtk.Box, func() *config.DisplayFields, func() config.TemperatureUnit, func() config.WindSpeedUnit, func() fontSizes) {
+// pollution metrics, temperature unit, and wind speed unit.
+// Returns the tab box, a getDisplayFields() func, a getPollutionFields() func,
+// a getTempUnit() func, and a getWindUnit() func.
+func buildWidgetTab(m *manager) (*gtk.Box, func() *config.DisplayFields, func() *config.PollutionFields, func() config.TemperatureUnit, func() config.WindSpeedUnit) {
 	vbox, _ := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 12)
 	vbox.SetMarginTop(12)
 	vbox.SetMarginStart(8)
@@ -800,6 +801,121 @@ func buildWidgetTab(m *manager) (*gtk.Box, func() *config.DisplayFields, func() 
 
 	vbox.PackStart(grid, false, false, 0)
 
+	// ── Pollution ─────────────────────────────────────────────────────────
+	sepPollution, _ := gtk.SeparatorNew(gtk.ORIENTATION_HORIZONTAL)
+	vbox.PackStart(sepPollution, false, false, 4)
+
+	pollutionTitle, _ := gtk.LabelNew("")
+	pollutionTitle.SetMarkup("<b>" + glib.MarkupEscapeText(m.t("settings.pollution.title")) + "</b>")
+	pollutionTitle.SetHAlign(gtk.ALIGN_START)
+	vbox.PackStart(pollutionTitle, false, false, 0)
+
+	pollutionSubtitle, _ := gtk.LabelNew(m.t("settings.pollution.subtitle"))
+	pollutionSubtitle.SetHAlign(gtk.ALIGN_START)
+	vbox.PackStart(pollutionSubtitle, false, false, 0)
+
+	// Pro note banner
+	proBox, _ := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 0)
+	proBoxSc, _ := proBox.GetStyleContext()
+	proNoteCSS, _ := gtk.CssProviderNew()
+	proNoteCSS.LoadFromData(`
+.pro-note-box {
+    border-radius: 8px;
+    padding: 8px 12px;
+    background: rgba(14, 165, 233, 0.1);
+    border: 1px solid rgba(56, 189, 248, 0.35);
+}
+`)
+	proBoxSc.AddProvider(proNoteCSS, gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
+	proBoxSc.AddClass("pro-note-box")
+
+	proNote, _ := gtk.LabelNew("")
+	proNote.SetMarkup(fmt.Sprintf("<span foreground='#38bdf8' font_size='9500'>%s</span>", glib.MarkupEscapeText(m.t("settings.pollution.proNote"))))
+	proNote.SetHAlign(gtk.ALIGN_START)
+	proNote.SetLineWrap(true)
+	proBox.PackStart(proNote, true, true, 0)
+	vbox.PackStart(proBox, false, false, 0)
+
+	pf := m.cfg.GetPollutionFields()
+	isPro := m.cfg.IsPro()
+
+	gridPollution, _ := gtk.GridNew()
+	gridPollution.SetRowSpacing(8)
+	gridPollution.SetColumnSpacing(16)
+	gridPollution.SetMarginStart(4)
+
+	chkCO, _ := gtk.CheckButtonNewWithLabel(m.t("settings.pollution.co"))
+	chkCO.SetActive(pf.ShowCO)
+	chkCO.SetSensitive(isPro)
+	gridPollution.Attach(chkCO, 0, 0, 1, 1)
+
+	chkNO, _ := gtk.CheckButtonNewWithLabel(m.t("settings.pollution.no"))
+	chkNO.SetActive(pf.ShowNO)
+	chkNO.SetSensitive(isPro)
+	gridPollution.Attach(chkNO, 1, 0, 1, 1)
+
+	chkNO2, _ := gtk.CheckButtonNewWithLabel(m.t("settings.pollution.no2"))
+	chkNO2.SetActive(pf.ShowNO2)
+	chkNO2.SetSensitive(isPro)
+	gridPollution.Attach(chkNO2, 2, 0, 1, 1)
+
+	chkO3, _ := gtk.CheckButtonNewWithLabel(m.t("settings.pollution.o3"))
+	chkO3.SetActive(pf.ShowO3)
+	chkO3.SetSensitive(isPro)
+	gridPollution.Attach(chkO3, 3, 0, 1, 1)
+
+	chkSO2, _ := gtk.CheckButtonNewWithLabel(m.t("settings.pollution.so2"))
+	chkSO2.SetActive(pf.ShowSO2)
+	chkSO2.SetSensitive(isPro)
+	gridPollution.Attach(chkSO2, 0, 1, 1, 1)
+
+	chkNH3, _ := gtk.CheckButtonNewWithLabel(m.t("settings.pollution.nh3"))
+	chkNH3.SetActive(pf.ShowNH3)
+	chkNH3.SetSensitive(isPro)
+	gridPollution.Attach(chkNH3, 1, 1, 1, 1)
+
+	chkPM25, _ := gtk.CheckButtonNewWithLabel(m.t("settings.pollution.pm2_5"))
+	chkPM25.SetActive(pf.ShowPM25)
+	chkPM25.SetSensitive(isPro)
+	gridPollution.Attach(chkPM25, 2, 1, 1, 1)
+
+	chkPM10, _ := gtk.CheckButtonNewWithLabel(m.t("settings.pollution.pm10"))
+	chkPM10.SetActive(pf.ShowPM10)
+	chkPM10.SetSensitive(isPro)
+	gridPollution.Attach(chkPM10, 3, 1, 1, 1)
+
+	vbox.PackStart(gridPollution, false, false, 0)
+
+	getDisplayFields := func() *config.DisplayFields {
+		return &config.DisplayFields{
+			ShowCity:     chkCity.GetActive(),
+			ShowIcon:     chkIcon.GetActive(),
+			ShowTemp:     chkTemp.GetActive(),
+			ShowDesc:     chkDesc.GetActive(),
+			ShowHumidity: chkHumidity.GetActive(),
+			ShowWind:     chkWind.GetActive(),
+			ShowTime:     chkTime.GetActive(),
+			ShowDate:     chkDate.GetActive(),
+			ShowWindGust: chkWindGust.GetActive(),
+			ShowDewPoint: chkDewPoint.GetActive(),
+			ShowPressure: chkPressure.GetActive(),
+			ShowUVIndex:  chkUVIndex.GetActive(),
+		}
+	}
+
+	getPollutionFields := func() *config.PollutionFields {
+		return &config.PollutionFields{
+			ShowCO:   chkCO.GetActive(),
+			ShowNO:   chkNO.GetActive(),
+			ShowNO2:  chkNO2.GetActive(),
+			ShowO3:   chkO3.GetActive(),
+			ShowSO2:  chkSO2.GetActive(),
+			ShowNH3:  chkNH3.GetActive(),
+			ShowPM25: chkPM25.GetActive(),
+			ShowPM10: chkPM10.GetActive(),
+		}
+	}
+
 	// ── Temperature Unit ──────────────────────────────────────────────────
 	sep, _ := gtk.SeparatorNew(gtk.ORIENTATION_HORIZONTAL)
 	vbox.PackStart(sep, false, false, 4)
@@ -855,23 +971,6 @@ func buildWidgetTab(m *manager) (*gtk.Box, func() *config.DisplayFields, func() 
 	hboxWind.PackStart(knotsBtn, false, false, 0)
 	vbox.PackStart(hboxWind, false, false, 0)
 
-	getDisplayFields := func() *config.DisplayFields {
-		return &config.DisplayFields{
-			ShowCity:     chkCity.GetActive(),
-			ShowIcon:     chkIcon.GetActive(),
-			ShowTemp:     chkTemp.GetActive(),
-			ShowDesc:     chkDesc.GetActive(),
-			ShowHumidity: chkHumidity.GetActive(),
-			ShowWind:     chkWind.GetActive(),
-			ShowTime:     chkTime.GetActive(),
-			ShowDate:     chkDate.GetActive(),
-			ShowWindGust: chkWindGust.GetActive(),
-			ShowDewPoint: chkDewPoint.GetActive(),
-			ShowPressure: chkPressure.GetActive(),
-			ShowUVIndex:  chkUVIndex.GetActive(),
-		}
-	}
-
 	getTempUnit := func() config.TemperatureUnit {
 		if fahBtn.GetActive() {
 			return config.TemperatureUnitFahrenheit
@@ -889,104 +988,7 @@ func buildWidgetTab(m *manager) (*gtk.Box, func() *config.DisplayFields, func() 
 		return config.WindSpeedUnitKmh
 	}
 
-	// ── Font Size ─────────────────────────────────────────────────────────
-	sep3, _ := gtk.SeparatorNew(gtk.ORIENTATION_HORIZONTAL)
-	vbox.PackStart(sep3, false, false, 4)
-
-	fontTitle, _ := gtk.LabelNew("")
-	fontTitle.SetMarkup("<b>" + glib.MarkupEscapeText(m.t("settings.fontSize.title")) + "</b>")
-	fontTitle.SetHAlign(gtk.ALIGN_START)
-	vbox.PackStart(fontTitle, false, false, 0)
-
-	fontSubtitle, _ := gtk.LabelNew(m.t("settings.fontSize.subtitle"))
-	fontSubtitle.SetHAlign(gtk.ALIGN_START)
-	fontSubtitle.SetLineWrap(true)
-	vbox.PackStart(fontSubtitle, false, false, 0)
-
-	// Live values — kept in sync as the user clicks ▲ / ▼.
-	curCityTime := m.fontSizeCityTime
-	curTempIcon := m.fontSizeTempIcon
-	curConditions := m.fontSizeConditions
-
-	// applyLive fires SetFontSizes so the widget updates immediately.
-	applyLive := func() {
-		m.SetFontSizes(curCityTime, curTempIcon, curConditions)
-	}
-
-	// buildFontRow creates one labelled row: label — ▼ — Npx — ▲
-	// labelKey is the i18n key, initial is the starting value, min/max clamp
-	// the range, onChange is called on every change for live preview.
-	buildFontRow := func(labelKey string, initial, minVal, maxVal int, onChange func(int)) (*gtk.Box, func() int) {
-		row, _ := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 8)
-
-		lbl, _ := gtk.LabelNew(m.t(labelKey))
-		lbl.SetHAlign(gtk.ALIGN_START)
-		lbl.SetHExpand(true)
-		row.PackStart(lbl, true, true, 0)
-
-		val := initial
-		sizeLbl, _ := gtk.LabelNew(strconv.Itoa(val) + "px")
-		sizeLbl.SetWidthChars(5)
-
-		decBtn, _ := gtk.ButtonNewWithLabel("▼")
-		incBtn, _ := gtk.ButtonNewWithLabel("▲")
-
-		refresh := func() {
-			sizeLbl.SetText(strconv.Itoa(val) + "px")
-			onChange(val)
-		}
-
-		decBtn.Connect("clicked", func() {
-			if val > minVal {
-				val--
-				refresh()
-			}
-		})
-		incBtn.Connect("clicked", func() {
-			if val < maxVal {
-				val++
-				refresh()
-			}
-		})
-
-		row.PackStart(decBtn, false, false, 0)
-		row.PackStart(sizeLbl, false, false, 0)
-		row.PackStart(incBtn, false, false, 0)
-
-		return row, func() int { return val }
-	}
-
-	rowCT, getCityTime := buildFontRow(
-		"settings.fontSize.cityTime",
-		curCityTime, 8, 48,
-		func(v int) { curCityTime = v; applyLive() },
-	)
-	vbox.PackStart(rowCT, false, false, 0)
-
-	rowTI, getTempIconSize := buildFontRow(
-		"settings.fontSize.tempIcon",
-		curTempIcon, 10, 72,
-		func(v int) { curTempIcon = v; applyLive() },
-	)
-	vbox.PackStart(rowTI, false, false, 0)
-
-	rowCond, getConditionsSize := buildFontRow(
-		"settings.fontSize.conditions",
-		curConditions, 6, 36,
-		func(v int) { curConditions = v; applyLive() },
-	)
-	rowCond.SetMarginBottom(12)
-	vbox.PackStart(rowCond, false, false, 0)
-
-	getFontSizes := func() fontSizes {
-		return fontSizes{
-			cityTime:   getCityTime(),
-			tempIcon:   getTempIconSize(),
-			conditions: getConditionsSize(),
-		}
-	}
-
-	return vbox, getDisplayFields, getTempUnit, getWindUnit, getFontSizes
+	return vbox, getDisplayFields, getPollutionFields, getTempUnit, getWindUnit
 }
 
 // buildLocationsTab builds the city management tab.
@@ -1640,8 +1642,8 @@ func buildLanguageTab(m *manager, initialLocale string) (*gtk.Box, func() string
 	return outer, func() string { return selected }
 }
 
-// buildAboutTab creates the About tab showing app info and links.
-func buildAboutTab(m *manager) *gtk.Box {
+// buildAboutTab creates the About tab showing app info, links, and font size configuration.
+func buildAboutTab(m *manager) (*gtk.Box, func() fontSizes) {
 	vbox, _ := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 12)
 	vbox.SetMarginTop(20)
 	vbox.SetMarginStart(20)
@@ -1699,9 +1701,100 @@ func buildAboutTab(m *manager) *gtk.Box {
 	manualRow.PackStart(manualLink, false, false, 0)
 	vbox.PackStart(manualRow, false, false, 0)
 
-	// Known issue note.
+	// Font Size section
 	sep3, _ := gtk.SeparatorNew(gtk.ORIENTATION_HORIZONTAL)
 	vbox.PackStart(sep3, false, false, 4)
 
-	return vbox
+	fontTitle, _ := gtk.LabelNew("")
+	fontTitle.SetMarkup("<b>" + glib.MarkupEscapeText(m.t("settings.fontSize.title")) + "</b>")
+	fontTitle.SetHAlign(gtk.ALIGN_START)
+	vbox.PackStart(fontTitle, false, false, 0)
+
+	fontSubtitle, _ := gtk.LabelNew(m.t("settings.fontSize.subtitle"))
+	fontSubtitle.SetHAlign(gtk.ALIGN_START)
+	fontSubtitle.SetLineWrap(true)
+	vbox.PackStart(fontSubtitle, false, false, 0)
+
+	// Live values — kept in sync as the user clicks ▲ / ▼.
+	curCityTime := m.fontSizeCityTime
+	curTempIcon := m.fontSizeTempIcon
+	curConditions := m.fontSizeConditions
+
+	// applyLive fires SetFontSizes so the widget updates immediately.
+	applyLive := func() {
+		m.SetFontSizes(curCityTime, curTempIcon, curConditions)
+	}
+
+	// buildFontRow creates one labelled row: label — ▼ — Npx — ▲
+	buildFontRow := func(labelKey string, initial, minVal, maxVal int, onChange func(int)) (*gtk.Box, func() int) {
+		row, _ := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 8)
+
+		lbl, _ := gtk.LabelNew(m.t(labelKey))
+		lbl.SetHAlign(gtk.ALIGN_START)
+		lbl.SetHExpand(true)
+		row.PackStart(lbl, true, true, 0)
+
+		val := initial
+		sizeLbl, _ := gtk.LabelNew(strconv.Itoa(val) + "px")
+		sizeLbl.SetWidthChars(5)
+
+		decBtn, _ := gtk.ButtonNewWithLabel("▼")
+		incBtn, _ := gtk.ButtonNewWithLabel("▲")
+
+		refresh := func() {
+			sizeLbl.SetText(strconv.Itoa(val) + "px")
+			onChange(val)
+		}
+
+		decBtn.Connect("clicked", func() {
+			if val > minVal {
+				val--
+				refresh()
+			}
+		})
+		incBtn.Connect("clicked", func() {
+			if val < maxVal {
+				val++
+				refresh()
+			}
+		})
+
+		row.PackStart(decBtn, false, false, 0)
+		row.PackStart(sizeLbl, false, false, 0)
+		row.PackStart(incBtn, false, false, 0)
+
+		return row, func() int { return val }
+	}
+
+	rowCT, getCityTime := buildFontRow(
+		"settings.fontSize.cityTime",
+		curCityTime, 8, 48,
+		func(v int) { curCityTime = v; applyLive() },
+	)
+	vbox.PackStart(rowCT, false, false, 0)
+
+	rowTI, getTempIconSize := buildFontRow(
+		"settings.fontSize.tempIcon",
+		curTempIcon, 10, 72,
+		func(v int) { curTempIcon = v; applyLive() },
+	)
+	vbox.PackStart(rowTI, false, false, 0)
+
+	rowCond, getConditionsSize := buildFontRow(
+		"settings.fontSize.conditions",
+		curConditions, 6, 36,
+		func(v int) { curConditions = v; applyLive() },
+	)
+	rowCond.SetMarginBottom(12)
+	vbox.PackStart(rowCond, false, false, 0)
+
+	getFontSizes := func() fontSizes {
+		return fontSizes{
+			cityTime:   getCityTime(),
+			tempIcon:   getTempIconSize(),
+			conditions: getConditionsSize(),
+		}
+	}
+
+	return vbox, getFontSizes
 }

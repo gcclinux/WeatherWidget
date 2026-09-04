@@ -72,6 +72,7 @@ type settingsState struct {
 	previewPanels     []*panel.CityPanel     // live preview panels in the About tab
 	appearancePanels  []*panel.CityPanel     // live preview panels in the Appearance tab
 	displayFields     *config.DisplayFields  // current display field checkbox state
+	pollutionFields   *config.PollutionFields // current pollution field checkbox state
 	customX           *int                   // pending custom X position
 	customY           *int                   // pending custom Y position
 }
@@ -128,6 +129,7 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 		selectedWindUnit:  config.NormalizeWindSpeedUnit(cfg.WindSpeedUnit),
 		selectedIconTheme: config.NormalizeIconTheme(cfg.IconTheme),
 		displayFields:     cfg.GetDisplayFields(),
+		pollutionFields:   cfg.GetPollutionFields(),
 		customX:           cfg.CustomX,
 		customY:           cfg.CustomY,
 	}
@@ -1188,72 +1190,108 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 			chkWindGust, chkDewPoint, chkPressure, chkUVIndex,
 		)
 
-		// Live preview panels for the Appearance tab.
-		defaultCitiesAppearance := config.DefaultCities()
-		appearancePreviewPanels := make([]*panel.CityPanel, len(defaultCitiesAppearance))
-		appearancePreviewObjects := make([]fyne.CanvasObject, len(defaultCitiesAppearance))
-		for i := range defaultCitiesAppearance {
-			p := panel.NewCityPanel(u.lm)
-			appearancePreviewPanels[i] = p
-			appearancePreviewObjects[i] = p.Container()
-		}
-		appearancePreviewGrid := container.NewGridWithColumns(len(defaultCitiesAppearance), appearancePreviewObjects...)
-		state.appearancePanels = appearancePreviewPanels
-
-		// Helper: read current checkbox state and apply to all preview panels.
-		applyDisplayPreview := func() {
-			fields := &config.DisplayFields{
-				ShowCity:      chkCity.Checked,
-				ShowIcon:      chkIcon.Checked,
-				ShowTemp:      chkTemp.Checked,
-				ShowDesc:      chkDesc.Checked,
+		// Wire up OnChanged for display checkboxes.
+		updateDisplayFields := func() {
+			state.displayFields = &config.DisplayFields{
+				ShowCity:     chkCity.Checked,
+				ShowIcon:     chkIcon.Checked,
+				ShowTemp:     chkTemp.Checked,
+				ShowDesc:     chkDesc.Checked,
 				ShowHumidity: chkHumidity.Checked,
 				ShowWind:     chkWind.Checked,
-				ShowTime:      chkTime.Checked,
-				ShowDate:      chkDate.Checked,
-				ShowWindGust:  chkWindGust.Checked,
-				ShowDewPoint:  chkDewPoint.Checked,
-				ShowPressure:  chkPressure.Checked,
-				ShowUVIndex:   chkUVIndex.Checked,
-			}
-			state.displayFields = fields
-			for _, p := range appearancePreviewPanels {
-				p.ApplyDisplayFields(fields)
+				ShowTime:     chkTime.Checked,
+				ShowDate:     chkDate.Checked,
+				ShowWindGust: chkWindGust.Checked,
+				ShowDewPoint: chkDewPoint.Checked,
+				ShowPressure: chkPressure.Checked,
+				ShowUVIndex:  chkUVIndex.Checked,
 			}
 		}
+		chkCity.OnChanged = func(_ bool) { updateDisplayFields() }
+		chkIcon.OnChanged = func(_ bool) { updateDisplayFields() }
+		chkTemp.OnChanged = func(_ bool) { updateDisplayFields() }
+		chkDesc.OnChanged = func(_ bool) { updateDisplayFields() }
+		chkHumidity.OnChanged = func(_ bool) { updateDisplayFields() }
+		chkWind.OnChanged = func(_ bool) { updateDisplayFields() }
+		chkTime.OnChanged = func(_ bool) { updateDisplayFields() }
+		chkDate.OnChanged = func(_ bool) { updateDisplayFields() }
+		chkWindGust.OnChanged = func(_ bool) { updateDisplayFields() }
+		chkDewPoint.OnChanged = func(_ bool) { updateDisplayFields() }
+		chkPressure.OnChanged = func(_ bool) { updateDisplayFields() }
+		chkUVIndex.OnChanged = func(_ bool) { updateDisplayFields() }
 
-		// Wire up OnChanged for all checkboxes.
-		chkCity.OnChanged = func(_ bool) { applyDisplayPreview() }
-		chkIcon.OnChanged = func(_ bool) { applyDisplayPreview() }
-		chkTemp.OnChanged = func(_ bool) { applyDisplayPreview() }
-		chkDesc.OnChanged = func(_ bool) { applyDisplayPreview() }
-		chkHumidity.OnChanged = func(_ bool) { applyDisplayPreview() }
-		chkWind.OnChanged = func(_ bool) { applyDisplayPreview() }
-		chkTime.OnChanged = func(_ bool) { applyDisplayPreview() }
-		chkDate.OnChanged = func(_ bool) { applyDisplayPreview() }
-		chkWindGust.OnChanged = func(_ bool) { applyDisplayPreview() }
-		chkDewPoint.OnChanged = func(_ bool) { applyDisplayPreview() }
-		chkPressure.OnChanged = func(_ bool) { applyDisplayPreview() }
-		chkUVIndex.OnChanged = func(_ bool) { applyDisplayPreview() }
+		// ── Pollution Section ────────────────────────────────────────────────
+		isPro := (providerDisplayToValue[providerSelect.Selected] == "easyweatherwidget" && strings.TrimSpace(apiKeyEntry.Text) != "") || cfg.IsPro()
 
-		// Fetch live weather data for appearance preview panels.
-		go func(cities []config.CityConfig, panels []*panel.CityPanel, tempUnit config.TemperatureUnit, windUnit config.WindSpeedUnit) {
-			adapter := remoteapi.NewRemoteAPIAdapter("easyweatherwidget", "free")
-			ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
-			defer cancel()
-			for i, city := range cities {
-				data, err := adapter.FetchWeather(ctx, city)
-				if err != nil {
-					continue
-				}
-				idx := i
-				d := data
-				fyne.Do(func() {
-					panels[idx].Update(d, tempUnit, windUnit)
-					panels[idx].StartClock(cities[idx].Timezone)
-				})
+		pollutionProNoteBg := canvas.NewRectangle(color.NRGBA{R: 14, G: 165, B: 233, A: 25})
+		pollutionProNoteBg.CornerRadius = 8
+		pollutionProNoteBorder := canvas.NewRectangle(color.Transparent)
+		pollutionProNoteBorder.StrokeColor = color.NRGBA{R: 56, G: 189, B: 248, A: 100}
+		pollutionProNoteBorder.StrokeWidth = 1
+		pollutionProNoteBorder.CornerRadius = 8
+		pollutionProNoteLabel := widget.NewLabel(u.t("settings.pollution.proNote"))
+		pollutionProNoteLabel.Wrapping = fyne.TextWrapWord
+		pollutionProNoteCard := container.NewStack(pollutionProNoteBg, pollutionProNoteBorder, container.NewPadded(pollutionProNoteLabel))
+
+		pf := cfg.GetPollutionFields()
+		chkCO := widget.NewCheck(u.t("settings.pollution.co"), nil)
+		chkCO.Checked = pf.ShowCO
+		chkNO := widget.NewCheck(u.t("settings.pollution.no"), nil)
+		chkNO.Checked = pf.ShowNO
+		chkNO2 := widget.NewCheck(u.t("settings.pollution.no2"), nil)
+		chkNO2.Checked = pf.ShowNO2
+		chkO3 := widget.NewCheck(u.t("settings.pollution.o3"), nil)
+		chkO3.Checked = pf.ShowO3
+		chkSO2 := widget.NewCheck(u.t("settings.pollution.so2"), nil)
+		chkSO2.Checked = pf.ShowSO2
+		chkNH3 := widget.NewCheck(u.t("settings.pollution.nh3"), nil)
+		chkNH3.Checked = pf.ShowNH3
+		chkPM25 := widget.NewCheck(u.t("settings.pollution.pm2_5"), nil)
+		chkPM25.Checked = pf.ShowPM25
+		chkPM10 := widget.NewCheck(u.t("settings.pollution.pm10"), nil)
+		chkPM10.Checked = pf.ShowPM10
+
+		if !isPro {
+			chkCO.Disable()
+			chkNO.Disable()
+			chkNO2.Disable()
+			chkO3.Disable()
+			chkSO2.Disable()
+			chkNH3.Disable()
+			chkPM25.Disable()
+			chkPM10.Disable()
+		}
+
+		updatePollutionFields := func() {
+			state.pollutionFields = &config.PollutionFields{
+				ShowCO:   chkCO.Checked,
+				ShowNO:   chkNO.Checked,
+				ShowNO2:  chkNO2.Checked,
+				ShowO3:   chkO3.Checked,
+				ShowSO2:  chkSO2.Checked,
+				ShowNH3:  chkNH3.Checked,
+				ShowPM25: chkPM25.Checked,
+				ShowPM10: chkPM10.Checked,
 			}
-		}(defaultCitiesAppearance, appearancePreviewPanels, state.selectedUnit, state.selectedWindUnit)
+		}
+		chkCO.OnChanged = func(_ bool) { updatePollutionFields() }
+		chkNO.OnChanged = func(_ bool) { updatePollutionFields() }
+		chkNO2.OnChanged = func(_ bool) { updatePollutionFields() }
+		chkO3.OnChanged = func(_ bool) { updatePollutionFields() }
+		chkSO2.OnChanged = func(_ bool) { updatePollutionFields() }
+		chkNH3.OnChanged = func(_ bool) { updatePollutionFields() }
+		chkPM25.OnChanged = func(_ bool) { updatePollutionFields() }
+		chkPM10.OnChanged = func(_ bool) { updatePollutionFields() }
+
+		pollutionChecks := container.NewGridWithColumns(4,
+			chkCO, chkNO, chkNO2, chkO3,
+			chkSO2, chkNH3, chkPM25, chkPM10,
+		)
+
+		pollutionSection := container.NewVBox(
+			pollutionProNoteCard,
+			pollutionChecks,
+		)
 
 		appearanceContent := container.NewPadded(container.NewVScroll(container.NewVBox(
 			sectionBlock(u.t("settings.position.title"), u.t("settings.position.subtitle"),
@@ -1276,13 +1314,15 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 			sectionBlock(u.t("settings.display.title"), u.t("settings.display.subtitle"),
 				displayChecks,
 			),
+			sectionBlock(u.t("settings.pollution.title"), u.t("settings.pollution.subtitle"),
+				pollutionSection,
+			),
 			sectionBlock(u.t("settings.temperature.title"), u.t("settings.temperature.subtitle"),
 				unitRadio,
 			),
 			sectionBlock(u.t("settings.windspeed.title"), u.t("settings.windspeed.subtitle"),
 				windUnitRadio,
 			),
-			appearancePreviewGrid,
 		)))
 		widgetTab := container.NewTabItemWithIcon(u.t("settings.tab.widget"), theme.ComputerIcon(), widgetContent)
 
@@ -1546,6 +1586,7 @@ func buildConfigFromUI(
 	cfg.WindSpeedUnit = config.NormalizeWindSpeedUnit(state.selectedWindUnit)
 	cfg.IconTheme = config.NormalizeIconTheme(state.selectedIconTheme)
 	cfg.DisplayFields = state.displayFields
+	cfg.PollutionFields = state.pollutionFields
 	provider := providerDisplayToValue[providerSelect.Selected]
 	if provider == "" {
 		provider = "openweathermap"
