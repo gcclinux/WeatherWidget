@@ -130,7 +130,12 @@ environment:
   FONTCONFIG_PATH: \$SNAP/gnome-platform/etc/fonts
   FONTCONFIG_FILE: \$SNAP/gnome-platform/etc/fonts/fonts.conf
   # GIO/GLib
-  GIO_MODULE_DIR: \$SNAP/gnome-platform/usr/lib/x86_64-linux-gnu/gio/modules
+  # Point at our own (empty) GIO modules dir instead of the gnome-platform one.
+  # The gnome-46-2404 platform ships libgiolibproxy.so without its libpxbackend
+  # backend, which triggers a harmless-but-noisy "cannot open shared object
+  # file: libpxbackend-1.0.so" warning at startup. This app uses Go's net/http
+  # directly and needs no GIO modules, so an empty dir silences it.
+  GIO_MODULE_DIR: \$SNAP/usr/lib/x86_64-linux-gnu/gio/modules
   GI_TYPELIB_PATH: \$SNAP/gnome-platform/usr/lib/x86_64-linux-gnu/girepository-1.0:\$SNAP/usr/lib/x86_64-linux-gnu/girepository-1.0
   # Locale
   LOCPATH: \$SNAP/gnome-platform/usr/lib/locale
@@ -206,6 +211,9 @@ parts:
       mkdir -p "\$DEST_DIR/data-dir/icons"
       mkdir -p "\$DEST_DIR/data-dir/sounds"
       mkdir -p "\$DEST_DIR/gnome-platform"
+      # Empty GIO modules dir so GIO_MODULE_DIR points somewhere valid but
+      # without the broken libgiolibproxy.so from the gnome platform snap.
+      mkdir -p "\$DEST_DIR/usr/lib/x86_64-linux-gnu/gio/modules"
       unset CFLAGS CPPFLAGS LDFLAGS
       export CGO_CFLAGS="-Wno-deprecated-declarations \$(pkg-config --cflags gtk+-3.0 ayatana-appindicator3-0.1 2>/dev/null)"
       export CGO_LDFLAGS="\$(pkg-config --libs gtk+-3.0 ayatana-appindicator3-0.1 2>/dev/null)"
