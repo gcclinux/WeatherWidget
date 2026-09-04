@@ -164,6 +164,56 @@ func SetLocaleFont(locale string) {
 	}
 }
 
+var (
+	tamilCardFont     fyne.Resource
+	tamilCardFontOnce sync.Once
+	cjkCardFont       fyne.Resource
+	cjkCardFontOnce   sync.Once
+)
+
+// LanguageCardFont returns a dedicated font resource for language cards
+// whose native names require non-Latin script coverage (e.g. Tamil or CJK),
+// ensuring their native script renders correctly regardless of which theme font is active.
+// For Latin-based languages, nil is returned so the active theme font is used.
+func LanguageCardFont(locale string) fyne.Resource {
+	switch {
+	case strings.HasPrefix(locale, "ta"):
+		tamilCardFontOnce.Do(func() {
+			data := loadFirstAvailableFont(
+				"fonts/notosanstamilb.ttf",
+				"fonts/notosanstamil.ttf",
+				"/usr/share/fonts/truetype/noto/NotoSansTamil-Bold.ttf",
+				"/usr/share/fonts/truetype/noto/NotoSansTamilUI-Bold.ttf",
+				`C:\Windows\Fonts\NirmalaB.ttf`,
+				`C:\Windows\Fonts\Nirmala.ttf`,
+				"/System/Library/Fonts/Supplemental/Tamil Sangam MN.ttc",
+			)
+			if data != nil {
+				tamilCardFont = fyne.NewStaticResource("notosanstamilb_card.ttf", data)
+			}
+		})
+		return tamilCardFont
+
+	case strings.HasPrefix(locale, "zh"), strings.HasPrefix(locale, "ja"):
+		cjkCardFontOnce.Do(func() {
+			data := loadFirstAvailableFont(
+				"fonts/droidsansfallback.ttf",
+				"/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc",
+				`C:\Windows\Fonts\msyhbd.ttc`,
+				`C:\Windows\Fonts\msyh.ttc`,
+			)
+			if data != nil {
+				cjkCardFont = fyne.NewStaticResource("cjk_card.ttf", data)
+			}
+		})
+		return cjkCardFont
+
+	default:
+		return nil
+	}
+}
+
+
 // RefreshFontCache forces Fyne to drop its internal font-face cache and
 // re-resolve faces from the current theme.
 //

@@ -1094,6 +1094,9 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 				}
 				nameText.TextSize = 14
 				nameText.TextStyle = fyne.TextStyle{Bold: true}
+				if cardFont := LanguageCardFont(loc.Code); cardFont != nil {
+					nameText.FontSource = cardFont
+				}
 				var titleObj fyne.CanvasObject = nameText
 
 				// Subtitle text (English)
