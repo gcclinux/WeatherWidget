@@ -16,3 +16,8 @@ var DemoPNG []byte
 //
 //go:embed fonts/*.ttf
 var Fonts embed.FS
+
+// AirIcons embeds the air-quality / pollution metric icons from the air directory.
+//
+//go:embed air/*
+var AirIcons embed.FS

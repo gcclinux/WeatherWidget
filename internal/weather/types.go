@@ -67,6 +67,20 @@ type WeatherData struct {
 	DewPoint      float64   `json:"dewPoint"`      // Celsius; 0 if not available
 	Pressure      float64   `json:"pressure"`      // hPa; 0 if not available
 	UVIndex       float64   `json:"uvIndex"`       // 0–11+; 0 if not available
+
+	// Air-quality / pollution values. nil = not available (row omitted).
+	// Populated by fetchEWW when the EWW pollution call succeeds; nil when
+	// that call fails (best-effort) or when the provider is OpenWeatherMap /
+	// Weather Underground.
+	AQI  *int     `json:"aqi,omitempty"`  // unitless index 1-5
+	CO   *float64 `json:"co,omitempty"`   // µg/m³
+	NO   *float64 `json:"no,omitempty"`   // µg/m³
+	NO2  *float64 `json:"no2,omitempty"`  // µg/m³
+	O3   *float64 `json:"o3,omitempty"`   // µg/m³
+	SO2  *float64 `json:"so2,omitempty"`  // µg/m³
+	NH3  *float64 `json:"nh3,omitempty"`  // µg/m³
+	PM25 *float64 `json:"pm25,omitempty"` // µg/m³
+	PM10 *float64 `json:"pm10,omitempty"` // µg/m³
 }
 
 // WeatherProvider defines the interface for fetching weather data

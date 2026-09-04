@@ -844,45 +844,53 @@ func buildWidgetTab(m *manager) (*gtk.Box, func() *config.DisplayFields, func() 
 	gridPollution.SetColumnSpacing(16)
 	gridPollution.SetMarginStart(4)
 
+	// AQI leads the group (canonical order: AQI first). The nine checkboxes
+	// fill a 4-column grid: row 0 = AQI,CO,NO,NO2; row 1 = O3,SO2,NH3,PM25;
+	// row 2 = PM10.
+	chkAQI, _ := gtk.CheckButtonNewWithLabel(m.t("settings.pollution.aqi"))
+	chkAQI.SetActive(pf.ShowAQI)
+	chkAQI.SetSensitive(isPro)
+	gridPollution.Attach(chkAQI, 0, 0, 1, 1)
+
 	chkCO, _ := gtk.CheckButtonNewWithLabel(m.t("settings.pollution.co"))
 	chkCO.SetActive(pf.ShowCO)
 	chkCO.SetSensitive(isPro)
-	gridPollution.Attach(chkCO, 0, 0, 1, 1)
+	gridPollution.Attach(chkCO, 1, 0, 1, 1)
 
 	chkNO, _ := gtk.CheckButtonNewWithLabel(m.t("settings.pollution.no"))
 	chkNO.SetActive(pf.ShowNO)
 	chkNO.SetSensitive(isPro)
-	gridPollution.Attach(chkNO, 1, 0, 1, 1)
+	gridPollution.Attach(chkNO, 2, 0, 1, 1)
 
 	chkNO2, _ := gtk.CheckButtonNewWithLabel(m.t("settings.pollution.no2"))
 	chkNO2.SetActive(pf.ShowNO2)
 	chkNO2.SetSensitive(isPro)
-	gridPollution.Attach(chkNO2, 2, 0, 1, 1)
+	gridPollution.Attach(chkNO2, 3, 0, 1, 1)
 
 	chkO3, _ := gtk.CheckButtonNewWithLabel(m.t("settings.pollution.o3"))
 	chkO3.SetActive(pf.ShowO3)
 	chkO3.SetSensitive(isPro)
-	gridPollution.Attach(chkO3, 3, 0, 1, 1)
+	gridPollution.Attach(chkO3, 0, 1, 1, 1)
 
 	chkSO2, _ := gtk.CheckButtonNewWithLabel(m.t("settings.pollution.so2"))
 	chkSO2.SetActive(pf.ShowSO2)
 	chkSO2.SetSensitive(isPro)
-	gridPollution.Attach(chkSO2, 0, 1, 1, 1)
+	gridPollution.Attach(chkSO2, 1, 1, 1, 1)
 
 	chkNH3, _ := gtk.CheckButtonNewWithLabel(m.t("settings.pollution.nh3"))
 	chkNH3.SetActive(pf.ShowNH3)
 	chkNH3.SetSensitive(isPro)
-	gridPollution.Attach(chkNH3, 1, 1, 1, 1)
+	gridPollution.Attach(chkNH3, 2, 1, 1, 1)
 
 	chkPM25, _ := gtk.CheckButtonNewWithLabel(m.t("settings.pollution.pm2_5"))
 	chkPM25.SetActive(pf.ShowPM25)
 	chkPM25.SetSensitive(isPro)
-	gridPollution.Attach(chkPM25, 2, 1, 1, 1)
+	gridPollution.Attach(chkPM25, 3, 1, 1, 1)
 
 	chkPM10, _ := gtk.CheckButtonNewWithLabel(m.t("settings.pollution.pm10"))
 	chkPM10.SetActive(pf.ShowPM10)
 	chkPM10.SetSensitive(isPro)
-	gridPollution.Attach(chkPM10, 3, 1, 1, 1)
+	gridPollution.Attach(chkPM10, 0, 2, 1, 1)
 
 	vbox.PackStart(gridPollution, false, false, 0)
 
@@ -905,6 +913,7 @@ func buildWidgetTab(m *manager) (*gtk.Box, func() *config.DisplayFields, func() 
 
 	getPollutionFields := func() *config.PollutionFields {
 		return &config.PollutionFields{
+			ShowAQI:  chkAQI.GetActive(),
 			ShowCO:   chkCO.GetActive(),
 			ShowNO:   chkNO.GetActive(),
 			ShowNO2:  chkNO2.GetActive(),

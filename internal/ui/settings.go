@@ -1237,6 +1237,8 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 		pollutionProNoteCard := container.NewStack(pollutionProNoteBg, pollutionProNoteBorder, container.NewPadded(pollutionProNoteLabel))
 
 		pf := cfg.GetPollutionFields()
+		chkAQI := widget.NewCheck(u.t("settings.pollution.aqi"), nil)
+		chkAQI.Checked = pf.ShowAQI
 		chkCO := widget.NewCheck(u.t("settings.pollution.co"), nil)
 		chkCO.Checked = pf.ShowCO
 		chkNO := widget.NewCheck(u.t("settings.pollution.no"), nil)
@@ -1255,6 +1257,7 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 		chkPM10.Checked = pf.ShowPM10
 
 		if !isPro {
+			chkAQI.Disable()
 			chkCO.Disable()
 			chkNO.Disable()
 			chkNO2.Disable()
@@ -1267,6 +1270,7 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 
 		updatePollutionFields := func() {
 			state.pollutionFields = &config.PollutionFields{
+				ShowAQI:  chkAQI.Checked,
 				ShowCO:   chkCO.Checked,
 				ShowNO:   chkNO.Checked,
 				ShowNO2:  chkNO2.Checked,
@@ -1277,6 +1281,7 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 				ShowPM10: chkPM10.Checked,
 			}
 		}
+		chkAQI.OnChanged = func(_ bool) { updatePollutionFields() }
 		chkCO.OnChanged = func(_ bool) { updatePollutionFields() }
 		chkNO.OnChanged = func(_ bool) { updatePollutionFields() }
 		chkNO2.OnChanged = func(_ bool) { updatePollutionFields() }
@@ -1287,8 +1292,9 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 		chkPM10.OnChanged = func(_ bool) { updatePollutionFields() }
 
 		pollutionChecks := container.NewGridWithColumns(4,
-			chkCO, chkNO, chkNO2, chkO3,
-			chkSO2, chkNH3, chkPM25, chkPM10,
+			chkAQI, chkCO, chkNO, chkNO2,
+			chkO3, chkSO2, chkNH3, chkPM25,
+			chkPM10,
 		)
 
 		pollutionSection := container.NewVBox(

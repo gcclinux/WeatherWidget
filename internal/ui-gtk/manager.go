@@ -262,6 +262,7 @@ func (m *manager) buildWindow() error {
 		}
 		p.setNoBackground(m.noBackground)
 		p.applyDisplayFields(m.cfg.GetDisplayFields())
+		p.applyPollutionRows(m.cfg.GetPollutionFields())
 		p.iconSize = 96
 		hbox.PackStart(p.root, false, false, 0)
 		m.panels = append(m.panels, p)
@@ -395,6 +396,7 @@ func (m *manager) buildWindow() error {
 	// during panel construction.
 	for _, p := range m.panels {
 		p.applyDisplayFields(m.cfg.GetDisplayFields())
+		p.applyPollutionRows(m.cfg.GetPollutionFields())
 	}
 
 	return nil
@@ -555,6 +557,7 @@ func (m *manager) onSettingsSave(newCfg *config.Config) error {
 		// Apply display field changes to existing panels.
 		for _, p := range m.panels {
 			p.applyDisplayFields(newCfg.GetDisplayFields())
+			p.applyPollutionRows(newCfg.GetPollutionFields())
 		}
 	}
 	m.sched.SetInterval(time.Duration(newCfg.RefreshInterval) * time.Minute)

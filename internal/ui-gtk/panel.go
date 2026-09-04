@@ -16,6 +16,14 @@ import (
 	"weatherwidget/internal/weather"
 )
 
+// pollutionRowWidgets holds the reusable widgets for one pollution metric row:
+// a horizontal box containing the metric icon and its value label.
+type pollutionRowWidgets struct {
+	row   *gtk.Box
+	icon  *gtk.Image
+	value *gtk.Label
+}
+
 // cityPanel holds all GTK widgets for a single city's weather display.
 type cityPanel struct {
 	root        *gtk.Box // top-level box, added to the main window's hbox
@@ -35,6 +43,13 @@ type cityPanel struct {
 	uvIndexLbl  *gtk.Label
 	windDirLbl  *gtk.Label
 	errorLbl    *gtk.Label
+
+	pollutionBox  *gtk.Box // vertical container for pollution rows
+	pollutionRows map[weather.PollutionMetric]*pollutionRowWidgets
+
+	// pollutionFields is the current metric selection driving row visibility.
+	// nil falls back to config.DefaultPollutionFields() in PlanPollutionRows.
+	pollutionFields *config.PollutionFields
 
 	city     string
 	region   string
@@ -223,6 +238,49 @@ func newCityPanel(city, region, timezone string, lm *i18n.LocaleManager) (*cityP
 	p.uvIndexLbl = uvIndexLbl
 	root.PackStart(uvIndexLbl, false, false, 0)
 
+	// ── Pollution rows ───────────────────────────────────────────────────────
+	// A vertical container for the per-metric icon+value rows, packed after the
+	// UV-index row and before the error label. The nine reusable rows are
+	// created once here (one per weather.PollutionMetric) and reused across
+	// updates; their visibility is controlled later by applyPollutionRows.
+	pollutionBox, err := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 2)
+	if err != nil {
+		return nil, err
+	}
+	p.pollutionBox = pollutionBox
+	root.PackStart(pollutionBox, false, false, 0)
+
+	p.pollutionRows = make(map[weather.PollutionMetric]*pollutionRowWidgets, len(weather.PollutionMetricOrder))
+	for _, metric := range weather.PollutionMetricOrder {
+		rowBox, err := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 6)
+		if err != nil {
+			return nil, err
+		}
+		rowBox.SetHAlign(gtk.ALIGN_CENTER)
+
+		rowIcon, err := gtk.ImageNew()
+		if err != nil {
+			return nil, err
+		}
+		rowBox.PackStart(rowIcon, false, false, 0)
+
+		rowValue, err := gtk.LabelNew("")
+		if err != nil {
+			return nil, err
+		}
+		rowValue.SetHAlign(gtk.ALIGN_CENTER)
+		sc, _ = rowValue.GetStyleContext()
+		sc.AddClass("info-label")
+		rowBox.PackStart(rowValue, false, false, 0)
+
+		pollutionBox.PackStart(rowBox, false, false, 0)
+		p.pollutionRows[metric] = &pollutionRowWidgets{
+			row:   rowBox,
+			icon:  rowIcon,
+			value: rowValue,
+		}
+	}
+
 	// ── Error label ──────────────────────────────────────────────────────────
 	errorLbl, err := gtk.LabelNew("")
 	if err != nil {
@@ -269,6 +327,44 @@ func (p *cityPanel) update(d *weather.WeatherData, tempUnit config.TemperatureUn
 	}
 	iconCode := weather.MapConditionToIconWithTheme(d.IconCode, d.LocalTime, theme)
 	p.loadIcon(iconCode, p.iconSize)
+
+	// Refresh pollution rows using the panel's current metric selection and the
+	// freshly stored data. PlanPollutionRows falls back to defaults when nil.
+	p.applyPollutionRows(p.pollutionFields)
+}
+
+// applyPollutionRows updates the pollution metric rows to reflect the given
+// field selection and the panel's most recent weather data. It stores pf as the
+// current selection, plans the visible rows via the pure planner, then for each
+// metric in canonical order either populates + shows the row (reordering it to
+// its planned position so visible rows follow plan order) or hides it.
+func (p *cityPanel) applyPollutionRows(pf *config.PollutionFields) {
+	p.pollutionFields = pf
+
+	rows := weather.PlanPollutionRows(pf, weather.PollutionOf(p.lastData))
+
+	// Map metric -> planned row (and its position within the plan).
+	planned := make(map[weather.PollutionMetric]weather.PollutionRow, len(rows))
+	planIndex := make(map[weather.PollutionMetric]int, len(rows))
+	for i, row := range rows {
+		planned[row.Metric] = row
+		planIndex[row.Metric] = i
+	}
+
+	for _, metric := range weather.PollutionMetricOrder {
+		w := p.pollutionRows[metric]
+		if w == nil {
+			continue
+		}
+		if row, ok := planned[metric]; ok {
+			p.loadAirIcon(w.icon, row.IconFile, pollutionIconSize)
+			w.value.SetText(row.ValueText)
+			p.pollutionBox.ReorderChild(w.row, planIndex[metric])
+			w.row.ShowAll()
+		} else {
+			w.row.Hide()
+		}
+	}
 }
 
 // showError displays an error state on the panel.
@@ -420,6 +516,69 @@ func (p *cityPanel) loadIcon(iconCode string, size int) {
 	// Always reserve a fixed square area so all panels align vertically.
 	p.icon.SetSizeRequest(size, size)
 	p.icon.SetVAlign(gtk.ALIGN_CENTER)
+}
+
+// pollutionIconSize is the pixel size for pollution metric icons rendered next to text.
+const pollutionIconSize = 24
+
+// loadAirIcon loads an air-quality icon file (e.g. "co.png") from the embedded
+// AirIcons filesystem, scales it to `size` px preserving aspect ratio, and sets
+// it on img. On any read/decode error it clears the image.
+func (p *cityPanel) loadAirIcon(img *gtk.Image, file string, size int) {
+	if size <= 0 {
+		size = pollutionIconSize
+	}
+	data, err := assets.AirIcons.ReadFile("air/" + file)
+	if err != nil {
+		img.Clear()
+		return
+	}
+
+	loader, err := gdk.PixbufLoaderNew()
+	if err != nil {
+		img.Clear()
+		return
+	}
+	if _, err := loader.Write(data); err != nil {
+		img.Clear()
+		return
+	}
+	if err := loader.Close(); err != nil {
+		img.Clear()
+		return
+	}
+
+	pb, err := loader.GetPixbuf()
+	if err != nil || pb == nil {
+		img.Clear()
+		return
+	}
+
+	// Scale preserving aspect ratio to `size`, mirroring loadIcon's math.
+	origW := pb.GetWidth()
+	origH := pb.GetHeight()
+	targetW := size
+	targetH := size
+	if origW > 0 && origH > 0 {
+		if origW >= origH {
+			targetH = int(float64(origH) * float64(size) / float64(origW))
+		} else {
+			targetW = int(float64(origW) * float64(size) / float64(origH))
+		}
+		if targetW < 1 {
+			targetW = 1
+		}
+		if targetH < 1 {
+			targetH = 1
+		}
+	}
+	scaled, err := pb.ScaleSimple(targetW, targetH, gdk.INTERP_BILINEAR)
+	if err != nil || scaled == nil {
+		img.SetFromPixbuf(pb)
+	} else {
+		img.SetFromPixbuf(scaled)
+	}
+	img.SetSizeRequest(size, size)
 }
 
 // applyIconSize rescales the currently displayed icon to a new pixel size.

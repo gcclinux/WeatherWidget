@@ -534,7 +534,7 @@ func (r *RemoteAPIAdapter) fetchEWW(ctx context.Context, city config.CityConfig)
 	temp := int(math.Round(eww.Temp))
 	log.Printf("successfully fetched weather for %s from EWW: %d°C, %s", city.Name, temp, eww.FreeText)
 
-	return &weather.WeatherData{
+	data := &weather.WeatherData{
 		CityName:      city.Name,
 		Region:        city.Region,
 		Temperature:   temp,
@@ -549,7 +549,87 @@ func (r *RemoteAPIAdapter) fetchEWW(ctx context.Context, city config.CityConfig)
 		DewPoint:      eww.DewPt,
 		Pressure:      eww.Pressure,
 		UVIndex:       eww.UV,
-	}, nil
+	}
+
+	// Best-effort pollution fetch for the same city. A pollution failure never
+	// fails the weather fetch (Requirement 2); on any error the pollution
+	// fields are left nil.
+	if pol, err := r.fetchEWWPollution(ctx, city); err != nil {
+		log.Printf("EWW pollution fetch failed for %s,%s (weather still returned): %v", city.Name, city.Region, err)
+	} else {
+		data.AQI = intPtr(pol.AQI)
+		data.CO = floatPtr(pol.CO)
+		data.NO = floatPtr(pol.NO)
+		data.NO2 = floatPtr(pol.NO2)
+		data.O3 = floatPtr(pol.O3)
+		data.SO2 = floatPtr(pol.SO2)
+		data.NH3 = floatPtr(pol.NH3)
+		data.PM25 = floatPtr(pol.PM25)
+		data.PM10 = floatPtr(pol.PM10)
+	}
+
+	return data, nil
+}
+
+// ewwPollutionResponse represents the flat pollution JSON body returned by the
+// EWW pollution endpoint. AQI is an integer index 1-5; the rest are float64
+// concentrations in µg/m³.
+type ewwPollutionResponse struct {
+	AQI  int     `json:"aqi"`
+	CO   float64 `json:"co"`
+	NO   float64 `json:"no"`
+	NO2  float64 `json:"no2"`
+	O3   float64 `json:"o3"`
+	SO2  float64 `json:"so2"`
+	PM25 float64 `json:"pm2_5"`
+	PM10 float64 `json:"pm10"`
+	NH3  float64 `json:"nh3"`
+}
+
+// intPtr and floatPtr return pointers to copies of their arguments, used to
+// mark a pollution reading as present (Requirement 1.3).
+func intPtr(v int) *int           { return &v }
+func floatPtr(v float64) *float64 { return &v }
+
+// fetchEWWPollution requests current pollution for the same city, mirroring
+// fetchEWW's URL/key/client/logging patterns. Best-effort: the caller treats
+// any error as "no pollution" (Requirement 2).
+func (r *RemoteAPIAdapter) fetchEWWPollution(ctx context.Context, city config.CityConfig) (*ewwPollutionResponse, error) {
+	key := r.apiKey
+	if key == "" {
+		key = "free" // matches fetchEWW (Requirements 3.1, 3.2)
+	}
+	// Same city as the weather request; no additional restriction (Requirement 3.3).
+	reqURL := fmt.Sprintf("%s/api/v1/pollution/key=%s/%s,%s", r.BaseURL, key, city.Name, city.Region)
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, reqURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("create pollution request: %w", err)
+	}
+
+	log.Printf("fetching pollution from EWW for %s,%s...", city.Name, city.Region)
+	resp, err := r.client.Do(req)
+	if err != nil {
+		log.Printf("EWW pollution network error for %s: %v", city.Name, err)
+		return nil, fmt.Errorf("execute pollution request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("read pollution response: %w", err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		log.Printf("EWW pollution API error for %s: status %d, body: %s", city.Name, resp.StatusCode, string(body))
+		return nil, fmt.Errorf("EWW pollution API error (status %d): %s", resp.StatusCode, string(body))
+	}
+
+	var pol ewwPollutionResponse
+	if err := json.Unmarshal(body, &pol); err != nil {
+		return nil, fmt.Errorf("parse EWW pollution response: %w", err)
+	}
+	return &pol, nil
 }
 
 func (r *RemoteAPIAdapter) testEWW(ctx context.Context) error {
