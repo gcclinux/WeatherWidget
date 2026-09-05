@@ -80,6 +80,7 @@
   "settings.about.description": "A compact, transparent time & weather widget that lives on your desktop.\nMonitor up to 5 cities at a glance with a beautiful, always-on-top overlay.",
   "settings.about.websiteLabel": "Website:",
   "settings.about.manualLabel": "Manual:",
+  "settings.about.airIndexLabel": "Air Index:",
   "settings.about.knownIssue": "⚠ Version 1.0.6 known issue: snapcraft package persistent position not working, expected to be fixed in new version.",
   "settings.about.previewLabel": "Preview",
   "settings.about.appName": "WeatherWidget",

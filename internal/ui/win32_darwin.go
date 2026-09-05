@@ -67,37 +67,36 @@ static void getScreenBounds(int index, int* outX, int* outY, int* outW, int* out
 	*outH = (int)visible.size.height;
 }
 
-// setupDarwinWindow configures the NSWindow for rounded corners.
+// setupDarwinWindow configures the NSWindow for per-card transparency.
 //
-// Rounded corners: the NSWindow must be non-opaque with a clear background
-// so that the corner regions become transparent. The contentView layer clips
-// all subviews (including Fyne's GL canvas) to the rounded rect.
-//
-// Transparency: handled by setDarwinBackgroundAlpha via NSWindow.alphaValue.
-// Since Fyne renders all content into a single opaque OpenGL framebuffer,
-// NSWindow.alphaValue is the only mechanism that achieves see-through effect.
+// The window is set non-opaque with a clear background so regions not covered
+// by Fyne content become transparent. The OpenGL view (Fyne's canvas) is
+// configured with an alpha-capable pixel format so it can blend with the
+// desktop.
 //
 // IMPORTANT: This function dispatches to the main queue because all
 // NSView/NSWindow operations must happen on the main thread.
 static void setupDarwinWindow(uintptr_t winHandle) {
 	dispatch_async(dispatch_get_main_queue(), ^{
 		NSWindow *w = (__bridge NSWindow*)(void*)winHandle;
-		// Non-opaque + clear background lets the corners show through to desktop.
+		// Non-opaque + clear background lets uncovered regions show desktop.
 		[w setOpaque:NO];
 		[w setBackgroundColor:[NSColor clearColor]];
 		[w setHasShadow:NO];
 
 		NSView *contentView = [w contentView];
 		contentView.wantsLayer = YES;
+		contentView.layer.backgroundColor = [[NSColor clearColor] CGColor];
 		contentView.layer.cornerRadius = 12.0;
 		contentView.layer.masksToBounds = YES;
 
-		// Also clip all child subviews (the Fyne GL NSOpenGLView) to the
-		// rounded corner mask by ensuring each subview's layer respects bounds.
+		// Find and configure the NSOpenGLView (Fyne's GL canvas) for transparency.
 		for (NSView *sub in [contentView subviews]) {
 			sub.wantsLayer = YES;
+			sub.layer.backgroundColor = [[NSColor clearColor] CGColor];
 			sub.layer.cornerRadius = 12.0;
 			sub.layer.masksToBounds = YES;
+			sub.layer.opaque = NO;
 		}
 	});
 }

@@ -308,15 +308,16 @@ func (t *widgetTheme) Color(name fyne.ThemeColorName, variant fyne.ThemeVariant)
 		return t.base.Color(name, theme.VariantDark)
 	}
 
-	// macOS: use a dark opaque background so the Fyne GL renderer clears to
-	// a visible color. Transparency is achieved by setting NSWindow.backgroundColor
-	// with the desired alpha via setDarwinBackgroundAlpha — the window is
-	// non-opaque so the desktop shows through the background while Fyne-rendered
-	// content (text, icons) remains fully opaque.
+	// macOS: use a fully transparent background so the desktop shows through
+	// everywhere except the individual city card backgrounds. The card panels
+	// have their own opaque (rounded, filled) background rectangles, so they
+	// remain visible while the space between/around them is see-through.
+	// NSWindow is made non-opaque via setupDarwinWindow and setDarwinBackgroundAlpha
+	// controls the overall window alpha for the opacity setting.
 	if runtime.GOOS == "darwin" {
 		switch name {
 		case theme.ColorNameBackground, theme.ColorNameOverlayBackground:
-			return color.NRGBA{R: 30, G: 30, B: 30, A: 255}
+			return color.NRGBA{R: 0, G: 0, B: 0, A: 0}
 		case theme.ColorNameForeground:
 			return color.NRGBA{R: 255, G: 255, B: 255, A: 255}
 		case theme.ColorNameDisabled:

@@ -81,6 +81,7 @@
   "settings.about.description": "常驻于桌面的紧凑透明时间与天气小组件。\n以优美的置顶界面一览最多 5 个城市的天气动态。",
   "settings.about.websiteLabel": "官方网站:",
   "settings.about.manualLabel": "用户手册:",
+  "settings.about.airIndexLabel": "Air Index:",
   "settings.about.knownIssue": "⚠ 1.0.6 版本已知问题: snapcraft 包在某些环境下位置持久化可能异常。",
   "settings.about.previewLabel": "效果预览",
   "settings.about.appName": "WeatherWidget",

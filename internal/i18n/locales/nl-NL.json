@@ -80,6 +80,7 @@
   "settings.about.description": "Een compacte, transparante tijd- en weerwidget op uw bureaublad.\nMonitor tot 5 steden tegelijk met een mooie, altijd-bovenop overlay.",
   "settings.about.websiteLabel": "Website:",
   "settings.about.manualLabel": "Handleiding:",
+  "settings.about.airIndexLabel": "Air Index:",
   "settings.about.knownIssue": "⚠ Bekend probleem in versie 1.0.6: persistente positie van het snapcraft-pakket werkt niet, verwacht te worden opgelost in een nieuwe versie.",
   "settings.about.previewLabel": "Voorbeeld",
   "settings.about.appName": "WeatherWidget",

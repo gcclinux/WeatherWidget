@@ -1399,24 +1399,68 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 		locationsTab := container.NewTabItemWithIcon(u.t("settings.tab.locations"), theme.ListIcon(), locationsContent)
 
 		// ── About tab ─────────────────────────────────────────────────────────
-		aboutVersion := widget.NewRichTextFromMarkdown(u.t("settings.about.version"))
 		aboutDesc := widget.NewLabel(u.t("settings.about.description"))
 		aboutDesc.Wrapping = fyne.TextWrapWord
 
+		// Combine app name and version in the card title.
+		aboutTitle := u.t("settings.about.appName") + " (version: 1.2.0)"
+
 		websiteLink := widget.NewHyperlink("easysmartapps.co.uk/weatherwidget", parseURL("https://easysmartapps.co.uk/weatherwidget"))
 		manualLink := widget.NewHyperlink("easysmartapps.co.uk/weatherwidget-manual", parseURL("https://easysmartapps.co.uk/weatherwidget-manual"))
+		airIndexLink := widget.NewHyperlink("easysmartapps.co.uk/weatherwidget-environmental", parseURL("https://easysmartapps.co.uk/weatherwidget-environmental"))
 
-		// Live preview: create 3 CityPanel instances for the default cities.
-		defaultCities := config.DefaultCities()
+		// Live preview: create a single CityPanel for Holambra. Showing only one
+		// city keeps the About window from becoming too wide, and the About
+		// preview always displays every available weather detail regardless of
+		// the user's current display-field selection.
+		allCities := config.DefaultCities()
+		previewCity := allCities[0]
+		for _, c := range allCities {
+			if c.Name == "Holambra" {
+				previewCity = c
+				break
+			}
+		}
+		defaultCities := []config.CityConfig{previewCity}
+
+		// Enable every standard weather detail for the preview. The pollution /
+		// air-quality row showcases 5 metrics (AQI, CO, O₃, SO₂, PM10) so users
+		// can see what the premium feature looks like, even though they can only
+		// enable pollution display after subscribing.
+		previewDisplayFields := &config.DisplayFields{
+			ShowCity:     true,
+			ShowIcon:     true,
+			ShowTemp:     true,
+			ShowDesc:     true,
+			ShowHumidity: true,
+			ShowWind:     true,
+			ShowTime:     true,
+			ShowDate:     true,
+			ShowWindGust: true,
+			ShowDewPoint: true,
+			ShowPressure: true,
+			ShowUVIndex:  true,
+		}
+		previewPollutionFields := &config.PollutionFields{
+			ShowAQI:  true,
+			ShowCO:   true,
+			ShowO3:   true,
+			ShowSO2:  true,
+			ShowPM25: true,
+			ShowPM10: true,
+		}
+
 		previewPanels := make([]*panel.CityPanel, len(defaultCities))
 		previewObjects := make([]fyne.CanvasObject, len(defaultCities))
 		for i := range defaultCities {
 			p := panel.NewCityPanel(u.lm)
+			p.ApplyDisplayFields(previewDisplayFields)
+			p.ApplyPollutionFields(previewPollutionFields)
 			previewPanels[i] = p
 			previewObjects[i] = p.Container()
 		}
 		state.previewPanels = previewPanels
-		previewGrid := container.NewGridWithColumns(len(defaultCities), previewObjects...)
+		previewGrid := container.NewHBox(previewObjects...)
 
 		// Fetch live weather data for preview panels in the background.
 		go func(cities []config.CityConfig, panels []*panel.CityPanel, tempUnit config.TemperatureUnit, windUnit config.WindSpeedUnit) {
@@ -1440,11 +1484,13 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 		previewLabel := widget.NewRichTextFromMarkdown("**" + u.t("settings.about.previewLabel") + "**")
 
 		aboutContent := container.NewPadded(container.NewVScroll(container.NewVBox(
-			widget.NewCard(u.t("settings.about.appName"), "", container.NewVBox(
+			widget.NewCard(aboutTitle, "", container.NewVBox(
 				aboutDesc,
-				container.NewHBox(widget.NewLabel(u.t("settings.about.websiteLabel")), websiteLink),
-				container.NewHBox(widget.NewLabel(u.t("settings.about.manualLabel")), manualLink),
-				aboutVersion,
+				container.NewGridWithColumns(2,
+					widget.NewLabel(u.t("settings.about.websiteLabel")), websiteLink,
+					widget.NewLabel(u.t("settings.about.manualLabel")), manualLink,
+					widget.NewLabel(u.t("settings.about.airIndexLabel")), airIndexLink,
+				),
 			)),
 			previewLabel,
 			previewGrid,

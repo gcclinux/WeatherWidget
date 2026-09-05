@@ -127,10 +127,10 @@ func DefaultDisplayFields() *DisplayFields {
 		ShowWind:     true,
 		ShowTime:     true,
 		ShowDate:     true,
-		ShowWindGust: false,
-		ShowDewPoint: false,
-		ShowPressure: false,
-		ShowUVIndex:  false,
+		ShowWindGust: true,
+		ShowDewPoint: true,
+		ShowPressure: true,
+		ShowUVIndex:  true,
 	}
 }
 
@@ -282,14 +282,14 @@ func IsDefaultCity(city CityConfig) bool {
 
 // DefaultConfig returns a Config with sensible defaults:
 // three default cities (Broxburn, Holambra, Ryjewo), 120-minute refresh,
-// bottom-right corner, remote_api data source, and EasyWeatherWidget as the
+// top-right corner, remote_api data source, and EasyWeatherWidget as the
 // default provider (works without a key for the default cities).
 func DefaultConfig() *Config {
 	return &Config{
 		DataSource:         DataSourceRemoteAPI,
 		Cities:             DefaultCities(),
 		RefreshInterval:    120,
-		CornerPosition:     "bottom-right",
+		CornerPosition:     "top-right",
 		Opacity:            100,
 		Locale:             "en-GB",
 		TemperatureUnit:    TemperatureUnitCelsius,

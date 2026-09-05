@@ -81,6 +81,7 @@
   "settings.about.description": "உங்கள் டெஸ்க்டாப்பில் இருக்கும் ஒரு சிறிய, வெளிப்படையான நேரம் மற்றும் வானிலை விட்ஜெட்.\nஅழகான மேலடுக்குடன் ஒரே பார்வையில் 5 நகரங்கள் வரை கண்காணிக்கவும்.",
   "settings.about.websiteLabel": "இணையதளம்:",
   "settings.about.manualLabel": "கையேடு:",
+  "settings.about.airIndexLabel": "Air Index:",
   "settings.about.knownIssue": "⚠ பதிப்பு 1.0.6 அறியப்பட்ட சிக்கல்: snapcraft தொகுப்பு நிலையான நிலை வேலை செய்யவில்லை.",
   "settings.about.previewLabel": "முன்னோட்டம்",
   "settings.about.appName": "WeatherWidget",

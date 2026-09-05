@@ -81,6 +81,7 @@
   "settings.about.description": "デスクトップに常駐するコンパクトで透過的な日時・天気ウィジェット。\n美しいオーバーレイで最大5都市の天気を一目で把握できます。",
   "settings.about.websiteLabel": "ウェブサイト:",
   "settings.about.manualLabel": "マニュアル:",
+  "settings.about.airIndexLabel": "Air Index:",
   "settings.about.knownIssue": "⚠ バージョン 1.0.6 の既知の問題: snapcraft パッケージで位置の永続化が機能しない場合があります。",
   "settings.about.previewLabel": "プレビュー",
   "settings.about.appName": "WeatherWidget",

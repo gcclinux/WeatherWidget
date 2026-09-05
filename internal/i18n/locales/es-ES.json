@@ -80,6 +80,7 @@
   "settings.about.description": "Un widget compacto y transparente de hora y clima en tu escritorio.\nMonitoriza hasta 5 ciudades a la vez con una superposición siempre visible.",
   "settings.about.websiteLabel": "Sitio web:",
   "settings.about.manualLabel": "Manual:",
+  "settings.about.airIndexLabel": "Air Index:",
   "settings.about.knownIssue": "⚠ Problema conocido en la versión 1.0.6: la posición persistente del paquete snapcraft no funciona, se espera que se solucione en una nueva versión.",
   "settings.about.previewLabel": "Vista previa",
   "settings.about.appName": "WeatherWidget",

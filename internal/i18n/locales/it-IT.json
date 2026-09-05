@@ -80,6 +80,7 @@
   "settings.about.description": "Un widget desktop compatto e trasparente per ora e meteo.\nMonitora fino a 5 città contemporaneamente con una sovrapposizione sempre visibile.",
   "settings.about.websiteLabel": "Sito web:",
   "settings.about.manualLabel": "Manuale:",
+  "settings.about.airIndexLabel": "Air Index:",
   "settings.about.knownIssue": "⚠ Problema noto nella versione 1.0.6: la posizione persistente del pacchetto snapcraft non funziona, dovrebbe essere risolto nella nuova versione.",
   "settings.about.previewLabel": "Anteprima",
   "settings.about.appName": "WeatherWidget",

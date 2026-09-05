@@ -80,6 +80,7 @@
   "settings.about.description": "Um widget compacto e transparente de hora e clima que fica na sua área de trabalho.\nMonitore até 5 cidades de uma só vez com uma sobreposição bonita e sempre visível.",
   "settings.about.websiteLabel": "Website:",
   "settings.about.manualLabel": "Manual:",
+  "settings.about.airIndexLabel": "Air Index:",
   "settings.about.knownIssue": "⚠ Problema conhecido na versão 1.0.6: posição persistente do pacote snapcraft não está funcionando, deve ser corrigido na nova versão.",
   "settings.about.previewLabel": "Visualização",
   "settings.about.appName": "WeatherWidget",

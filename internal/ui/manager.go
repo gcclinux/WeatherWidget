@@ -21,6 +21,12 @@ type UIManager struct {
 	widget   fyne.Window
 	settings fyne.Window
 	panels   []*panel.CityPanel
+
+	// curDisplayFields and curPollutionFields track the most recently applied
+	// visibility config so the window can be resized to fit the actual content
+	// whenever either changes.
+	curDisplayFields   *config.DisplayFields
+	curPollutionFields *config.PollutionFields
 }
 
 // NewUIManager creates a new UIManager and its main widget window.
@@ -78,12 +84,25 @@ func (u *UIManager) ShowWidget(cities []config.CityConfig) {
 	}
 
 	// Stack the city cards vertically — one card under another.
+	// Use a custom VBox layout with minimal spacing since Fyne's GL renderer
+	// fills empty space with an opaque background (true transparency isn't
+	// supported in Fyne's Metal/GL rendering pipeline).
 	stack := container.NewVBox(objects...)
 	u.widget.SetContent(stack)
 
-	w, h, _ := CalculateLayout(count)
-	u.widget.Resize(fyne.NewSize(float32(w), float32(h)))
+	u.resizeToContent(count)
 	u.widget.Show()
+}
+
+// resizeToContent resizes the widget window to fit the given number of city
+// cards using the currently applied display and pollution field visibility.
+func (u *UIManager) resizeToContent(count int) {
+	// Let the content's minimum size drive the window size. This is more
+	// reliable than calculating a fixed height because Fyne containers (VBox,
+	// Padded, Stack) compute their own minimum size from their children.
+	if u.widget.Content() != nil {
+		u.widget.Resize(u.widget.Content().MinSize())
+	}
 }
 
 // UpdatePanels updates each CityPanel with the corresponding weather data, units, and icon theme.
@@ -105,13 +124,9 @@ func (u *UIManager) ApplyDisplayFields(df *config.DisplayFields) {
 	for _, p := range u.panels {
 		p.ApplyDisplayFields(df)
 	}
+	u.curDisplayFields = df
 	// Resize widget to match the dynamic height.
-	count := len(u.panels)
-	if count == 0 {
-		count = 1
-	}
-	w, h, _ := CalculateLayoutWithFields(count, df)
-	u.widget.Resize(fyne.NewSize(float32(w), float32(h)))
+	u.resizeToContent(len(u.panels))
 }
 
 // ApplyPollutionFields applies the given air-quality metric selection to all panels.
@@ -119,6 +134,9 @@ func (u *UIManager) ApplyPollutionFields(pf *config.PollutionFields) {
 	for _, p := range u.panels {
 		p.ApplyPollutionFields(pf)
 	}
+	u.curPollutionFields = pf
+	// The air-quality row's presence affects the card height, so resize too.
+	u.resizeToContent(len(u.panels))
 }
 
 // RerenderPanels re-renders all panels using their cached data with new units or icon theme.
@@ -149,7 +167,7 @@ func (u *UIManager) SetCorner(position string, monitorIndex int) {
 		if count == 0 {
 			count = 1
 		}
-		ww, wh, _ = CalculateLayout(count)
+		ww, wh, _ = CalculateLayoutWithPollution(count, u.curDisplayFields, u.curPollutionFields)
 	}
 
 	var x, y int

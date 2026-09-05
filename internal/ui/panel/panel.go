@@ -19,6 +19,62 @@ import (
 	"weatherwidget/internal/weather"
 )
 
+// fixedWidthLayout is a custom Fyne layout that always reports a fixed width
+// for its container, regardless of the child content width. This ensures the
+// left info block takes consistent horizontal space across all city cards.
+type fixedWidthLayout struct {
+	width float32
+}
+
+func (f *fixedWidthLayout) MinSize(objects []fyne.CanvasObject) fyne.Size {
+	var h float32
+	for _, o := range objects {
+		if o.Visible() {
+			h = fyne.Max(h, o.MinSize().Height)
+		}
+	}
+	return fyne.NewSize(f.width, h)
+}
+
+func (f *fixedWidthLayout) Layout(objects []fyne.CanvasObject, size fyne.Size) {
+	for _, o := range objects {
+		if o.Visible() {
+			o.Resize(fyne.NewSize(f.width, size.Height))
+			o.Move(fyne.NewPos(0, 0))
+		}
+	}
+}
+
+// compactPaddingLayout provides reduced vertical padding for metric tiles,
+// giving a tighter cell height while maintaining horizontal padding.
+type compactPaddingLayout struct {
+	hPad float32 // horizontal padding
+	vPad float32 // vertical padding (reduced for compact cells)
+}
+
+func (c *compactPaddingLayout) MinSize(objects []fyne.CanvasObject) fyne.Size {
+	var w, h float32
+	for _, o := range objects {
+		if o.Visible() {
+			s := o.MinSize()
+			w = fyne.Max(w, s.Width)
+			h = fyne.Max(h, s.Height)
+		}
+	}
+	return fyne.NewSize(w+c.hPad*2, h+c.vPad*2)
+}
+
+func (c *compactPaddingLayout) Layout(objects []fyne.CanvasObject, size fyne.Size) {
+	innerW := size.Width - c.hPad*2
+	innerH := size.Height - c.vPad*2
+	for _, o := range objects {
+		if o.Visible() {
+			o.Resize(fyne.NewSize(innerW, innerH))
+			o.Move(fyne.NewPos(c.hPad, c.vPad))
+		}
+	}
+}
+
 // airMetricCell holds the widgets for a single air-quality metric shown in the
 // bottom row of the card: an icon, the full metric name, and a value label.
 type airMetricCell struct {
@@ -168,6 +224,7 @@ var metricBorderColor = color.NRGBA{R: 255, G: 255, B: 255, A: 36}
 
 // newMetricTile builds one bordered, transparent metric cell containing the
 // given emoji glyph, the metric name, and an (initially empty) value label.
+// Content is centered both horizontally and vertically within the cell.
 func newMetricTile(emoji, name string) *metricTileWidget {
 	emojiText := canvas.NewText(emoji, theme.ForegroundColor())
 	emojiText.TextSize = 15
@@ -179,15 +236,20 @@ func newMetricTile(emoji, name string) *metricTileWidget {
 	valueText.TextSize = 15
 	valueText.TextStyle = fyne.TextStyle{Bold: true}
 
+	// Center the header (emoji + name) and value text within the cell
 	header := container.NewHBox(emojiText, nameText)
-	content := container.NewVBox(header, valueText)
+	centeredHeader := container.NewCenter(header)
+	centeredValue := container.NewCenter(valueText)
+	content := container.NewVBox(centeredHeader, centeredValue)
 
 	// A thin rectangle border behind the padded content forms the grid lines.
 	border := canvas.NewRectangle(color.Transparent)
 	border.StrokeColor = metricBorderColor
 	border.StrokeWidth = 1
 
-	tile := container.NewStack(border, container.NewPadded(content))
+	// Use compact padding (reduced vertical padding for ~10% shorter cells)
+	compactPad := container.New(&compactPaddingLayout{hPad: 8, vPad: 4}, container.NewCenter(content))
+	tile := container.NewStack(border, compactPad)
 	return &metricTileWidget{container: tile, value: valueText}
 }
 
@@ -288,8 +350,13 @@ func NewCityPanel(lm *i18n.LocaleManager) *CityPanel {
 	return p
 }
 
+// metricsGridWidth is the fixed width for the right-hand metrics grid so that
+// all city panels have consistent grid sizing regardless of content width.
+const metricsGridWidth = 380
+
 // metricGrid builds the right-hand three-column grid of metric tiles based on
 // the current display-field visibility (up to six tiles form a 3×2 grid).
+// The grid is wrapped in a fixed-width container to ensure consistent sizing.
 func (p *CityPanel) metricGrid() fyne.CanvasObject {
 	var cells []fyne.CanvasObject
 
@@ -309,7 +376,10 @@ func (p *CityPanel) metricGrid() fyne.CanvasObject {
 	if len(cells) == 0 {
 		return layout.NewSpacer()
 	}
-	return container.NewGridWithColumns(3, cells...)
+
+	grid := container.NewGridWithColumns(3, cells...)
+	// Wrap the grid in a fixed-width container for consistent sizing across all city panels
+	return container.New(&fixedWidthLayout{width: metricsGridWidth}, grid)
 }
 
 // buildLayout constructs the horizontal card: a left info block (weather icon
@@ -341,22 +411,19 @@ func (p *CityPanel) buildLayout() fyne.CanvasObject {
 	leftRowObjects = append(leftRowObjects, container.NewCenter(infoCol))
 	leftBlock := container.NewHBox(leftRowObjects...)
 
-	var leftObjects []fyne.CanvasObject
-	if p.displayFields.ShowCity {
-		leftObjects = append(leftObjects, p.cityText)
-	}
-	leftObjects = append(leftObjects, leftBlock)
-	left := container.NewVBox(leftObjects...)
+	// Give the left block a fixed width so the metrics grid always starts at
+	// the same position across all city cards, with a consistent gap after the
+	// icon/time/temp section regardless of content width.
+	const leftBlockWidth = 210
+	left := container.New(&fixedWidthLayout{width: leftBlockWidth}, leftBlock)
 
 	// ── Right metrics grid ───────────────────────────────────────────────────
-	right := container.NewCenter(p.metricGrid())
+	right := p.metricGrid()
 
-	// Top region: left block and right grid side by side.
-	top := container.NewHBox(
-		left,
-		layout.NewSpacer(),
-		right,
-	)
+	// Middle region: left block (icon + time/date/temp/condition) beside the metrics grid.
+	// The grid now starts at the same vertical level as the time/date/temp/condition,
+	// below the city name line.
+	middle := container.NewHBox(left, right)
 
 	// ── Air-quality row (bottom) ─────────────────────────────────────────────
 	p.airRow = container.NewHBox()
@@ -367,10 +434,37 @@ func (p *CityPanel) buildLayout() fyne.CanvasObject {
 	}
 	bottom := container.NewCenter(p.airRow)
 
-	return container.NewVBox(
-		top,
-		bottom,
-	)
+	// Build the final content: city name on top, then middle row, then air row.
+	var contentObjects []fyne.CanvasObject
+	if p.displayFields.ShowCity {
+		contentObjects = append(contentObjects, p.cityText)
+	}
+	contentObjects = append(contentObjects, middle, bottom)
+	content := container.NewVBox(contentObjects...)
+
+	// Wrap content in a rounded, bordered card. The card background extends to
+	// the full panel bounds so there's no gap between stacked cards. This
+	// minimizes visible black from Fyne's GL clear (which can't be transparent).
+	card := newCardBackground()
+	return container.NewStack(card, container.NewPadded(content))
+}
+
+// cardCornerRadius, cardStrokeWidth and the card colors define the rounded,
+// bordered look applied behind each city panel. The values mirror the GTK UI
+// (16px radius) so both UIs look consistent.
+const (
+	cardCornerRadius = 12
+	cardStrokeWidth  = 1
+)
+
+// newCardBackground creates the rounded rectangle drawn behind a city card:
+// a slightly lighter fill than the window background with a subtle border.
+func newCardBackground() *canvas.Rectangle {
+	rect := canvas.NewRectangle(color.NRGBA{R: 44, G: 44, B: 48, A: 235})
+	rect.CornerRadius = cardCornerRadius
+	rect.StrokeColor = color.NRGBA{R: 90, G: 90, B: 96, A: 255}
+	rect.StrokeWidth = cardStrokeWidth
+	return rect
 }
 
 // ApplyDisplayFields updates the panel's visibility configuration and rebuilds the layout.

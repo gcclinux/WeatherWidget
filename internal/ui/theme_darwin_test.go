@@ -9,11 +9,12 @@ import (
 	"fyne.io/fyne/v2/theme"
 )
 
-// TestDarwinThemeBackground_Opaque verifies the darwin theme returns an opaque
-// dark background. Transparency is handled at the NSWindow layer, not the Fyne
-// theme layer, so the GL renderer must clear to a visible dark color.
+// TestDarwinThemeBackground_Transparent verifies the darwin theme returns a
+// fully transparent background. This allows the desktop to show through
+// everywhere except the individual city card backgrounds (which have their own
+// opaque fill). NSWindow is made non-opaque via setupDarwinWindow.
 // **Validates: Requirements 2.1**
-func TestDarwinThemeBackground_Opaque(t *testing.T) {
+func TestDarwinThemeBackground_Transparent(t *testing.T) {
 	wt := NewWidgetTheme(theme.DefaultTheme())
 
 	got := wt.Color(theme.ColorNameBackground, theme.VariantDark)
@@ -31,19 +32,18 @@ func TestDarwinThemeBackground_Opaque(t *testing.T) {
 
 	t.Logf("Darwin theme background: R=%d G=%d B=%d A=%d", nrgba.R, nrgba.G, nrgba.B, nrgba.A)
 
-	if nrgba.A != 255 {
+	if nrgba.A != 0 {
 		t.Errorf(
-			"Darwin theme background should be fully opaque (A=255) so content is visible, got A=%d. "+
-				"Transparency is applied via NSWindow.backgroundColor, not the Fyne theme.",
+			"Darwin theme background should be fully transparent (A=0) so desktop shows through, got A=%d.",
 			nrgba.A,
 		)
 	}
 }
 
-// TestDarwinThemeOverlayBackground_Opaque mirrors TestDarwinThemeBackground_Opaque
+// TestDarwinThemeOverlayBackground_Transparent mirrors TestDarwinThemeBackground_Transparent
 // for ColorNameOverlayBackground.
 // **Validates: Requirements 2.1**
-func TestDarwinThemeOverlayBackground_Opaque(t *testing.T) {
+func TestDarwinThemeOverlayBackground_Transparent(t *testing.T) {
 	wt := NewWidgetTheme(theme.DefaultTheme())
 
 	got := wt.Color(theme.ColorNameOverlayBackground, theme.VariantDark)
@@ -61,9 +61,9 @@ func TestDarwinThemeOverlayBackground_Opaque(t *testing.T) {
 
 	t.Logf("Darwin theme overlay background: R=%d G=%d B=%d A=%d", nrgba.R, nrgba.G, nrgba.B, nrgba.A)
 
-	if nrgba.A != 255 {
+	if nrgba.A != 0 {
 		t.Errorf(
-			"Darwin theme overlay background should be fully opaque (A=255), got A=%d.",
+			"Darwin theme overlay background should be fully transparent (A=0), got A=%d.",
 			nrgba.A,
 		)
 	}

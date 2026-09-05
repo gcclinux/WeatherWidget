@@ -455,6 +455,7 @@ func TestEnGBCompleteness(t *testing.T) {
 		"settings.about.description",
 		"settings.about.websiteLabel",
 		"settings.about.manualLabel",
+		"settings.about.airIndexLabel",
 		"settings.about.previewLabel",
 		"settings.about.appName",
 		"settings.language.title",
