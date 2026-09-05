@@ -242,12 +242,12 @@ func (m *manager) buildWindow() error {
 	// CSS provider — sets transparent window background and panel styles.
 	m.applyCSS()
 
-	// City panels in a horizontal box.
-	hbox, err := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 4)
+	// City cards stacked vertically — one card under another.
+	vbox, err := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 3)
 	if err != nil {
 		return err
 	}
-	hbox.SetName("panelbox")
+	vbox.SetName("panelbox")
 
 	cities := m.cfg.Cities
 	if len(cities) == 0 {
@@ -261,20 +261,27 @@ func (m *manager) buildWindow() error {
 			continue
 		}
 		p.setNoBackground(m.noBackground)
+		p.setTintAlpha(panelAlpha(m.opacity, m.noBackground))
 		p.applyDisplayFields(m.cfg.GetDisplayFields())
 		p.applyPollutionRows(m.cfg.GetPollutionFields())
 		p.iconSize = 96
-		hbox.PackStart(p.root, false, false, 0)
+		vbox.PackStart(p.root, false, false, 0)
 		m.panels = append(m.panels, p)
 	}
 
-	win.Add(hbox)
+	win.Add(vbox)
 
-	// Connect draw signal to paint a transparent background.
+	// Connect draw signal to paint the window background: fully transparent
+	// window, then one rounded semi-transparent rectangle per card. Painting
+	// the card background here (rather than only via CSS) guarantees a single,
+	// uniform tint behind everything in the card — including the weather
+	// icon's transparent PNG pixels — so the icon area matches the rest of the
+	// card instead of revealing the desktop.
 	// gotk3 resolves the instance to its most specific Go type (*gtk.Window),
 	// so the callback's first arg must be *gtk.Window, not *gtk.Widget.
 	win.Connect("draw", func(w *gtk.Window, cr *cairoContext) {
 		paintTransparent(cr)
+		m.paintCards(cr)
 	})
 
 	// --- Window positioning ---
@@ -402,6 +409,39 @@ func (m *manager) buildWindow() error {
 	return nil
 }
 
+// paintCards fills each city card's rounded background directly onto the
+// window's cairo context. This runs after paintTransparent (which clears the
+// window) and before GTK draws the child widgets, so the fill sits behind all
+// card content — including the weather icon's transparent pixels — giving a
+// uniform tint that matches the CSS-styled labels and tiles.
+func (m *manager) paintCards(cr *cairoContext) {
+	alpha := panelAlpha(m.opacity, m.noBackground)
+	if alpha <= 0 {
+		return // no-background / fully transparent mode: nothing to paint
+	}
+	const (
+		radius = 16.0 // matches .city-panel border-radius
+		margin = 2.0  // matches .city-panel margin
+		r      = 20.0 / 255.0
+		g      = 20.0 / 255.0
+		b      = 20.0 / 255.0
+	)
+	for _, p := range m.panels {
+		if p == nil || p.root == nil {
+			continue
+		}
+		alloc := p.root.GetAllocation()
+		x := float64(alloc.GetX()) + margin
+		y := float64(alloc.GetY()) + margin
+		wd := float64(alloc.GetWidth()) - 2*margin
+		ht := float64(alloc.GetHeight()) - 2*margin
+		if wd <= 0 || ht <= 0 {
+			continue
+		}
+		paintRoundedRect(cr, x, y, wd, ht, radius, r, g, b, alpha)
+	}
+}
+
 // applyCSS loads and applies the GTK CSS that controls panel appearance.
 func (m *manager) applyCSS() {
 	css := buildCSS(m.opacity, m.noBackground, m.fontSizeCityTime, m.fontSizeTempIcon, m.fontSizeConditions)
@@ -424,13 +464,16 @@ func (m *manager) applyPosition() {
 }
 
 // panelSize returns the total (width, height) of the current panels.
+// Cards are stacked vertically, so the width is a single card width and the
+// height is the sum of the per-card heights plus inter-card spacing.
 func (m *manager) panelSize() (int, int) {
 	count := len(m.panels)
 	if count == 0 {
 		count = 1
 	}
-	// Each panel is approximately 160px wide, 220px tall.
-	return count*160 + (count-1)*4, 220
+	// Each card is ~380px wide and ~250px tall; cards are separated by 3px.
+	const cardH = 250
+	return cardWidth, count*cardH + (count-1)*3
 }
 
 // handleWeatherUpdate updates each panel with fresh weather data.
@@ -457,6 +500,11 @@ func (m *manager) openSettings() {
 func (m *manager) SetOpacity(pct int) {
 	m.opacity = pct
 	m.applyCSS()
+	// Update each panel's tint alpha so icons re-composite with the new tint.
+	alpha := panelAlpha(pct, m.noBackground)
+	for _, p := range m.panels {
+		p.setTintAlpha(alpha)
+	}
 }
 
 // SetFontSizes updates all three font size values and immediately refreshes the
@@ -473,8 +521,10 @@ func (m *manager) SetFontSizes(cityTime, tempIcon, conditions int) {
 // SetNoBackground toggles background-removal mode and refreshes CSS.
 func (m *manager) SetNoBackground(enable bool) {
 	m.noBackground = enable
+	alpha := panelAlpha(m.opacity, enable)
 	for _, p := range m.panels {
 		p.setNoBackground(enable)
+		p.setTintAlpha(alpha)
 	}
 	m.applyCSS()
 }

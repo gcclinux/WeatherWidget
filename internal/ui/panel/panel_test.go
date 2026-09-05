@@ -43,8 +43,8 @@ func TestNewCityPanel(t *testing.T) {
 	if p.tempText.Text != "--°C" {
 		t.Errorf("tempText placeholder = %q, want %q", p.tempText.Text, "--°C")
 	}
-	if p.cityText.Text != "City, RG" {
-		t.Errorf("cityText placeholder = %q, want %q", p.cityText.Text, "City, RG")
+	if p.cityText.Text != "📍 City, RG" {
+		t.Errorf("cityText placeholder = %q, want %q", p.cityText.Text, "📍 City, RG")
 	}
 	if p.errorIcon.Visible() {
 		t.Error("errorIcon should be hidden initially")
@@ -85,8 +85,8 @@ func TestCityPanel_Update(t *testing.T) {
 	if p.descText.Text != "Partial Sunny" {
 		t.Errorf("descText = %q, want %q", p.descText.Text, "Partial Sunny")
 	}
-	if p.cityText.Text != "Holambra, SP" {
-		t.Errorf("cityText = %q, want %q", p.cityText.Text, "Holambra, SP")
+	if p.cityText.Text != "📍 Holambra, SP" {
+		t.Errorf("cityText = %q, want %q", p.cityText.Text, "📍 Holambra, SP")
 	}
 	if p.errorIcon.Visible() {
 		t.Error("errorIcon should be hidden after successful update")
@@ -238,20 +238,20 @@ func TestCityPanel_DynamicDisplayFields_StartupOrder(t *testing.T) {
 	}
 	p.ApplyDisplayFields(df)
 
-	// Verify that the dynamic objects are present in the container tree
+	// Verify that the dynamic metric tiles are present in the container tree
 	foundGust, foundDew, foundPressure, foundUV := false, false, false, false
 	var checkObjects func(obj fyne.CanvasObject)
 	checkObjects = func(obj fyne.CanvasObject) {
-		if obj == p.windGustText {
+		if obj == p.windGustTile.value {
 			foundGust = true
 		}
-		if obj == p.dewPointText {
+		if obj == p.dewPointTile.value {
 			foundDew = true
 		}
-		if obj == p.pressureText {
+		if obj == p.pressureTile.value {
 			foundPressure = true
 		}
-		if obj == p.uvIndexText {
+		if obj == p.uvTile.value {
 			foundUV = true
 		}
 		if c, ok := obj.(*fyne.Container); ok {
@@ -263,16 +263,16 @@ func TestCityPanel_DynamicDisplayFields_StartupOrder(t *testing.T) {
 	checkObjects(p.Container())
 
 	if !foundGust {
-		t.Error("expected windGustText to be in container hierarchy on startup")
+		t.Error("expected wind gust tile to be in container hierarchy on startup")
 	}
 	if !foundDew {
-		t.Error("expected dewPointText to be in container hierarchy on startup")
+		t.Error("expected dew point tile to be in container hierarchy on startup")
 	}
 	if !foundPressure {
-		t.Error("expected pressureText to be in container hierarchy on startup")
+		t.Error("expected pressure tile to be in container hierarchy on startup")
 	}
 	if !foundUV {
-		t.Error("expected uvIndexText to be in container hierarchy on startup")
+		t.Error("expected UV index tile to be in container hierarchy on startup")
 	}
 
 	// Now simulate weather data arrival
@@ -291,17 +291,17 @@ func TestCityPanel_DynamicDisplayFields_StartupOrder(t *testing.T) {
 	}
 	p.Update(data, config.TemperatureUnitCelsius, config.WindSpeedUnitKmh)
 
-	if p.windGustText.Text == "" {
-		t.Error("windGustText should be populated after Update")
+	if p.windGustTile.value.Text == "" {
+		t.Error("wind gust tile should be populated after Update")
 	}
-	if p.dewPointText.Text == "" {
-		t.Error("dewPointText should be populated after Update")
+	if p.dewPointTile.value.Text == "" {
+		t.Error("dew point tile should be populated after Update")
 	}
-	if p.pressureText.Text == "" {
-		t.Error("pressureText should be populated after Update")
+	if p.pressureTile.value.Text == "" {
+		t.Error("pressure tile should be populated after Update")
 	}
-	if p.uvIndexText.Text == "" {
-		t.Error("uvIndexText should be populated after Update")
+	if p.uvTile.value.Text == "" {
+		t.Error("UV index tile should be populated after Update")
 	}
 }
 

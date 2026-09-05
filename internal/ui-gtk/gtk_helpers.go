@@ -5,6 +5,7 @@ package uitk
 import (
 	"fmt"
 	"log"
+	"math"
 
 	"github.com/gotk3/gotk3/cairo"
 	"github.com/gotk3/gotk3/gdk"
@@ -42,6 +43,48 @@ func paintTransparent(cr *cairo.Context) {
 	cr.Paint()
 }
 
+// panelAlpha maps the opacity percent (and no-background flag) to the alpha
+// used for the card background. Kept in one place so the CSS and the manual
+// card painter (paintCard) agree exactly.
+func panelAlpha(opacity int, noBackground bool) float64 {
+	if noBackground {
+		return 0.0
+	}
+	switch {
+	case opacity >= 100:
+		return 0.85
+	case opacity >= 75:
+		return 0.70
+	case opacity >= 50:
+		return 0.55
+	default: // 25%
+		return 0.40
+	}
+}
+
+// paintRoundedRect fills a rounded rectangle at (x, y, w, h) with the given
+// RGBA using the cairo context, matching the card's border radius. The path is
+// built with an explicit MoveTo + four corner arcs (this gotk3 cairo binding
+// does not expose NewSubPath).
+func paintRoundedRect(cr *cairo.Context, x, y, w, h, radius, r, g, b, a float64) {
+	const degrees = math.Pi / 180.0
+	if radius > w/2 {
+		radius = w / 2
+	}
+	if radius > h/2 {
+		radius = h / 2
+	}
+	cr.NewPath()
+	cr.MoveTo(x+radius, y)
+	cr.Arc(x+w-radius, y+radius, radius, -90*degrees, 0*degrees)   // top-right
+	cr.Arc(x+w-radius, y+h-radius, radius, 0*degrees, 90*degrees)  // bottom-right
+	cr.Arc(x+radius, y+h-radius, radius, 90*degrees, 180*degrees)  // bottom-left
+	cr.Arc(x+radius, y+radius, radius, 180*degrees, 270*degrees)   // top-left
+	cr.ClosePath()
+	cr.SetSourceRGBA(r, g, b, a)
+	cr.Fill()
+}
+
 // buildCSS returns the CSS string for the widget panels based on opacity,
 // no-background settings, and the three user-configurable font sizes:
 //   - fsCityTime:   city name and time labels (px)
@@ -69,24 +112,8 @@ func buildCSS(opacity int, noBackground bool, fsCityTime, fsTempIcon, fsConditio
 		fsTime = 1
 	}
 
-	// Map opacity percent to an alpha value for the panel background.
-	var alpha float64
-	if noBackground {
-		alpha = 0.0
-	} else {
-		switch {
-		case opacity >= 100:
-			alpha = 0.85
-		case opacity >= 75:
-			alpha = 0.70
-		case opacity >= 50:
-			alpha = 0.55
-		default: // 25%
-			alpha = 0.40
-		}
-	}
-
-	panelBg := fmt.Sprintf("rgba(20, 20, 20, %.2f)", alpha)
+	// The card background itself is painted manually in manager.paintCards
+	// (see panelAlpha); the CSS below only styles text, tiles, and borders.
 
 	return fmt.Sprintf(`
 window {
@@ -96,11 +123,20 @@ window {
     background-color: transparent;
 }
 .city-panel {
-    background-color: %s;
-    border-radius: 10px;
-    padding: 10px;
+    /* Background is painted manually in manager.paintCards so it sits behind
+       the weather icon's transparent pixels too; keep the CSS fill clear to
+       avoid double-tinting. */
+    background-color: transparent;
+    border-radius: 16px;
+    padding: 12px 14px;
     margin: 2px;
     color: white;
+}
+/* The weather icon sits directly on the card background — no extra fill, so
+   its transparent PNG pixels show the same card tint as the rest of the card. */
+.icon-bg {
+    background-color: transparent;
+    border-radius: 12px;
 }
 .city-label {
     font-size: %dpx;
@@ -115,7 +151,7 @@ window {
 .desc-label {
     font-size: %dpx;
     font-style: italic;
-    color: #cccccc;
+    color: #dddddd;
 }
 .time-label {
     font-size: %dpx;
@@ -128,14 +164,57 @@ window {
 }
 .info-label {
     font-size: %dpx;
-    color: #cccccc;
+    color: #eeeeee;
+}
+/* Right-hand metrics grid: transparent tiles separated by thin borders that
+   read as a grid, matching the design mockup. */
+.metrics-grid {
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 8px;
+}
+.metric-tile {
+    background-color: transparent;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    padding: 6px 10px;
+}
+.metric-emoji {
+    font-size: %dpx;
+}
+.metric-name {
+    font-size: %dpx;
+    color: #dddddd;
+}
+.metric-value {
+    font-size: %dpx;
+    font-weight: bold;
+    color: white;
+}
+/* Thin divider between the top region and the air-quality row. */
+.card-separator {
+    background-color: rgba(255, 255, 255, 0.15);
+    min-height: 1px;
+    margin: 6px 0;
+}
+/* Air-quality tiles along the bottom of the card. */
+.air-tile {
+    padding: 4px 2px;
+}
+.air-name {
+    font-size: %dpx;
+    color: #bbbbbb;
+}
+.air-label {
+    font-size: %dpx;
+    font-weight: bold;
+    color: #ffffff;
 }
 .error-label {
     font-size: 11px;
     color: #ff8888;
     font-style: italic;
 }
-`, panelBg, fsCityTime, fsTempIcon, fsConditions, fsTime, fsConditions, fsConditions)
+`, fsCityTime, fsTempIcon, fsConditions, fsTime, fsConditions, fsConditions,
+		fsConditions+2, fsConditions, fsConditions+2, fsConditions-1, fsConditions)
 }
 
 // applyCSSToScreen loads the given CSS string into the default screen's

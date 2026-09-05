@@ -2,81 +2,71 @@ package ui
 
 import "weatherwidget/internal/config"
 
-// PanelWidth is the width of a single CityPanel in device-independent pixels.
-const PanelWidth = 160
+// PanelWidth is the width of a single city card in device-independent pixels.
+// The redesigned card is laid out horizontally (info block beside a metrics
+// grid); it is wider than the old vertical column but kept compact.
+const PanelWidth = 380
 
-// PanelHeight is the default height of a single CityPanel in device-independent pixels.
-const PanelHeight = 185
+// PanelHeight is the default height of a single city card in device-independent pixels.
+const PanelHeight = 260
 
 // Element height contributions in dip (approximate).
+//
+// The card's top region height is driven by the taller of the left info block
+// and the right metrics grid. The left block dominates, so the height estimate
+// sums the visible left-block elements plus the air-quality row.
 const (
-	heightCity      = 24 // city name text + spacing
-	heightIcon      = 70 // icon (64) + spacing
-	heightTemp      = 48 // large temperature text + spacing
-	heightDesc      = 18 // description text + spacing
-	heightHumidity  = 18 // humidity row + spacing
-	heightWindRow   = 18 // wind speed + direction row + spacing
-	heightTime      = 26 // time text
-	heightDate      = 18 // date text
-	heightSeparator = 8  // separator line + spacing
-	heightPadding   = 16 // container padding (top + bottom)
-	heightSpacers   = 10 // spacers between sections
-	heightInfoRow   = 18 // generic info row height (wind gust, dew point, pressure, UV, wind dir)
+	heightCity    = 26 // location line + spacing
+	heightIcon    = 100 // weather icon (96) + spacing
+	heightTemp    = 52 // large temperature text + spacing
+	heightDesc    = 20 // condition text + spacing
+	heightTime    = 30 // time text + spacing
+	heightDate    = 20 // date text + spacing
+	heightAirRow  = 54 // air-quality icon + value row
+	heightPadding = 24 // container padding (top + bottom)
 )
 
-// CalculateLayout computes the widget dimensions for the given number of city panels.
-// It returns the total width (cityCount x 160 dip), height (185 dip), and number of panel slots.
+// CalculateLayout computes the widget dimensions for the given number of city cards.
+// Cards are stacked vertically, so the total width is a single card width and the
+// total height is cityCount × card height. Returns width, height, and slot count.
 func CalculateLayout(cityCount int) (width, height, slots int) {
-	return cityCount * PanelWidth, PanelHeight, cityCount
+	if cityCount < 1 {
+		cityCount = 1
+	}
+	return PanelWidth, cityCount * PanelHeight, cityCount
 }
 
 // CalculateLayoutWithFields computes the widget dimensions accounting for
-// which display fields are visible. Returns total width, dynamic height, and slot count.
+// which display fields are visible. Cards are stacked vertically, so the total
+// width is a single card width and the total height is cityCount × per-card height.
 func CalculateLayoutWithFields(cityCount int, df *config.DisplayFields) (width, height, slots int) {
+	if cityCount < 1 {
+		cityCount = 1
+	}
 	if df == nil {
 		df = config.DefaultDisplayFields()
 	}
 
-	h := heightPadding + heightSpacers
+	// Per-card height is dominated by the left info block plus the air row.
+	perCard := heightPadding + heightAirRow
 	if df.ShowCity {
-		h += heightCity
+		perCard += heightCity
 	}
 	if df.ShowIcon {
-		h += heightIcon
-	}
-	if df.ShowTemp {
-		h += heightTemp
-	}
-	if df.ShowDesc {
-		h += heightDesc
-	}
-	if df.ShowHumidity {
-		h += heightHumidity
-	}
-	if df.ShowWind {
-		h += heightWindRow
-	}
-	if df.ShowWindGust {
-		h += heightInfoRow
-	}
-	if df.ShowDewPoint {
-		h += heightInfoRow
-	}
-	if df.ShowPressure {
-		h += heightInfoRow
-	}
-	if df.ShowUVIndex {
-		h += heightInfoRow
-	}
-	if df.ShowTime || df.ShowDate {
-		h += heightSeparator
+		perCard += heightIcon
 	}
 	if df.ShowTime {
-		h += heightTime
+		perCard += heightTime
 	}
 	if df.ShowDate {
-		h += heightDate
+		perCard += heightDate
+	}
+	if df.ShowTemp {
+		perCard += heightTemp
+	}
+	if df.ShowDesc {
+		perCard += heightDesc
 	}
 
-	return cityCount * PanelWidth, h, cityCount
+	return PanelWidth, cityCount * perCard, cityCount
 }

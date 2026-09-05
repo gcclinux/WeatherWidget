@@ -16,40 +16,64 @@ import (
 	"weatherwidget/internal/weather"
 )
 
-// pollutionRowWidgets holds the reusable widgets for one pollution metric row:
-// a horizontal box containing the metric icon and its value label.
+// pollutionRowWidgets holds the reusable widgets for one pollution metric
+// tile: a vertical box containing the metric icon, its full name, and its
+// value label.
 type pollutionRowWidgets struct {
 	row   *gtk.Box
 	icon  *gtk.Image
+	name  *gtk.Label
 	value *gtk.Label
 }
 
-// cityPanel holds all GTK widgets for a single city's weather display.
-type cityPanel struct {
-	root        *gtk.Box // top-level box, added to the main window's hbox
-	nameBox     *gtk.Box // row: icon + city name
-	icon        *gtk.Image
-	cityLbl     *gtk.Label
-	timeLbl     *gtk.Label
-	dateLbl     *gtk.Label
-	tempLbl     *gtk.Label
-	descLbl     *gtk.Label
-	humidLbl    *gtk.Label // humidity row
-	windLbl     *gtk.Label // wind speed row
-	windRowBox  *gtk.Box
-	windGustLbl *gtk.Label
-	dewPointLbl *gtk.Label
-	pressureLbl *gtk.Label
-	uvIndexLbl  *gtk.Label
-	windDirLbl  *gtk.Label
-	errorLbl    *gtk.Label
+// metricTile is one weather-metric tile in the right-hand grid: a bordered,
+// transparent cell showing an emoji, the metric name, and its value. The
+// value label is updated with fresh data; the emoji and name are set once.
+type metricTile struct {
+	box   *gtk.Box   // the tile container (bordered cell)
+	name  *gtk.Label // metric name, e.g. "Humidity"
+	value *gtk.Label // formatted value, e.g. "84%"
+}
 
-	pollutionBox  *gtk.Box // vertical container for pollution rows
+// cityPanel holds all GTK widgets for a single city's weather display.
+//
+// Layout is a horizontal "card": a left info block (location, weather icon
+// beside time/date/temperature/condition) sits above a right metrics grid
+// (humidity, wind, wind gust, dew point, pressure, UV index). A row of
+// air-quality tiles runs along the bottom of the card.
+type cityPanel struct {
+	root *gtk.Box // top-level card box (vertical)
+
+	topBox      *gtk.Box  // horizontal: weather icon + time/date/temp/desc
+	nameBox     *gtk.Box  // left info block (vertical): location + topBox
+	metricsGrid *gtk.Grid // right metrics grid
+	separator   *gtk.Box  // thin divider between top region and air row
+
+	icon    *gtk.Image
+	iconBg  *gtk.EventBox // tinted background wrapper behind the weather icon
+	cityLbl *gtk.Label
+	timeLbl *gtk.Label
+	dateLbl *gtk.Label
+	tempLbl *gtk.Label
+	descLbl *gtk.Label
+
+	// Weather metric tiles (right-hand grid). Each tile shows an emoji, the
+	// metric name, and its value. The value labels are updated in update().
+	humidTile, windTile, windGustTile   *metricTile
+	dewPointTile, pressureTile, uvTile  *metricTile
+
+	errorLbl *gtk.Label
+
+	pollutionBox  *gtk.Box // horizontal container for pollution tiles
 	pollutionRows map[weather.PollutionMetric]*pollutionRowWidgets
 
 	// pollutionFields is the current metric selection driving row visibility.
 	// nil falls back to config.DefaultPollutionFields() in PlanPollutionRows.
 	pollutionFields *config.PollutionFields
+
+	// displayFields is the current display-field selection driving which
+	// metrics appear in the right-hand grid and which info elements are shown.
+	displayFields *config.DisplayFields
 
 	city     string
 	region   string
@@ -61,6 +85,12 @@ type cityPanel struct {
 	lastIconCode string // most recently loaded icon code, for resize without re-fetch
 	iconSize     int    // current icon pixel size; 0 means default (96px)
 
+	// tintAlpha is the card background alpha (0.0–1.0) used for compositing
+	// icons. When icons are loaded, their transparent pixels are filled with
+	// this tint so they match the card background instead of revealing the
+	// desktop. Updated via setTintAlpha().
+	tintAlpha float64
+
 	clockTicker *time.Ticker
 	clockStop   chan struct{}
 }
@@ -69,215 +99,230 @@ type cityPanel struct {
 func newCityPanel(city, region, timezone string, lm *i18n.LocaleManager) (*cityPanel, error) {
 	p := &cityPanel{city: city, region: region, timezone: timezone, lm: lm}
 
-	// Root box — vertical layout with CSS class.
-	root, err := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 4)
+	// Root box — the card. Vertical: top info region, separator, air row.
+	root, err := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 8)
 	if err != nil {
 		return nil, err
 	}
 	root.SetName("panel-" + city)
 	sc, _ := root.GetStyleContext()
 	sc.AddClass("city-panel")
-	root.SetSizeRequest(158, -1)
+	root.SetSizeRequest(cardWidth, -1)
 	p.root = root
 
-	// ── City row (name then icon below) ─────────────────────────────────────
-	nameBox, err := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 4)
+	// ── Location (top of the card) ───────────────────────────────────────────
+	cityLbl, err := gtk.LabelNew("📍 " + city + ", " + region)
 	if err != nil {
 		return nil, err
 	}
-	p.nameBox = nameBox
-
-	cityLbl, err := gtk.LabelNew(city + ", " + region)
-	if err != nil {
-		return nil, err
-	}
-	cityLbl.SetHAlign(gtk.ALIGN_CENTER)
+	cityLbl.SetHAlign(gtk.ALIGN_START)
 	cityLbl.SetEllipsize(3) // PANGO_ELLIPSIZE_END
 	sc, _ = cityLbl.GetStyleContext()
 	sc.AddClass("city-label")
 	p.cityLbl = cityLbl
+	root.PackStart(cityLbl, false, false, 0)
+
+	// ── Top region: [ left info block ] [ metrics grid ] ─────────────────────
+	topRegion, err := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 12)
+	if err != nil {
+		return nil, err
+	}
+	root.PackStart(topRegion, false, false, 0)
+
+	// Left info block: weather icon on the left, with time/date/temp/desc
+	// stacked in a column to its right.
+	nameBox, err := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 12)
+	if err != nil {
+		return nil, err
+	}
+	p.nameBox = nameBox
+	topRegion.PackStart(nameBox, false, false, 0)
 
 	iconWidget, _ := gtk.ImageNew()
 	iconWidget.SetSizeRequest(96, 96)
 	iconWidget.SetHAlign(gtk.ALIGN_CENTER)
 	iconWidget.SetVAlign(gtk.ALIGN_CENTER)
 	p.icon = iconWidget
+	// The weather icon PNGs have transparent pixels. On an app-paintable,
+	// fully-transparent window those pixels would reveal the desktop instead
+	// of the card tint. Wrapping the image in an EventBox that carries the
+	// same tinted background as the card makes the icon composite over the
+	// panel colour, matching the rest of the card.
+	iconBg, err := gtk.EventBoxNew()
+	if err != nil {
+		return nil, err
+	}
+	iconBg.SetHAlign(gtk.ALIGN_CENTER)
+	iconBg.SetVAlign(gtk.ALIGN_CENTER)
+	// Windowless so the card background composites through the icon's
+	// transparent PNG pixels, matching the rest of the card.
+	iconBg.SetVisibleWindow(false)
+	sc, _ = iconBg.GetStyleContext()
+	sc.AddClass("icon-bg")
+	iconBg.Add(iconWidget)
+	p.iconBg = iconBg
+	nameBox.PackStart(iconBg, false, false, 0)
 
-	nameBox.PackStart(cityLbl, false, false, 0)
-	nameBox.PackStart(iconWidget, false, false, 0)
-	root.PackStart(nameBox, false, false, 0)
+	// Column to the right of the icon: time, date, temperature, condition.
+	infoCol, err := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 2)
+	if err != nil {
+		return nil, err
+	}
+	infoCol.SetVAlign(gtk.ALIGN_CENTER)
+	nameBox.PackStart(infoCol, false, false, 0)
 
-	// ── Time ────────────────────────────────────────────────────────────────
 	timeLbl, err := gtk.LabelNew("--:--:--")
 	if err != nil {
 		return nil, err
 	}
-	timeLbl.SetHAlign(gtk.ALIGN_CENTER)
+	timeLbl.SetHAlign(gtk.ALIGN_START)
 	sc, _ = timeLbl.GetStyleContext()
 	sc.AddClass("time-label")
 	p.timeLbl = timeLbl
-	root.PackStart(timeLbl, false, false, 0)
+	infoCol.PackStart(timeLbl, false, false, 0)
 
-	// ── Date ────────────────────────────────────────────────────────────────
 	dateLbl, err := gtk.LabelNew("")
 	if err != nil {
 		return nil, err
 	}
-	dateLbl.SetHAlign(gtk.ALIGN_CENTER)
+	dateLbl.SetHAlign(gtk.ALIGN_START)
 	sc, _ = dateLbl.GetStyleContext()
 	sc.AddClass("date-label")
 	p.dateLbl = dateLbl
-	root.PackStart(dateLbl, false, false, 0)
+	infoCol.PackStart(dateLbl, false, false, 0)
 
-	// ── Temperature ─────────────────────────────────────────────────────────
 	tempLbl, err := gtk.LabelNew("--°C")
 	if err != nil {
 		return nil, err
 	}
-	tempLbl.SetHAlign(gtk.ALIGN_CENTER)
+	tempLbl.SetHAlign(gtk.ALIGN_START)
 	sc, _ = tempLbl.GetStyleContext()
 	sc.AddClass("temp-label")
 	p.tempLbl = tempLbl
-	root.PackStart(tempLbl, false, false, 0)
+	infoCol.PackStart(tempLbl, false, false, 0)
 
-	// ── Description ─────────────────────────────────────────────────────────
 	descLbl, err := gtk.LabelNew("")
 	if err != nil {
 		return nil, err
 	}
-	descLbl.SetHAlign(gtk.ALIGN_CENTER)
+	descLbl.SetHAlign(gtk.ALIGN_START)
 	descLbl.SetLineWrap(true)
 	sc, _ = descLbl.GetStyleContext()
 	sc.AddClass("desc-label")
 	p.descLbl = descLbl
-	root.PackStart(descLbl, false, false, 0)
+	infoCol.PackStart(descLbl, false, false, 0)
 
-	// ── Humidity row ─────────────────────────────────────────────────────────
-	humidLbl, err := gtk.LabelNew("")
+	// ── Right metrics grid (3 columns × 2 rows of bordered tiles) ────────────
+	metricsGrid, err := gtk.GridNew()
 	if err != nil {
 		return nil, err
 	}
-	humidLbl.SetHAlign(gtk.ALIGN_CENTER)
-	sc, _ = humidLbl.GetStyleContext()
-	sc.AddClass("info-label")
-	p.humidLbl = humidLbl
-	root.PackStart(humidLbl, false, false, 0)
+	metricsGrid.SetColumnSpacing(0)
+	metricsGrid.SetRowSpacing(0)
+	metricsGrid.SetVAlign(gtk.ALIGN_CENTER)
+	metricsGrid.SetHAlign(gtk.ALIGN_END)
+	metricsGrid.SetRowHomogeneous(true)
+	metricsGrid.SetColumnHomogeneous(true)
+	sc, _ = metricsGrid.GetStyleContext()
+	sc.AddClass("metrics-grid")
+	p.metricsGrid = metricsGrid
+	topRegion.PackEnd(metricsGrid, false, false, 0)
 
-	// ── Wind / wind-direction row ─────────────────────────────────────────────
-	windRowBox, err := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 4)
+	// Build the six metric tiles (icon/emoji + name + value).
+	p.humidTile, err = p.newMetricTile("💧", weather.HumidityDisplay(0, p.lm).Name)
 	if err != nil {
 		return nil, err
 	}
-	windRowBox.SetHAlign(gtk.ALIGN_CENTER)
-	p.windRowBox = windRowBox
-
-	windLbl, err := gtk.LabelNew("")
+	p.windTile, err = p.newMetricTile("💨", weather.WindDisplay(0, 0, config.WindSpeedUnitKmh, p.lm).Name)
 	if err != nil {
 		return nil, err
 	}
-	windLbl.SetHAlign(gtk.ALIGN_CENTER)
-	sc, _ = windLbl.GetStyleContext()
-	sc.AddClass("info-label")
-	p.windLbl = windLbl
-	windRowBox.PackStart(windLbl, false, false, 0)
-
-	// ── Wind direction ───────────────────────────────────────────────────────
-	windDirLbl, err := gtk.LabelNew("")
+	p.windGustTile, err = p.newMetricTile("🌬", weather.WindGustDisplay(0, config.WindSpeedUnitKmh, p.lm).Name)
 	if err != nil {
 		return nil, err
 	}
-	windDirLbl.SetHAlign(gtk.ALIGN_CENTER)
-	sc, _ = windDirLbl.GetStyleContext()
-	sc.AddClass("info-label")
-	p.windDirLbl = windDirLbl
-	windRowBox.PackStart(windDirLbl, false, false, 0)
-
-	root.PackStart(windRowBox, false, false, 0)
-
-	// ── Wind gust ────────────────────────────────────────────────────────────
-	windGustLbl, err := gtk.LabelNew("")
+	p.dewPointTile, err = p.newMetricTile("💧", weather.DewPointDisplay(1, p.lm).Name)
 	if err != nil {
 		return nil, err
 	}
-	windGustLbl.SetHAlign(gtk.ALIGN_CENTER)
-	sc, _ = windGustLbl.GetStyleContext()
-	sc.AddClass("info-label")
-	p.windGustLbl = windGustLbl
-	root.PackStart(windGustLbl, false, false, 0)
-
-	// ── Dew point ────────────────────────────────────────────────────────────
-	dewPointLbl, err := gtk.LabelNew("")
+	p.pressureTile, err = p.newMetricTile("🌡", weather.PressureDisplay(0, p.lm).Name)
 	if err != nil {
 		return nil, err
 	}
-	dewPointLbl.SetHAlign(gtk.ALIGN_CENTER)
-	sc, _ = dewPointLbl.GetStyleContext()
-	sc.AddClass("info-label")
-	p.dewPointLbl = dewPointLbl
-	root.PackStart(dewPointLbl, false, false, 0)
-
-	// ── Pressure ─────────────────────────────────────────────────────────────
-	pressureLbl, err := gtk.LabelNew("")
+	p.uvTile, err = p.newMetricTile("☀", weather.UVIndexDisplay(0, p.lm).Name)
 	if err != nil {
 		return nil, err
 	}
-	pressureLbl.SetHAlign(gtk.ALIGN_CENTER)
-	sc, _ = pressureLbl.GetStyleContext()
-	sc.AddClass("info-label")
-	p.pressureLbl = pressureLbl
-	root.PackStart(pressureLbl, false, false, 0)
 
-	// ── UV index ─────────────────────────────────────────────────────────────
-	uvIndexLbl, err := gtk.LabelNew("")
+	// ── Separator between the top region and the air-quality row ─────────────
+	separator, err := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 0)
 	if err != nil {
 		return nil, err
 	}
-	uvIndexLbl.SetHAlign(gtk.ALIGN_CENTER)
-	sc, _ = uvIndexLbl.GetStyleContext()
-	sc.AddClass("info-label")
-	p.uvIndexLbl = uvIndexLbl
-	root.PackStart(uvIndexLbl, false, false, 0)
+	separator.SetSizeRequest(-1, 1)
+	sc, _ = separator.GetStyleContext()
+	sc.AddClass("card-separator")
+	p.separator = separator
+	root.PackStart(separator, false, false, 0)
 
-	// ── Pollution rows ───────────────────────────────────────────────────────
-	// A vertical container for the per-metric icon+value rows, packed after the
-	// UV-index row and before the error label. The nine reusable rows are
-	// created once here (one per weather.PollutionMetric) and reused across
-	// updates; their visibility is controlled later by applyPollutionRows.
-	pollutionBox, err := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 2)
+	// ── Air-quality row ──────────────────────────────────────────────────────
+	// A horizontal container of per-metric tiles (icon, name, value). The nine
+	// reusable tiles are created once here (one per weather.PollutionMetric)
+	// and reused across updates; their visibility is controlled later by
+	// applyPollutionRows.
+	pollutionBox, err := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 10)
 	if err != nil {
 		return nil, err
 	}
+	pollutionBox.SetHAlign(gtk.ALIGN_CENTER)
 	p.pollutionBox = pollutionBox
 	root.PackStart(pollutionBox, false, false, 0)
 
 	p.pollutionRows = make(map[weather.PollutionMetric]*pollutionRowWidgets, len(weather.PollutionMetricOrder))
 	for _, metric := range weather.PollutionMetricOrder {
-		rowBox, err := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 6)
+		tile, err := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 1)
 		if err != nil {
 			return nil, err
 		}
-		rowBox.SetHAlign(gtk.ALIGN_CENTER)
+		tile.SetHAlign(gtk.ALIGN_CENTER)
+		sc, _ = tile.GetStyleContext()
+		sc.AddClass("air-tile")
 
-		rowIcon, err := gtk.ImageNew()
+		tileIcon, err := gtk.ImageNew()
 		if err != nil {
 			return nil, err
 		}
-		rowBox.PackStart(rowIcon, false, false, 0)
+		tileIcon.SetHAlign(gtk.ALIGN_CENTER)
+		tile.PackStart(tileIcon, false, false, 0)
 
-		rowValue, err := gtk.LabelNew("")
+		tileName, err := gtk.LabelNew(weather.PollutionMetricName(metric, p.lm))
 		if err != nil {
 			return nil, err
 		}
-		rowValue.SetHAlign(gtk.ALIGN_CENTER)
-		sc, _ = rowValue.GetStyleContext()
-		sc.AddClass("info-label")
-		rowBox.PackStart(rowValue, false, false, 0)
+		tileName.SetHAlign(gtk.ALIGN_CENTER)
+		tileName.SetJustify(gtk.JUSTIFY_CENTER)
+		tileName.SetLineWrap(true)
+		tileName.SetLineWrapMode(2) // PANGO_WRAP_WORD_CHAR
+		sc, _ = tileName.GetStyleContext()
+		sc.AddClass("air-name")
+		tile.PackStart(tileName, false, false, 0)
 
-		pollutionBox.PackStart(rowBox, false, false, 0)
+		tileValue, err := gtk.LabelNew("")
+		if err != nil {
+			return nil, err
+		}
+		tileValue.SetHAlign(gtk.ALIGN_CENTER)
+		tileValue.SetJustify(gtk.JUSTIFY_CENTER)
+		sc, _ = tileValue.GetStyleContext()
+		sc.AddClass("air-label")
+		tile.PackStart(tileValue, false, false, 0)
+
+		pollutionBox.PackStart(tile, false, false, 0)
 		p.pollutionRows[metric] = &pollutionRowWidgets{
-			row:   rowBox,
-			icon:  rowIcon,
-			value: rowValue,
+			row:   tile,
+			icon:  tileIcon,
+			name:  tileName,
+			value: tileValue,
 		}
 	}
 
@@ -293,10 +338,115 @@ func newCityPanel(city, region, timezone string, lm *i18n.LocaleManager) (*cityP
 	p.errorLbl = errorLbl
 	root.PackStart(errorLbl, false, false, 0)
 
+	// Populate the metrics grid with the default field selection.
+	p.layoutMetrics()
+
 	// Start clock ticker.
 	p.startClock()
 
 	return p, nil
+}
+
+// cardWidth is the fixed width of a city card in pixels. The card is laid out
+// horizontally (info block beside a metrics grid), so it is wider than the old
+// vertical column, but kept as compact as the content allows.
+const cardWidth = 380
+
+// newMetricTile builds one bordered, transparent metric cell containing the
+// given emoji glyph, the metric name, and an (initially empty) value label.
+// The emoji and name sit on the top row; the value is shown in bold below.
+func (p *cityPanel) newMetricTile(emoji, name string) (*metricTile, error) {
+	box, err := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 2)
+	if err != nil {
+		return nil, err
+	}
+	box.SetHExpand(true)
+	sc, _ := box.GetStyleContext()
+	sc.AddClass("metric-tile")
+
+	// Header row: emoji + name.
+	header, err := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 6)
+	if err != nil {
+		return nil, err
+	}
+	header.SetHAlign(gtk.ALIGN_START)
+	box.PackStart(header, false, false, 0)
+
+	emojiLbl, err := gtk.LabelNew(emoji)
+	if err != nil {
+		return nil, err
+	}
+	sc, _ = emojiLbl.GetStyleContext()
+	sc.AddClass("metric-emoji")
+	header.PackStart(emojiLbl, false, false, 0)
+
+	nameLbl, err := gtk.LabelNew(name)
+	if err != nil {
+		return nil, err
+	}
+	nameLbl.SetHAlign(gtk.ALIGN_START)
+	sc, _ = nameLbl.GetStyleContext()
+	sc.AddClass("metric-name")
+	header.PackStart(nameLbl, false, false, 0)
+
+	valueLbl, err := gtk.LabelNew("")
+	if err != nil {
+		return nil, err
+	}
+	valueLbl.SetHAlign(gtk.ALIGN_START)
+	sc, _ = valueLbl.GetStyleContext()
+	sc.AddClass("metric-value")
+	box.PackStart(valueLbl, false, false, 0)
+
+	return &metricTile{box: box, name: nameLbl, value: valueLbl}, nil
+}
+
+// metricGridEntry pairs a metric tile with the display-field flag controlling
+// its visibility, for laying out the 3×2 metrics grid.
+type metricGridEntry struct {
+	tile *metricTile
+	show bool
+}
+
+// layoutMetrics rebuilds the right-hand metrics grid from the current
+// display-field selection. Visible tiles are placed left-to-right, top-to-
+// bottom in a three-column grid (so up to six tiles form 3×2). Tiles are
+// reused (never destroyed) so their values persist across re-layouts.
+func (p *cityPanel) layoutMetrics() {
+	df := p.displayFields
+	if df == nil {
+		df = config.DefaultDisplayFields()
+	}
+
+	entries := []metricGridEntry{
+		{p.humidTile, df.ShowHumidity},
+		{p.windTile, df.ShowWind},
+		{p.windGustTile, df.ShowWindGust},
+		{p.dewPointTile, df.ShowDewPoint},
+		{p.pressureTile, df.ShowPressure},
+		{p.uvTile, df.ShowUVIndex},
+	}
+
+	// Detach any currently-attached tiles before re-adding the visible ones.
+	for _, e := range entries {
+		if parent, _ := e.tile.box.GetParent(); parent != nil {
+			p.metricsGrid.Remove(e.tile.box)
+		}
+	}
+
+	const cols = 3
+	idx := 0
+	for _, e := range entries {
+		if !e.show {
+			continue
+		}
+		col := idx % cols
+		row := idx / cols
+		p.metricsGrid.Attach(e.tile.box, col, row, 1, 1)
+		e.tile.box.Show()
+		idx++
+	}
+	p.metricsGrid.ShowAll()
 }
 
 // update refreshes all displayed fields with new weather data.
@@ -309,16 +459,17 @@ func (p *cityPanel) update(d *weather.WeatherData, tempUnit config.TemperatureUn
 
 	p.errorLbl.Hide()
 
-	p.cityLbl.SetText(d.CityName + ", " + d.Region)
+	p.cityLbl.SetText("📍 " + d.CityName + ", " + d.Region)
 	p.tempLbl.SetText(weather.FormatTemperature(d.Temperature, tempUnit))
 	p.descLbl.SetText(weather.FormatDescription(d.Description, p.lm))
-	p.humidLbl.SetText(weather.FormatHumidity(d.Humidity, p.lm))
-	p.windLbl.SetText(weather.FormatWind(d.WindSpeed, windUnit))
-	p.windGustLbl.SetText(weather.FormatWindGust(d.WindGust, windUnit, p.lm))
-	p.dewPointLbl.SetText(weather.FormatDewPoint(d.DewPoint, p.lm))
-	p.pressureLbl.SetText(weather.FormatPressure(d.Pressure))
-	p.uvIndexLbl.SetText(weather.FormatUVIndex(d.UVIndex))
-	p.windDirLbl.SetText(weather.FormatWindDir(d.WindDirection))
+
+	// Weather metric tiles — set the value labels (names are fixed).
+	p.humidTile.value.SetText(weather.HumidityDisplay(d.Humidity, p.lm).Value)
+	p.windTile.value.SetText(weather.WindDisplay(d.WindSpeed, d.WindDirection, windUnit, p.lm).Value)
+	p.windGustTile.value.SetText(weather.WindGustDisplay(d.WindGust, windUnit, p.lm).Value)
+	p.dewPointTile.value.SetText(weather.DewPointDisplay(d.DewPoint, p.lm).Value)
+	p.pressureTile.value.SetText(weather.PressureDisplay(d.Pressure, p.lm).Value)
+	p.uvTile.value.SetText(weather.UVIndexDisplay(d.UVIndex, p.lm).Value)
 
 	// Load weather icon at the current icon size.
 	theme := config.IconThemeNew
@@ -382,11 +533,30 @@ func (p *cityPanel) showError(isStale bool) {
 // adjustments if needed in the future.)
 func (p *cityPanel) setNoBackground(_ bool) {}
 
+// setTintAlpha updates the panel's tint alpha value used for compositing icons.
+// When the app opacity changes, the tint behind icons must change to match.
+func (p *cityPanel) setTintAlpha(alpha float64) {
+	p.tintAlpha = alpha
+	// Reload icons so they composite with the new tint.
+	if p.lastIconCode != "" {
+		p.loadIcon(p.lastIconCode, p.iconSize)
+	}
+	// Reload pollution icons for all visible rows.
+	if p.lastData != nil {
+		p.applyPollutionRows(p.pollutionFields)
+	}
+}
+
 // applyDisplayFields shows or hides individual elements based on the config.
+// Left-block elements (location, icon, time, date, temperature, condition) are
+// toggled directly. The right-hand metrics grid is rebuilt via layoutMetrics,
+// which attaches only the visible metric tiles.
 func (p *cityPanel) applyDisplayFields(df *config.DisplayFields) {
 	if df == nil {
 		df = config.DefaultDisplayFields()
 	}
+	p.displayFields = df
+
 	setVisible := func(w gtk.IWidget, show bool) {
 		if show {
 			w.ToWidget().Show()
@@ -394,21 +564,18 @@ func (p *cityPanel) applyDisplayFields(df *config.DisplayFields) {
 			w.ToWidget().Hide()
 		}
 	}
-	setVisible(p.nameBox, df.ShowCity || df.ShowIcon)
+	// Location.
 	setVisible(p.cityLbl, df.ShowCity)
-	setVisible(p.icon, df.ShowIcon)
-	setVisible(p.tempLbl, df.ShowTemp)
-	setVisible(p.descLbl, df.ShowDesc)
-	setVisible(p.humidLbl, df.ShowHumidity)
-	setVisible(p.windLbl, df.ShowWind)
-	setVisible(p.windDirLbl, df.ShowWind)
-	setVisible(p.windRowBox, df.ShowWind)
-	setVisible(p.windGustLbl, df.ShowWindGust)
-	setVisible(p.dewPointLbl, df.ShowDewPoint)
-	setVisible(p.pressureLbl, df.ShowPressure)
-	setVisible(p.uvIndexLbl, df.ShowUVIndex)
+	// Left info block (icon + time/date/temp/desc).
+	setVisible(p.nameBox, df.ShowIcon || df.ShowTemp || df.ShowDesc || df.ShowTime || df.ShowDate)
+	setVisible(p.iconBg, df.ShowIcon)
 	setVisible(p.timeLbl, df.ShowTime)
 	setVisible(p.dateLbl, df.ShowDate)
+	setVisible(p.tempLbl, df.ShowTemp)
+	setVisible(p.descLbl, df.ShowDesc)
+
+	// Right metrics grid: attach only the visible tiles.
+	p.layoutMetrics()
 }
 
 // loadIcon tries to load the weather icon from embedded assets at the given
@@ -509,17 +676,65 @@ func (p *cityPanel) loadIcon(iconCode string, size int) {
 	}
 	scaled, err := pb.ScaleSimple(targetW, targetH, gdk.INTERP_BILINEAR)
 	if err != nil || scaled == nil {
-		p.icon.SetFromPixbuf(pb)
-	} else {
-		p.icon.SetFromPixbuf(scaled)
+		scaled = pb
 	}
+
+	// Composite over the card tint so transparent pixels show the card
+	// background instead of punching through to the desktop.
+	if p.tintAlpha > 0 {
+		scaled = compositeOverTint(scaled, p.tintAlpha)
+	}
+
+	p.icon.SetFromPixbuf(scaled)
 	// Always reserve a fixed square area so all panels align vertically.
 	p.icon.SetSizeRequest(size, size)
 	p.icon.SetVAlign(gtk.ALIGN_CENTER)
 }
 
 // pollutionIconSize is the pixel size for pollution metric icons rendered next to text.
-const pollutionIconSize = 24
+const pollutionIconSize = 48
+
+// compositeOverTint creates a new pixbuf that composites src over a solid
+// fill of the card's background tint (rgba 20,20,20, alpha). This flattens
+// the transparent PNG pixels so they show the card tint instead of punching
+// through to the desktop. alpha is in the 0.0–1.0 range and controls how
+// transparent the background fill is, matching the card's opacity.
+func compositeOverTint(src *gdk.Pixbuf, alpha float64) *gdk.Pixbuf {
+	if src == nil {
+		return nil
+	}
+	w := src.GetWidth()
+	h := src.GetHeight()
+	if w <= 0 || h <= 0 {
+		return src
+	}
+
+	// Create a new RGBA pixbuf filled with the card tint.
+	dst, err := gdk.PixbufNew(gdk.COLORSPACE_RGB, true, 8, w, h)
+	if err != nil || dst == nil {
+		return src
+	}
+
+	// Fill with the card tint color rgba(20,20,20, alpha). The alpha matches
+	// the card's transparency so the icon background blends with the card.
+	r := uint32(20)
+	g := uint32(20)
+	b := uint32(20)
+	a := uint32(alpha * 255)
+	if a > 255 {
+		a = 255
+	}
+	fillColor := (r << 24) | (g << 16) | (b << 8) | a
+	dst.Fill(fillColor)
+
+	// Composite the source icon over the filled background. The gotk3
+	// Composite signature:
+	//   Composite(dest, destX, destY, destW, destH, offsetX, offsetY, scaleX, scaleY, interp, alpha)
+	// We composite at 1:1 scale, full opacity.
+	src.Composite(dst, 0, 0, w, h, 0, 0, 1.0, 1.0, gdk.INTERP_BILINEAR, 255)
+
+	return dst
+}
 
 // loadAirIcon loads an air-quality icon file (e.g. "co.png") from the embedded
 // AirIcons filesystem, scales it to `size` px preserving aspect ratio, and sets
@@ -574,11 +789,19 @@ func (p *cityPanel) loadAirIcon(img *gtk.Image, file string, size int) {
 	}
 	scaled, err := pb.ScaleSimple(targetW, targetH, gdk.INTERP_BILINEAR)
 	if err != nil || scaled == nil {
-		img.SetFromPixbuf(pb)
-	} else {
-		img.SetFromPixbuf(scaled)
+		scaled = pb
+		targetW = origW
+		targetH = origH
 	}
-	img.SetSizeRequest(size, size)
+
+	// Composite over the card tint so transparent pixels show the card
+	// background instead of punching through to the desktop.
+	if p.tintAlpha > 0 {
+		scaled = compositeOverTint(scaled, p.tintAlpha)
+	}
+
+	img.SetFromPixbuf(scaled)
+	img.SetSizeRequest(targetW, targetH)
 }
 
 // applyIconSize rescales the currently displayed icon to a new pixel size.

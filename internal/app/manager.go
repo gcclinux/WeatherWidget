@@ -106,6 +106,7 @@ func (a *AppManager) Run() error {
 	// 7. Show widget and apply Win32 styles.
 	a.ui.ShowWidget(cfg.Cities)
 	a.ui.ApplyDisplayFields(cfg.GetDisplayFields())
+	a.ui.ApplyPollutionFields(cfg.GetPollutionFields())
 	a.ui.ApplyWin32Styles()
 	a.applyPosition(cfg)
 	log.Printf("WeatherWidget window shown at %s", cfg.CornerPosition)
@@ -274,11 +275,13 @@ func (a *AppManager) onSettingsSave(newCfg *config.Config) error {
 		a.stopPanelClocks()
 		a.ui.ShowWidget(newCfg.Cities)
 		a.ui.ApplyDisplayFields(newCfg.GetDisplayFields())
+		a.ui.ApplyPollutionFields(newCfg.GetPollutionFields())
 		a.ui.ApplyWin32Styles()
 		a.startPanelClocks(newCfg.Cities)
 	} else {
-		// Even if cities didn't change, display fields may have.
+		// Even if cities didn't change, display or pollution fields may have.
 		a.ui.ApplyDisplayFields(newCfg.GetDisplayFields())
+		a.ui.ApplyPollutionFields(newCfg.GetPollutionFields())
 	}
 
 	// Always reposition the widget window (position may have changed independently).

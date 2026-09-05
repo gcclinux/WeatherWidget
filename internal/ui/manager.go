@@ -77,8 +77,9 @@ func (u *UIManager) ShowWidget(cities []config.CityConfig) {
 		objects[i] = p.Container()
 	}
 
-	grid := container.NewGridWithColumns(count, objects...)
-	u.widget.SetContent(grid)
+	// Stack the city cards vertically — one card under another.
+	stack := container.NewVBox(objects...)
+	u.widget.SetContent(stack)
 
 	w, h, _ := CalculateLayout(count)
 	u.widget.Resize(fyne.NewSize(float32(w), float32(h)))
@@ -111,6 +112,13 @@ func (u *UIManager) ApplyDisplayFields(df *config.DisplayFields) {
 	}
 	w, h, _ := CalculateLayoutWithFields(count, df)
 	u.widget.Resize(fyne.NewSize(float32(w), float32(h)))
+}
+
+// ApplyPollutionFields applies the given air-quality metric selection to all panels.
+func (u *UIManager) ApplyPollutionFields(pf *config.PollutionFields) {
+	for _, p := range u.panels {
+		p.ApplyPollutionFields(pf)
+	}
 }
 
 // RerenderPanels re-renders all panels using their cached data with new units or icon theme.
