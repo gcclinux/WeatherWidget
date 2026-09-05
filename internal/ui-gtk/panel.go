@@ -64,8 +64,9 @@ type cityPanel struct {
 
 	errorLbl *gtk.Label
 
-	pollutionBox  *gtk.Box // horizontal container for pollution tiles
-	pollutionRows map[weather.PollutionMetric]*pollutionRowWidgets
+	pollutionBox      *gtk.Box // outer horizontal container for pollution layout
+	pollutionBoxRight *gtk.Box // right-aligned box for non-AQI pollution tiles
+	pollutionRows     map[weather.PollutionMetric]*pollutionRowWidgets
 
 	// pollutionFields is the current metric selection driving row visibility.
 	// nil falls back to config.DefaultPollutionFields() in PlanPollutionRows.
@@ -266,17 +267,24 @@ func newCityPanel(city, region, timezone string, lm *i18n.LocaleManager) (*cityP
 	root.PackStart(separator, false, false, 0)
 
 	// ── Air-quality row ──────────────────────────────────────────────────────
-	// A horizontal container of per-metric tiles (icon, name, value). The nine
-	// reusable tiles are created once here (one per weather.PollutionMetric)
-	// and reused across updates; their visibility is controlled later by
-	// applyPollutionRows.
+	// A horizontal container with AQI on the left and all other pollution
+	// metrics grouped on the right. Uses a spacer to push non-AQI tiles right.
 	pollutionBox, err := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 10)
 	if err != nil {
 		return nil, err
 	}
-	pollutionBox.SetHAlign(gtk.ALIGN_CENTER)
+	pollutionBox.SetHAlign(gtk.ALIGN_FILL)
+	pollutionBox.SetHExpand(true)
 	p.pollutionBox = pollutionBox
 	root.PackStart(pollutionBox, false, false, 0)
+
+	// Right-side box for non-AQI pollution tiles (right-aligned)
+	pollutionBoxRight, err := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 10)
+	if err != nil {
+		return nil, err
+	}
+	pollutionBoxRight.SetHAlign(gtk.ALIGN_END)
+	p.pollutionBoxRight = pollutionBoxRight
 
 	p.pollutionRows = make(map[weather.PollutionMetric]*pollutionRowWidgets, len(weather.PollutionMetricOrder))
 	for _, metric := range weather.PollutionMetricOrder {
@@ -317,7 +325,13 @@ func newCityPanel(city, region, timezone string, lm *i18n.LocaleManager) (*cityP
 		sc.AddClass("air-label")
 		tile.PackStart(tileValue, false, false, 0)
 
-		pollutionBox.PackStart(tile, false, false, 0)
+		// AQI goes directly in the main pollution box (left-aligned)
+		// All other metrics go in the right-aligned box
+		if metric == weather.MetricAQI {
+			pollutionBox.PackStart(tile, false, false, 0)
+		} else {
+			pollutionBoxRight.PackStart(tile, false, false, 0)
+		}
 		p.pollutionRows[metric] = &pollutionRowWidgets{
 			row:   tile,
 			icon:  tileIcon,
@@ -325,6 +339,9 @@ func newCityPanel(city, region, timezone string, lm *i18n.LocaleManager) (*cityP
 			value: tileValue,
 		}
 	}
+
+	// Add the right-aligned box for non-AQI metrics with expand to push it right
+	pollutionBox.PackStart(pollutionBoxRight, true, true, 0)
 
 	// ── Error label ──────────────────────────────────────────────────────────
 	errorLbl, err := gtk.LabelNew("")
@@ -510,7 +527,17 @@ func (p *cityPanel) applyPollutionRows(pf *config.PollutionFields) {
 		if row, ok := planned[metric]; ok {
 			p.loadAirIcon(w.icon, row.IconFile, pollutionIconSize)
 			w.value.SetText(row.ValueText)
-			p.pollutionBox.ReorderChild(w.row, planIndex[metric])
+			// AQI is in pollutionBox, others are in pollutionBoxRight
+			if metric == weather.MetricAQI {
+				p.pollutionBox.ReorderChild(w.row, 0)
+			} else {
+				// Calculate position within right box (excluding AQI)
+				rightIndex := planIndex[metric]
+				if _, hasAQI := planned[weather.MetricAQI]; hasAQI && rightIndex > 0 {
+					rightIndex-- // Adjust for AQI being in separate container
+				}
+				p.pollutionBoxRight.ReorderChild(w.row, rightIndex)
+			}
 			w.row.ShowAll()
 		} else {
 			w.row.Hide()
@@ -677,6 +704,8 @@ func (p *cityPanel) loadIcon(iconCode string, size int) {
 	scaled, err := pb.ScaleSimple(targetW, targetH, gdk.INTERP_BILINEAR)
 	if err != nil || scaled == nil {
 		scaled = pb
+		targetW = origW
+		targetH = origH
 	}
 
 	// Composite over the card tint so transparent pixels show the card
@@ -686,8 +715,8 @@ func (p *cityPanel) loadIcon(iconCode string, size int) {
 	}
 
 	p.icon.SetFromPixbuf(scaled)
-	// Always reserve a fixed square area so all panels align vertically.
-	p.icon.SetSizeRequest(size, size)
+	// Use actual scaled dimensions to avoid transparent stripes around non-square icons.
+	p.icon.SetSizeRequest(targetW, targetH)
 	p.icon.SetVAlign(gtk.ALIGN_CENTER)
 }
 
