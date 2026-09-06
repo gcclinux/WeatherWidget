@@ -66,6 +66,12 @@ type simplePanel struct {
 	lastIconCode string // most recently loaded icon code, for resize without re-fetch
 	iconSize     int    // current icon pixel size; 0 means default (96px)
 
+	// tintAlpha is the card background alpha (0.0–1.0) used for compositing
+	// icons. When icons are loaded, their transparent pixels are filled with
+	// this tint so they match the card background instead of revealing the
+	// desktop. Updated via setTintAlpha().
+	tintAlpha float64
+
 	clockTicker *time.Ticker
 	clockStop   chan struct{}
 }
@@ -392,8 +398,19 @@ func (p *simplePanel) showError(isStale bool) {
 // setNoBackground adjusts the panel background CSS class.
 func (p *simplePanel) setNoBackground(_ bool) {}
 
-// setTintAlpha is a no-op for simple panels (no icon compositing needed).
-func (p *simplePanel) setTintAlpha(_ float64) {}
+// setTintAlpha updates the panel's tint alpha value used for compositing icons.
+// When the app opacity changes, the tint behind icons must change to match.
+func (p *simplePanel) setTintAlpha(alpha float64) {
+	p.tintAlpha = alpha
+	// Reload icons so they composite with the new tint.
+	if p.lastIconCode != "" {
+		p.loadIcon(p.lastIconCode, p.iconSize)
+	}
+	// Reload pollution icons for all visible rows.
+	if p.lastData != nil {
+		p.applyPollutionRows(p.pollutionFields)
+	}
+}
 
 // applyDisplayFields shows or hides individual elements based on the config.
 func (p *simplePanel) applyDisplayFields(df *config.DisplayFields) {
@@ -522,12 +539,24 @@ func (p *simplePanel) loadIcon(iconCode string, size int) {
 	}
 	scaled, err := pb.ScaleSimple(targetW, targetH, gdk.INTERP_BILINEAR)
 	if err != nil || scaled == nil {
-		p.icon.SetFromPixbuf(pb)
-	} else {
-		p.icon.SetFromPixbuf(scaled)
+		scaled = pb
+		targetW = origW
+		targetH = origH
 	}
-	// Always reserve a fixed square area so all panels align vertically.
-	p.icon.SetSizeRequest(size, size)
+
+	// Composite over the card tint so transparent pixels show the card
+	// background instead of punching through to the desktop.
+	if p.tintAlpha > 0 {
+		scaled = compositeOverTint(scaled, p.tintAlpha)
+		// Account for the padding added by compositeOverTint
+		targetW += tintPadding * 2
+		targetH += tintPadding * 2
+	}
+
+	p.icon.SetFromPixbuf(scaled)
+	// Use actual scaled dimensions to avoid transparent stripes around non-square icons.
+	p.icon.SetSizeRequest(targetW, targetH)
+	p.icon.SetVAlign(gtk.ALIGN_CENTER)
 	p.icon.SetVAlign(gtk.ALIGN_CENTER)
 }
 
@@ -585,11 +614,22 @@ func (p *simplePanel) loadAirIcon(img *gtk.Image, file string, size int) {
 	}
 	scaled, err := pb.ScaleSimple(targetW, targetH, gdk.INTERP_BILINEAR)
 	if err != nil || scaled == nil {
-		img.SetFromPixbuf(pb)
-	} else {
-		img.SetFromPixbuf(scaled)
+		scaled = pb
+		targetW = origW
+		targetH = origH
 	}
-	img.SetSizeRequest(size, size)
+
+	// Composite over the card tint so transparent pixels show the card
+	// background instead of punching through to the desktop.
+	if p.tintAlpha > 0 {
+		scaled = compositeOverTint(scaled, p.tintAlpha)
+		// Account for the padding added by compositeOverTint
+		targetW += tintPadding * 2
+		targetH += tintPadding * 2
+	}
+
+	img.SetFromPixbuf(scaled)
+	img.SetSizeRequest(targetW-1, targetH)
 }
 
 // applyIconSize rescales the currently displayed icon to a new pixel size.
