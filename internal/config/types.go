@@ -58,6 +58,29 @@ func NormalizeIconTheme(t IconTheme) IconTheme {
 	}
 }
 
+// ViewMode represents the layout style for displaying city weather panels.
+type ViewMode string
+
+const (
+	// ViewModeEnhanced displays cities stacked vertically with a horizontal
+	// metrics grid beside the weather icon (modern layout).
+	ViewModeEnhanced ViewMode = "enhanced"
+	// ViewModeSimple displays cities side-by-side with a vertical list of
+	// weather data (classic layout).
+	ViewModeSimple ViewMode = "simple"
+)
+
+// NormalizeViewMode returns the mode unchanged if it is a known value,
+// otherwise returns ViewModeEnhanced as the safe default.
+func NormalizeViewMode(m ViewMode) ViewMode {
+	switch m {
+	case ViewModeEnhanced, ViewModeSimple:
+		return m
+	default:
+		return ViewModeEnhanced
+	}
+}
+
 // DataSourceType represents the type of weather data source.
 type DataSourceType string
 
@@ -82,6 +105,7 @@ type Config struct {
 	TemperatureUnit TemperatureUnit `json:"temperatureUnit,omitempty"`
 	WindSpeedUnit   WindSpeedUnit   `json:"windSpeedUnit,omitempty"`
 	IconTheme       IconTheme       `json:"iconTheme,omitempty"`
+	ViewMode        ViewMode        `json:"viewMode,omitempty"` // "enhanced" or "simple" layout
 	DisplayFields   *DisplayFields   `json:"displayFields,omitempty"`
 	PollutionFields *PollutionFields `json:"pollutionFields,omitempty"`
 	APIConfig       *APIConfig       `json:"apiConfig,omitempty"`
@@ -295,6 +319,7 @@ func DefaultConfig() *Config {
 		TemperatureUnit:    TemperatureUnitCelsius,
 		WindSpeedUnit:      WindSpeedUnitKmh,
 		IconTheme:          IconThemeNew,
+		ViewMode:           ViewModeEnhanced,
 		FontSizeCityTime:   14,
 		FontSizeTempIcon:   32,
 		FontSizeConditions: 10,

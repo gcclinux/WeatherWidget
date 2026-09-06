@@ -20,7 +20,9 @@ type UIManager struct {
 	lm       *i18n.LocaleManager
 	widget   fyne.Window
 	settings fyne.Window
-	panels   []*panel.CityPanel
+	panels   []*panel.CityPanel        // Enhanced view panels
+	simplePanels []*panel.SimpleCityPanel // Simple view panels
+	viewMode config.ViewMode            // Current view mode
 
 	// curDisplayFields and curPollutionFields track the most recently applied
 	// visibility config so the window can be resized to fit the actual content
@@ -67,6 +69,13 @@ func (u *UIManager) ApplyWin32Styles() {
 // ShowWidget creates CityPanel instances for each city, arranges them
 // horizontally, resizes the window to fit, and displays it.
 func (u *UIManager) ShowWidget(cities []config.CityConfig) {
+	u.ShowWidgetWithMode(cities, config.ViewModeEnhanced)
+}
+
+// ShowWidgetWithMode creates city panels for each city using the specified view mode.
+// Enhanced mode: cities stacked vertically with horizontal data grid.
+// Simple mode: cities displayed side-by-side with vertical data list.
+func (u *UIManager) ShowWidgetWithMode(cities []config.CityConfig, viewMode config.ViewMode) {
 	count := len(cities)
 	if count == 0 {
 		count = 1
@@ -75,20 +84,37 @@ func (u *UIManager) ShowWidget(cities []config.CityConfig) {
 		count = 5
 	}
 
-	u.panels = make([]*panel.CityPanel, count)
-	objects := make([]fyne.CanvasObject, count)
-	for i := 0; i < count; i++ {
-		p := panel.NewCityPanel(u.lm)
-		u.panels[i] = p
-		objects[i] = p.Container()
-	}
+	u.viewMode = config.NormalizeViewMode(viewMode)
 
-	// Stack the city cards vertically — one card under another.
-	// Use a custom VBox layout with minimal spacing since Fyne's GL renderer
-	// fills empty space with an opaque background (true transparency isn't
-	// supported in Fyne's Metal/GL rendering pipeline).
-	stack := container.NewVBox(objects...)
-	u.widget.SetContent(stack)
+	if u.viewMode == config.ViewModeSimple {
+		// Simple view: cities side-by-side with vertical data list
+		u.simplePanels = make([]*panel.SimpleCityPanel, count)
+		u.panels = nil // Clear enhanced panels
+		objects := make([]fyne.CanvasObject, count)
+		for i := 0; i < count; i++ {
+			p := panel.NewSimpleCityPanel(u.lm)
+			u.simplePanels[i] = p
+			objects[i] = p.Container()
+		}
+
+		// Arrange cities horizontally (side-by-side)
+		grid := container.NewGridWithColumns(count, objects...)
+		u.widget.SetContent(grid)
+	} else {
+		// Enhanced view: cities stacked vertically with horizontal data grid
+		u.panels = make([]*panel.CityPanel, count)
+		u.simplePanels = nil // Clear simple panels
+		objects := make([]fyne.CanvasObject, count)
+		for i := 0; i < count; i++ {
+			p := panel.NewCityPanel(u.lm)
+			u.panels[i] = p
+			objects[i] = p.Container()
+		}
+
+		// Stack the city cards vertically — one card under another.
+		stack := container.NewVBox(objects...)
+		u.widget.SetContent(stack)
+	}
 
 	u.resizeToContent(count)
 	u.widget.Show()
@@ -105,51 +131,98 @@ func (u *UIManager) resizeToContent(count int) {
 	}
 }
 
+// GetViewMode returns the current view mode.
+func (u *UIManager) GetViewMode() config.ViewMode {
+	return u.viewMode
+}
+
 // UpdatePanels updates each CityPanel with the corresponding weather data, units, and icon theme.
 // Panels and data are matched by index; extra data entries are ignored.
 func (u *UIManager) UpdatePanels(data []weather.WeatherData, tempUnit config.TemperatureUnit, windUnit config.WindSpeedUnit, iconTheme ...config.IconTheme) {
-	log.Printf("UIManager: updating %d panels with %d data entries", len(u.panels), len(data))
-	for i, p := range u.panels {
-		if i >= len(data) {
-			break
+	if u.viewMode == config.ViewModeSimple {
+		log.Printf("UIManager: updating %d simple panels with %d data entries", len(u.simplePanels), len(data))
+		for i, p := range u.simplePanels {
+			if i >= len(data) {
+				break
+			}
+			d := data[i]
+			p.Update(&d, tempUnit, windUnit, iconTheme...)
 		}
-		d := data[i]
-		p.Update(&d, tempUnit, windUnit, iconTheme...)
+	} else {
+		log.Printf("UIManager: updating %d panels with %d data entries", len(u.panels), len(data))
+		for i, p := range u.panels {
+			if i >= len(data) {
+				break
+			}
+			d := data[i]
+			p.Update(&d, tempUnit, windUnit, iconTheme...)
+		}
 	}
 }
 
 // ApplyDisplayFields applies the given display field configuration to all panels
 // and resizes the widget window to fit the visible content.
 func (u *UIManager) ApplyDisplayFields(df *config.DisplayFields) {
-	for _, p := range u.panels {
-		p.ApplyDisplayFields(df)
+	if u.viewMode == config.ViewModeSimple {
+		for _, p := range u.simplePanels {
+			p.ApplyDisplayFields(df)
+		}
+	} else {
+		for _, p := range u.panels {
+			p.ApplyDisplayFields(df)
+		}
 	}
 	u.curDisplayFields = df
 	// Resize widget to match the dynamic height.
-	u.resizeToContent(len(u.panels))
+	panelCount := len(u.panels)
+	if u.viewMode == config.ViewModeSimple {
+		panelCount = len(u.simplePanels)
+	}
+	u.resizeToContent(panelCount)
 }
 
 // ApplyPollutionFields applies the given air-quality metric selection to all panels.
 func (u *UIManager) ApplyPollutionFields(pf *config.PollutionFields) {
-	for _, p := range u.panels {
-		p.ApplyPollutionFields(pf)
+	if u.viewMode == config.ViewModeSimple {
+		for _, p := range u.simplePanels {
+			p.ApplyPollutionFields(pf)
+		}
+	} else {
+		for _, p := range u.panels {
+			p.ApplyPollutionFields(pf)
+		}
 	}
 	u.curPollutionFields = pf
 	// The air-quality row's presence affects the card height, so resize too.
-	u.resizeToContent(len(u.panels))
+	panelCount := len(u.panels)
+	if u.viewMode == config.ViewModeSimple {
+		panelCount = len(u.simplePanels)
+	}
+	u.resizeToContent(panelCount)
 }
 
 // RerenderPanels re-renders all panels using their cached data with new units or icon theme.
 // Used when only the temperature, wind speed unit, or icon theme changes, avoiding a new weather fetch.
 func (u *UIManager) RerenderPanels(tempUnit config.TemperatureUnit, windUnit config.WindSpeedUnit, iconTheme ...config.IconTheme) {
-	for _, p := range u.panels {
-		p.Rerender(tempUnit, windUnit, iconTheme...)
+	if u.viewMode == config.ViewModeSimple {
+		for _, p := range u.simplePanels {
+			p.Rerender(tempUnit, windUnit, iconTheme...)
+		}
+	} else {
+		for _, p := range u.panels {
+			p.Rerender(tempUnit, windUnit, iconTheme...)
+		}
 	}
 }
 
-// Panels returns the current list of city panels.
+// Panels returns the current list of city panels (Enhanced view).
 func (u *UIManager) Panels() []*panel.CityPanel {
 	return u.panels
+}
+
+// SimplePanels returns the current list of simple city panels (Simple view).
+func (u *UIManager) SimplePanels() []*panel.SimpleCityPanel {
+	return u.simplePanels
 }
 
 // SetCorner repositions the widget window to the specified screen corner
@@ -164,6 +237,9 @@ func (u *UIManager) SetCorner(position string, monitorIndex int) {
 	// Fallback if canvas hasn't reported a size yet.
 	if ww == 0 || wh == 0 {
 		count := len(u.panels)
+		if u.viewMode == config.ViewModeSimple {
+			count = len(u.simplePanels)
+		}
 		if count == 0 {
 			count = 1
 		}

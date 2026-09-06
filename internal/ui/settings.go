@@ -68,6 +68,7 @@ type settingsState struct {
 	selectedUnit      config.TemperatureUnit // temperature unit selected in the appearance tab
 	selectedWindUnit  config.WindSpeedUnit   // wind speed unit selected in the widget tab
 	selectedIconTheme config.IconTheme       // icon theme selected in the display tab
+	selectedViewMode  config.ViewMode        // view mode selected in the display tab
 	saved             bool                   // true if Save was clicked (suppresses revert on close)
 	previewPanels     []*panel.CityPanel     // live preview panels in the About tab
 	appearancePanels  []*panel.CityPanel     // live preview panels in the Appearance tab
@@ -128,6 +129,7 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 		selectedUnit:      config.NormalizeTemperatureUnit(cfg.TemperatureUnit),
 		selectedWindUnit:  config.NormalizeWindSpeedUnit(cfg.WindSpeedUnit),
 		selectedIconTheme: config.NormalizeIconTheme(cfg.IconTheme),
+		selectedViewMode:  config.NormalizeViewMode(cfg.ViewMode),
 		displayFields:     cfg.GetDisplayFields(),
 		pollutionFields:   cfg.GetPollutionFields(),
 		customX:           cfg.CustomX,
@@ -147,6 +149,7 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 	origUnit := config.NormalizeTemperatureUnit(cfg.TemperatureUnit)
 	origWindUnit := config.NormalizeWindSpeedUnit(cfg.WindSpeedUnit)
 	origIconTheme := config.NormalizeIconTheme(cfg.IconTheme)
+	origViewMode := config.NormalizeViewMode(cfg.ViewMode)
 	origCustomX := cfg.CustomX
 	origCustomY := cfg.CustomY
 
@@ -1302,7 +1305,45 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 			pollutionChecks,
 		)
 
+		// ── View Mode ─────────────────────────────────────────────────────────
+		viewModeEnhancedOption := u.t("settings.viewMode.enhanced")
+		viewModeSimpleOption := u.t("settings.viewMode.simple")
+
+		viewModeValueMap := map[string]config.ViewMode{
+			viewModeEnhancedOption: config.ViewModeEnhanced,
+			viewModeSimpleOption:   config.ViewModeSimple,
+		}
+		viewModeLabelMap := map[config.ViewMode]string{
+			config.ViewModeEnhanced: viewModeEnhancedOption,
+			config.ViewModeSimple:   viewModeSimpleOption,
+		}
+
+		viewModeRadio := widget.NewRadioGroup(
+			[]string{viewModeEnhancedOption, viewModeSimpleOption},
+			func(selected string) {
+				state.selectedViewMode = viewModeValueMap[selected]
+				// Live preview: rebuild the main widget with the new view mode
+				u.ShowWidgetWithMode(cfg.Cities, state.selectedViewMode)
+				// Re-apply display and pollution fields to the new panels
+				u.ApplyDisplayFields(state.displayFields)
+				u.ApplyPollutionFields(state.pollutionFields)
+				// Re-render panels with current unit settings
+				u.RerenderPanels(state.selectedUnit, state.selectedWindUnit, state.selectedIconTheme)
+			},
+		)
+		viewModeRadio.Horizontal = true
+
+		normalizedViewMode := config.NormalizeViewMode(state.selectedViewMode)
+		if label, ok := viewModeLabelMap[normalizedViewMode]; ok {
+			viewModeRadio.SetSelected(label)
+		} else {
+			viewModeRadio.SetSelected(viewModeEnhancedOption)
+		}
+
 		appearanceContent := container.NewPadded(container.NewVScroll(container.NewVBox(
+			sectionBlock(u.t("settings.viewMode.title"), u.t("settings.viewMode.subtitle"),
+				viewModeRadio,
+			),
 			sectionBlock(u.t("settings.position.title"), u.t("settings.position.subtitle"),
 				container.NewVBox(positionItems...),
 			),
@@ -1558,6 +1599,10 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 		// Revert live preview changes if the user closed without saving.
 		if !state.saved {
 			u.SetOpacity(origOpacity)
+			// Revert view mode if it was changed
+			if u.GetViewMode() != origViewMode {
+				u.ShowWidgetWithMode(cfg.Cities, origViewMode)
+			}
 			u.RerenderPanels(origUnit, origWindUnit, origIconTheme)
 			if origCustomX != nil && origCustomY != nil {
 				u.SetPosition(*origCustomX, *origCustomY)
@@ -1640,6 +1685,7 @@ func buildConfigFromUI(
 	cfg.TemperatureUnit = config.NormalizeTemperatureUnit(state.selectedUnit)
 	cfg.WindSpeedUnit = config.NormalizeWindSpeedUnit(state.selectedWindUnit)
 	cfg.IconTheme = config.NormalizeIconTheme(state.selectedIconTheme)
+	cfg.ViewMode = config.NormalizeViewMode(state.selectedViewMode)
 	cfg.DisplayFields = state.displayFields
 	cfg.PollutionFields = state.pollutionFields
 	provider := providerDisplayToValue[providerSelect.Selected]

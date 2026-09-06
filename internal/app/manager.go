@@ -104,7 +104,7 @@ func (a *AppManager) Run() error {
 	a.weather = weather.NewWeatherService(provider)
 
 	// 7. Show widget and apply Win32 styles.
-	a.ui.ShowWidget(cfg.Cities)
+	a.ui.ShowWidgetWithMode(cfg.Cities, cfg.ViewMode)
 	a.ui.ApplyDisplayFields(cfg.GetDisplayFields())
 	a.ui.ApplyPollutionFields(cfg.GetPollutionFields())
 	a.ui.ApplyWin32Styles()
@@ -270,10 +270,10 @@ func (a *AppManager) onSettingsSave(newCfg *config.Config) error {
 	a.scheduler.SetInterval(time.Duration(newCfg.RefreshInterval) * time.Minute)
 	a.scheduler.SetCities(newCfg.Cities)
 
-	// Rebuild city panels if city list changed.
-	if len(oldCfg.Cities) != len(newCfg.Cities) || !sameCities(oldCfg.Cities, newCfg.Cities) {
+	// Rebuild city panels if city list or view mode changed.
+	if len(oldCfg.Cities) != len(newCfg.Cities) || !sameCities(oldCfg.Cities, newCfg.Cities) || oldCfg.ViewMode != newCfg.ViewMode {
 		a.stopPanelClocks()
-		a.ui.ShowWidget(newCfg.Cities)
+		a.ui.ShowWidgetWithMode(newCfg.Cities, newCfg.ViewMode)
 		a.ui.ApplyDisplayFields(newCfg.GetDisplayFields())
 		a.ui.ApplyPollutionFields(newCfg.GetPollutionFields())
 		a.ui.ApplyWin32Styles()
@@ -353,7 +353,14 @@ func (a *AppManager) createProvider(cfg *config.Config) weather.WeatherProvider 
 // updates the UI panels accordingly.
 func (a *AppManager) handleWeatherUpdate(results []weather.WeatherResult) {
 	panels := a.ui.Panels()
-	log.Printf("handling weather update: %d results, %d UI panels available", len(results), len(panels))
+	simplePanels := a.ui.SimplePanels()
+	viewMode := a.ui.GetViewMode()
+	
+	panelCount := len(panels)
+	if viewMode == config.ViewModeSimple {
+		panelCount = len(simplePanels)
+	}
+	log.Printf("handling weather update: %d results, %d UI panels available (mode: %s)", len(results), panelCount, viewMode)
 
 	data := make([]weather.WeatherData, 0, len(results))
 	for i, r := range results {
@@ -368,14 +375,27 @@ func (a *AppManager) handleWeatherUpdate(results []weather.WeatherResult) {
 			}
 			data = append(data, emptyData)
 		}
-		if i < len(panels) {
-			if r.HasError {
-				idx := i
-				isStale := r.IsStale
-				log.Printf("notifying UI of error for panel %d (city: %s, stale: %v)", idx, a.cfg.Cities[idx].Name, isStale)
-				fyne.Do(func() {
-					panels[idx].ShowError(isStale)
-				})
+		if viewMode == config.ViewModeSimple {
+			if i < len(simplePanels) {
+				if r.HasError {
+					idx := i
+					isStale := r.IsStale
+					log.Printf("notifying UI of error for simple panel %d (city: %s, stale: %v)", idx, a.cfg.Cities[idx].Name, isStale)
+					fyne.Do(func() {
+						simplePanels[idx].ShowError(isStale)
+					})
+				}
+			}
+		} else {
+			if i < len(panels) {
+				if r.HasError {
+					idx := i
+					isStale := r.IsStale
+					log.Printf("notifying UI of error for panel %d (city: %s, stale: %v)", idx, a.cfg.Cities[idx].Name, isStale)
+					fyne.Do(func() {
+						panels[idx].ShowError(isStale)
+					})
+				}
 			}
 		}
 	}
@@ -422,23 +442,45 @@ func (a *AppManager) providerConfigChanged(old, new *config.Config) bool {
 
 // startPanelClocks starts the clock ticker on each city panel.
 func (a *AppManager) startPanelClocks(cities []config.CityConfig) {
-	panels := a.ui.Panels()
-	for i, p := range panels {
-		if i < len(cities) {
-			tz := cities[i].Timezone
-			if tz == "" {
-				tz = "UTC"
+	viewMode := a.ui.GetViewMode()
+	if viewMode == config.ViewModeSimple {
+		simplePanels := a.ui.SimplePanels()
+		for i, p := range simplePanels {
+			if i < len(cities) {
+				tz := cities[i].Timezone
+				if tz == "" {
+					tz = "UTC"
+				}
+				p.StartClock(tz)
 			}
-			p.StartClock(tz)
+		}
+	} else {
+		panels := a.ui.Panels()
+		for i, p := range panels {
+			if i < len(cities) {
+				tz := cities[i].Timezone
+				if tz == "" {
+					tz = "UTC"
+				}
+				p.StartClock(tz)
+			}
 		}
 	}
 }
 
 // stopPanelClocks stops the clock ticker on all city panels.
 func (a *AppManager) stopPanelClocks() {
-	panels := a.ui.Panels()
-	for _, p := range panels {
-		p.StopClock()
+	viewMode := a.ui.GetViewMode()
+	if viewMode == config.ViewModeSimple {
+		simplePanels := a.ui.SimplePanels()
+		for _, p := range simplePanels {
+			p.StopClock()
+		}
+	} else {
+		panels := a.ui.Panels()
+		for _, p := range panels {
+			p.StopClock()
+		}
 	}
 }
 

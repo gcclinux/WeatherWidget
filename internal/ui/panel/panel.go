@@ -75,6 +75,40 @@ func (c *compactPaddingLayout) Layout(objects []fyne.CanvasObject, size fyne.Siz
 	}
 }
 
+// spacedHBoxLayout arranges objects horizontally with a fixed spacing between them.
+type spacedHBoxLayout struct {
+	spacing float32
+}
+
+func (s *spacedHBoxLayout) MinSize(objects []fyne.CanvasObject) fyne.Size {
+	var w, h float32
+	visibleCount := 0
+	for _, o := range objects {
+		if o.Visible() {
+			size := o.MinSize()
+			w += size.Width
+			h = fyne.Max(h, size.Height)
+			visibleCount++
+		}
+	}
+	if visibleCount > 1 {
+		w += s.spacing * float32(visibleCount-1)
+	}
+	return fyne.NewSize(w, h)
+}
+
+func (s *spacedHBoxLayout) Layout(objects []fyne.CanvasObject, size fyne.Size) {
+	var x float32
+	for _, o := range objects {
+		if o.Visible() {
+			oSize := o.MinSize()
+			o.Resize(fyne.NewSize(oSize.Width, size.Height))
+			o.Move(fyne.NewPos(x, 0))
+			x += oSize.Width + s.spacing
+		}
+	}
+}
+
 // airMetricCell holds the widgets for a single air-quality metric shown in the
 // bottom row of the card: an icon, the full metric name, and a value label.
 type airMetricCell struct {
@@ -115,8 +149,10 @@ type CityPanel struct {
 	dewPointTile, pressureTile, uvTile *metricTileWidget
 
 	// Air-quality row (bottom of the card).
-	airCells map[weather.PollutionMetric]*airMetricCell
-	airRow   *fyne.Container
+	airCells        map[weather.PollutionMetric]*airMetricCell
+	airRow          *fyne.Container // full bottom row container
+	aqiLeftRow      *fyne.Container // AQI cell on the left
+	otherAirRightRow *fyne.Container // other pollution cells on the right
 
 	errorIcon *canvas.Image
 
@@ -378,8 +414,12 @@ func (p *CityPanel) metricGrid() fyne.CanvasObject {
 	}
 
 	grid := container.NewGridWithColumns(3, cells...)
-	// Wrap the grid in a fixed-width container for consistent sizing across all city panels
-	return container.New(&fixedWidthLayout{width: metricsGridWidth}, grid)
+	// Wrap the grid in a fixed-width container for consistent sizing across all city panels,
+	// then add a 6px right margin spacer
+	gridWithWidth := container.New(&fixedWidthLayout{width: metricsGridWidth}, grid)
+	gridRightSpacer := canvas.NewRectangle(color.Transparent)
+	gridRightSpacer.SetMinSize(fyne.NewSize(6, 1))
+	return container.NewHBox(gridWithWidth, gridRightSpacer)
 }
 
 // buildLayout constructs the horizontal card: a left info block (weather icon
@@ -426,13 +466,36 @@ func (p *CityPanel) buildLayout() fyne.CanvasObject {
 	middle := container.NewHBox(left, right)
 
 	// ── Air-quality row (bottom) ─────────────────────────────────────────────
-	p.airRow = container.NewHBox()
+	// AQI on the left (aligned with weather icon), other pollution icons on the right
+	// (right-aligned, adding inward from right edge with 2px spacing between icons)
+	p.aqiLeftRow = container.NewHBox()
+
+	// Collect other pollution cells (non-AQI) for the right side with 2px spacing
+	var otherCells []fyne.CanvasObject
 	for _, m := range weather.PollutionMetricOrder {
 		if c := p.airCells[m]; c != nil {
-			p.airRow.Add(c.container)
+			if m == weather.MetricAQI {
+				p.aqiLeftRow.Add(c.container)
+			} else {
+				otherCells = append(otherCells, c.container)
+			}
 		}
 	}
-	bottom := container.NewCenter(p.airRow)
+	// Use spaced layout with 4px between pollution icons on the right
+	p.otherAirRightRow = container.New(&spacedHBoxLayout{spacing: 12}, otherCells...)
+
+	// Add 6px buffer padding: left margin for AQI, right margin for other pollution icons
+	leftSpacer := canvas.NewRectangle(color.Transparent)
+	leftSpacer.SetMinSize(fyne.NewSize(6, 1))
+	rightSpacer := canvas.NewRectangle(color.Transparent)
+	rightSpacer.SetMinSize(fyne.NewSize(6, 1))
+
+	aqiWithPadding := container.NewHBox(leftSpacer, p.aqiLeftRow)
+	otherWithPadding := container.NewHBox(p.otherAirRightRow, rightSpacer)
+
+	// Use Border layout: AQI on left with padding, other pollution icons on right with padding
+	p.airRow = container.NewBorder(nil, nil, aqiWithPadding, otherWithPadding, nil)
+	bottom := p.airRow
 
 	// Build the final content: city name on top, then middle row, then air row.
 	var contentObjects []fyne.CanvasObject
@@ -510,6 +573,12 @@ func (p *CityPanel) applyAirCells() {
 		} else {
 			cell.container.Hide()
 		}
+	}
+	if p.aqiLeftRow != nil {
+		p.aqiLeftRow.Refresh()
+	}
+	if p.otherAirRightRow != nil {
+		p.otherAirRightRow.Refresh()
 	}
 	if p.airRow != nil {
 		p.airRow.Refresh()
