@@ -712,6 +712,9 @@ func (p *cityPanel) loadIcon(iconCode string, size int) {
 	// background instead of punching through to the desktop.
 	if p.tintAlpha > 0 {
 		scaled = compositeOverTint(scaled, p.tintAlpha)
+		// Account for the padding added by compositeOverTint
+		targetW += tintPadding * 2
+		targetH += tintPadding * 2
 	}
 
 	p.icon.SetFromPixbuf(scaled)
@@ -723,11 +726,19 @@ func (p *cityPanel) loadIcon(iconCode string, size int) {
 // pollutionIconSize is the pixel size for pollution metric icons rendered next to text.
 const pollutionIconSize = 48
 
+// tintPadding is the extra pixels added around the icon when compositing over
+// the card tint. This eliminates thin gaps between the icon background and the
+// card background that can appear due to sub-pixel rendering or alignment.
+const tintPadding = 2
+
 // compositeOverTint creates a new pixbuf that composites src over a solid
 // fill of the card's background tint (rgba 20,20,20, alpha). This flattens
 // the transparent PNG pixels so they show the card tint instead of punching
 // through to the desktop. alpha is in the 0.0–1.0 range and controls how
 // transparent the background fill is, matching the card's opacity.
+//
+// The background is extended by tintPadding pixels on all sides to ensure
+// complete coverage and eliminate any visible gaps at the icon edges.
 func compositeOverTint(src *gdk.Pixbuf, alpha float64) *gdk.Pixbuf {
 	if src == nil {
 		return nil
@@ -738,8 +749,11 @@ func compositeOverTint(src *gdk.Pixbuf, alpha float64) *gdk.Pixbuf {
 		return src
 	}
 
-	// Create a new RGBA pixbuf filled with the card tint.
-	dst, err := gdk.PixbufNew(gdk.COLORSPACE_RGB, true, 8, w, h)
+	// Create a new RGBA pixbuf filled with the card tint, extended by padding
+	// on all sides to eliminate edge gaps.
+	dstW := w + tintPadding*2
+	dstH := h + tintPadding*2
+	dst, err := gdk.PixbufNew(gdk.COLORSPACE_RGB, true, 8, dstW, dstH)
 	if err != nil || dst == nil {
 		return src
 	}
@@ -756,11 +770,11 @@ func compositeOverTint(src *gdk.Pixbuf, alpha float64) *gdk.Pixbuf {
 	fillColor := (r << 24) | (g << 16) | (b << 8) | a
 	dst.Fill(fillColor)
 
-	// Composite the source icon over the filled background. The gotk3
+	// Composite the source icon centered over the filled background. The gotk3
 	// Composite signature:
 	//   Composite(dest, destX, destY, destW, destH, offsetX, offsetY, scaleX, scaleY, interp, alpha)
-	// We composite at 1:1 scale, full opacity.
-	src.Composite(dst, 0, 0, w, h, 0, 0, 1.0, 1.0, gdk.INTERP_BILINEAR, 255)
+	// We composite at 1:1 scale, full opacity, offset by tintPadding.
+	src.Composite(dst, tintPadding, tintPadding, w, h, float64(tintPadding), float64(tintPadding), 1.0, 1.0, gdk.INTERP_BILINEAR, 255)
 
 	return dst
 }
@@ -827,6 +841,9 @@ func (p *cityPanel) loadAirIcon(img *gtk.Image, file string, size int) {
 	// background instead of punching through to the desktop.
 	if p.tintAlpha > 0 {
 		scaled = compositeOverTint(scaled, p.tintAlpha)
+		// Account for the padding added by compositeOverTint
+		targetW += tintPadding * 2
+		targetH += tintPadding * 2
 	}
 
 	img.SetFromPixbuf(scaled)
