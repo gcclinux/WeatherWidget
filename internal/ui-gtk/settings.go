@@ -1686,29 +1686,55 @@ func buildAboutTab(m *manager) (*gtk.Box, func() fontSizes) {
 	sep2, _ := gtk.SeparatorNew(gtk.ORIENTATION_HORIZONTAL)
 	vbox.PackStart(sep2, false, false, 4)
 
+	// Links section in a styled frame with grid layout for alignment.
+	linksFrame, _ := gtk.FrameNew("")
+	linksFrame.SetShadowType(gtk.SHADOW_ETCHED_IN)
+	sc, _ := linksFrame.GetStyleContext()
+	sc.AddClass("links-frame")
+
+	linksGrid, _ := gtk.GridNew()
+	linksGrid.SetRowSpacing(4)
+	linksGrid.SetColumnSpacing(12)
+	linksGrid.SetMarginTop(12)
+	linksGrid.SetMarginBottom(12)
+	linksGrid.SetMarginStart(16)
+	linksGrid.SetMarginEnd(16)
+
 	// Website link.
-	websiteRow, _ := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 8)
 	websiteLbl, _ := gtk.LabelNew(m.t("settings.about.websiteLabel"))
-	websiteLbl.SetHAlign(gtk.ALIGN_START)
+	websiteLbl.SetHAlign(gtk.ALIGN_END)
 	websiteLink, _ := gtk.LinkButtonNewWithLabel(
 		"https://easysmartapps.co.uk/weatherwidget",
 		"easysmartapps.co.uk/weatherwidget",
 	)
-	websiteRow.PackStart(websiteLbl, false, false, 0)
-	websiteRow.PackStart(websiteLink, false, false, 0)
-	vbox.PackStart(websiteRow, false, false, 0)
+	websiteLink.SetHAlign(gtk.ALIGN_START)
+	linksGrid.Attach(websiteLbl, 0, 0, 1, 1)
+	linksGrid.Attach(websiteLink, 1, 0, 1, 1)
 
 	// Manual link.
-	manualRow, _ := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 8)
 	manualLbl, _ := gtk.LabelNew(m.t("settings.about.manualLabel"))
-	manualLbl.SetHAlign(gtk.ALIGN_START)
+	manualLbl.SetHAlign(gtk.ALIGN_END)
 	manualLink, _ := gtk.LinkButtonNewWithLabel(
 		"https://easysmartapps.co.uk/weatherwidget-manual",
 		"easysmartapps.co.uk/weatherwidget-manual",
 	)
-	manualRow.PackStart(manualLbl, false, false, 0)
-	manualRow.PackStart(manualLink, false, false, 0)
-	vbox.PackStart(manualRow, false, false, 0)
+	manualLink.SetHAlign(gtk.ALIGN_START)
+	linksGrid.Attach(manualLbl, 0, 1, 1, 1)
+	linksGrid.Attach(manualLink, 1, 1, 1, 1)
+
+	// Air Index link.
+	airIndexLbl, _ := gtk.LabelNew(m.t("settings.about.airIndexLabel"))
+	airIndexLbl.SetHAlign(gtk.ALIGN_END)
+	airIndexLink, _ := gtk.LinkButtonNewWithLabel(
+		"https://easysmartapps.co.uk/weatherwidget-environmental",
+		"easysmartapps.co.uk/weatherwidget-environmental",
+	)
+	airIndexLink.SetHAlign(gtk.ALIGN_START)
+	linksGrid.Attach(airIndexLbl, 0, 2, 1, 1)
+	linksGrid.Attach(airIndexLink, 1, 2, 1, 1)
+
+	linksFrame.Add(linksGrid)
+	vbox.PackStart(linksFrame, false, false, 0)
 
 	// Font Size section
 	sep3, _ := gtk.SeparatorNew(gtk.ORIENTATION_HORIZONTAL)
@@ -1775,27 +1801,39 @@ func buildAboutTab(m *manager) (*gtk.Box, func() fontSizes) {
 		return row, func() int { return val }
 	}
 
+	// Font size controls in a styled frame.
+	fontFrame, _ := gtk.FrameNew("")
+	fontFrame.SetShadowType(gtk.SHADOW_ETCHED_IN)
+
+	fontBox, _ := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 6)
+	fontBox.SetMarginTop(12)
+	fontBox.SetMarginBottom(12)
+	fontBox.SetMarginStart(16)
+	fontBox.SetMarginEnd(16)
+
 	rowCT, getCityTime := buildFontRow(
 		"settings.fontSize.cityTime",
 		curCityTime, 8, 48,
 		func(v int) { curCityTime = v; applyLive() },
 	)
-	vbox.PackStart(rowCT, false, false, 0)
+	fontBox.PackStart(rowCT, false, false, 0)
 
 	rowTI, getTempIconSize := buildFontRow(
 		"settings.fontSize.tempIcon",
 		curTempIcon, 10, 72,
 		func(v int) { curTempIcon = v; applyLive() },
 	)
-	vbox.PackStart(rowTI, false, false, 0)
+	fontBox.PackStart(rowTI, false, false, 0)
 
 	rowCond, getConditionsSize := buildFontRow(
 		"settings.fontSize.conditions",
 		curConditions, 6, 36,
 		func(v int) { curConditions = v; applyLive() },
 	)
-	rowCond.SetMarginBottom(12)
-	vbox.PackStart(rowCond, false, false, 0)
+	fontBox.PackStart(rowCond, false, false, 0)
+
+	fontFrame.Add(fontBox)
+	vbox.PackStart(fontFrame, false, false, 0)
 
 	getFontSizes := func() fontSizes {
 		return fontSizes{
