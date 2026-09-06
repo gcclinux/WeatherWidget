@@ -369,6 +369,16 @@ func newCityPanel(city, region, timezone string, lm *i18n.LocaleManager) (*cityP
 // vertical column, but kept as compact as the content allows.
 const cardWidth = 380
 
+// GetRoot returns the root widget for embedding in a container.
+func (p *cityPanel) GetRoot() *gtk.Box {
+	return p.root
+}
+
+// GetWidth returns the card width for this panel type.
+func (p *cityPanel) GetWidth() int {
+	return cardWidth
+}
+
 // newMetricTile builds one bordered, transparent metric cell containing the
 // given emoji glyph, the metric name, and an (initially empty) value label.
 // The emoji and name sit on the top row; the value is shown in bold below.
@@ -853,6 +863,7 @@ func (p *cityPanel) loadAirIcon(img *gtk.Image, file string, size int) {
 // applyIconSize rescales the currently displayed icon to a new pixel size.
 // It is called from manager.SetFontSizes for live preview.
 func (p *cityPanel) applyIconSize(size int) {
+	p.iconSize = size
 	if p.lastIconCode == "" {
 		return
 	}

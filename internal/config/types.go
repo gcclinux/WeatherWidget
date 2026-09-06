@@ -58,6 +58,25 @@ func NormalizeIconTheme(t IconTheme) IconTheme {
 	}
 }
 
+// ViewMode represents the layout style for the weather widget display.
+type ViewMode string
+
+const (
+	ViewModeEnhanced ViewMode = "enhanced" // Modern horizontal card layout with metrics grid
+	ViewModeSimple   ViewMode = "simple"   // Classic vertical column layout
+)
+
+// NormalizeViewMode returns the mode unchanged if it is a known value,
+// otherwise returns ViewModeEnhanced as the safe default.
+func NormalizeViewMode(m ViewMode) ViewMode {
+	switch m {
+	case ViewModeEnhanced, ViewModeSimple:
+		return m
+	default:
+		return ViewModeEnhanced
+	}
+}
+
 // DataSourceType represents the type of weather data source.
 type DataSourceType string
 
@@ -82,6 +101,7 @@ type Config struct {
 	TemperatureUnit TemperatureUnit `json:"temperatureUnit,omitempty"`
 	WindSpeedUnit   WindSpeedUnit   `json:"windSpeedUnit,omitempty"`
 	IconTheme       IconTheme       `json:"iconTheme,omitempty"`
+	ViewMode        ViewMode        `json:"viewMode,omitempty"`
 	DisplayFields   *DisplayFields   `json:"displayFields,omitempty"`
 	PollutionFields *PollutionFields `json:"pollutionFields,omitempty"`
 	APIConfig       *APIConfig       `json:"apiConfig,omitempty"`
@@ -295,6 +315,7 @@ func DefaultConfig() *Config {
 		TemperatureUnit:    TemperatureUnitCelsius,
 		WindSpeedUnit:      WindSpeedUnitKmh,
 		IconTheme:          IconThemeNew,
+		ViewMode:           ViewModeEnhanced,
 		FontSizeCityTime:   14,
 		FontSizeTempIcon:   32,
 		FontSizeConditions: 10,

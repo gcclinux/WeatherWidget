@@ -107,12 +107,13 @@ type manager struct {
 	guard      *guard.SingleInstanceGuard
 
 	win    *gtk.Window // main transparent widget window
-	panels []*cityPanel
+	panels []weatherPanel
 
-	noBackground bool   // whether panels show without background
-	noBorder     bool   // whether window decorations are hidden
-	opacity      int    // 25 / 50 / 75 / 100
-	css          string // current CSS applied to the window
+	viewMode     config.ViewMode // current view mode (enhanced or simple)
+	noBackground bool            // whether panels show without background
+	noBorder     bool            // whether window decorations are hidden
+	opacity      int             // 25 / 50 / 75 / 100
+	css          string          // current CSS applied to the window
 
 	// Font sizes for the three widget sections (px). Zero means use default.
 	fontSizeCityTime   int
@@ -157,6 +158,7 @@ func (m *manager) start(openSettings bool) error {
 	}
 	m.noBackground = cfg.NoBackground
 	m.noBorder = cfg.NoBorder
+	m.viewMode = config.NormalizeViewMode(cfg.ViewMode)
 	m.fontSizeCityTime = cfg.GetFontSizeCityTime()
 	m.fontSizeTempIcon = cfg.GetFontSizeTempIcon()
 	m.fontSizeConditions = cfg.GetFontSizeConditions()
@@ -242,20 +244,33 @@ func (m *manager) buildWindow() error {
 	// CSS provider — sets transparent window background and panel styles.
 	m.applyCSS()
 
-	// City cards stacked vertically — one card under another.
-	vbox, err := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 3)
+	// City cards layout depends on view mode:
+	// - Simple view: horizontal (side by side)
+	// - Enhanced view: vertical (stacked)
+	var panelBox *gtk.Box
+	if m.viewMode == config.ViewModeSimple {
+		panelBox, err = gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 3)
+	} else {
+		panelBox, err = gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 3)
+	}
 	if err != nil {
 		return err
 	}
-	vbox.SetName("panelbox")
+	panelBox.SetName("panelbox")
 
 	cities := m.cfg.Cities
 	if len(cities) == 0 {
 		cities = config.DefaultCities()
 	}
-	m.panels = make([]*cityPanel, 0, len(cities))
+	m.panels = make([]weatherPanel, 0, len(cities))
 	for _, city := range cities {
-		p, err := newCityPanel(city.Name, city.Region, city.Timezone, m.lm)
+		var p weatherPanel
+		var err error
+		if m.viewMode == config.ViewModeSimple {
+			p, err = newSimplePanel(city.Name, city.Region, city.Timezone, m.lm)
+		} else {
+			p, err = newCityPanel(city.Name, city.Region, city.Timezone, m.lm)
+		}
 		if err != nil {
 			log.Printf("failed to create panel for %s: %v", city.Name, err)
 			continue
@@ -264,12 +279,12 @@ func (m *manager) buildWindow() error {
 		p.setTintAlpha(panelAlpha(m.opacity, m.noBackground))
 		p.applyDisplayFields(m.cfg.GetDisplayFields())
 		p.applyPollutionRows(m.cfg.GetPollutionFields())
-		p.iconSize = 96
-		vbox.PackStart(p.root, false, false, 0)
+		p.applyIconSize(96)
+		panelBox.PackStart(p.GetRoot(), false, false, 0)
 		m.panels = append(m.panels, p)
 	}
 
-	win.Add(vbox)
+	win.Add(panelBox)
 
 	// Connect draw signal to paint the window background: fully transparent
 	// window, then one rounded semi-transparent rectangle per card. Painting
@@ -427,10 +442,14 @@ func (m *manager) paintCards(cr *cairoContext) {
 		b      = 20.0 / 255.0
 	)
 	for _, p := range m.panels {
-		if p == nil || p.root == nil {
+		if p == nil {
 			continue
 		}
-		alloc := p.root.GetAllocation()
+		root := p.GetRoot()
+		if root == nil {
+			continue
+		}
+		alloc := root.GetAllocation()
 		x := float64(alloc.GetX()) + margin
 		y := float64(alloc.GetY()) + margin
 		wd := float64(alloc.GetWidth()) - 2*margin
@@ -464,16 +483,24 @@ func (m *manager) applyPosition() {
 }
 
 // panelSize returns the total (width, height) of the current panels.
-// Cards are stacked vertically, so the width is a single card width and the
-// height is the sum of the per-card heights plus inter-card spacing.
+// Simple view: horizontal layout (side by side), width is sum of card widths.
+// Enhanced view: vertical layout (stacked), height is sum of card heights.
 func (m *manager) panelSize() (int, int) {
 	count := len(m.panels)
 	if count == 0 {
 		count = 1
 	}
-	// Each card is ~380px wide and ~250px tall; cards are separated by 3px.
+	const spacing = 3
+	if m.viewMode == config.ViewModeSimple {
+		// Simple view: horizontal layout (side by side)
+		// Width is sum of card widths + spacing, height is single card height
+		const cardH = 600 // simple panels are taller due to vertical layout
+		return count*simpleCardWidth + (count-1)*spacing, cardH
+	}
+	// Enhanced view: vertical layout (stacked)
+	// Width is single card width, height is sum of card heights + spacing
 	const cardH = 250
-	return cardWidth, count*cardH + (count-1)*3
+	return cardWidth, count*cardH + (count-1)*spacing
 }
 
 // handleWeatherUpdate updates each panel with fresh weather data.
@@ -598,8 +625,15 @@ func (m *manager) onSettingsSave(newCfg *config.Config) error {
 	m.fontSizeTempIcon = newCfg.GetFontSizeTempIcon()
 	m.fontSizeConditions = newCfg.GetFontSizeConditions()
 
+	// Check if view mode changed - requires panel rebuild
+	newViewMode := config.NormalizeViewMode(newCfg.ViewMode)
+	viewModeChanged := m.viewMode != newViewMode
+	if viewModeChanged {
+		m.viewMode = newViewMode
+	}
+
 	citiesChanged := len(oldCfg.Cities) != len(newCfg.Cities) || !sameCities(oldCfg.Cities, newCfg.Cities)
-	if citiesChanged {
+	if citiesChanged || viewModeChanged {
 		m.rebuildPanels(newCfg.Cities)
 	} else {
 		m.applyCSS()
