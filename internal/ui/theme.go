@@ -267,10 +267,32 @@ func SetLinuxBackgroundShade(opacityPercent int) {
 	linuxBgShade.Store(int32(shade))
 }
 
+func activeFont(style fyne.TextStyle, fallback fyne.Theme) fyne.Resource {
+	fontMu.RLock()
+	defer fontMu.RUnlock()
+
+	if style.Bold && fontBold != nil {
+		return fontBold
+	}
+	if style.Italic && fontItalic != nil {
+		return fontItalic
+	}
+	if fontRegular != nil {
+		return fontRegular
+	}
+	if fallback != nil {
+		return fallback.Font(style)
+	}
+	return theme.DefaultTheme().Font(style)
+}
+
 // widgetTheme is a Fyne theme that:
-//   - On Windows: replaces the background with a color-key when transparency is active
+//   - On Windows: always uses dark variant colors, pure white foreground, and
+//     transparencyKey background so the Win32 window is transparent and the widget
+//     is always consistent in colors regardless of Windows OS light/dark mode.
 //   - On Linux: always uses a dark background (ignoring system light/dark preference)
 //     to ensure the widget looks consistent and native
+//   - On macOS: uses a fully transparent background with dark variant colors
 type widgetTheme struct {
 	base fyne.Theme
 }
@@ -281,12 +303,23 @@ func NewWidgetTheme(base fyne.Theme) fyne.Theme {
 }
 
 func (t *widgetTheme) Color(name fyne.ThemeColorName, variant fyne.ThemeVariant) color.Color {
-	// Windows: color-key transparency when active.
-	if transparencyActive.Load() == 1 {
+	// Windows: Background is always transparencyKey (RGB 1,1,1) so the Win32 window's color-key
+	// makes the area behind and around the cards 100% transparent.
+	// Foreground is dark text so that all settings windows, dialogs, checkboxes,
+	// and tabs remain crisp and readable on light backgrounds, while weather cards
+	// use explicit white text on dark cards.
+	if runtime.GOOS == "windows" {
 		switch name {
 		case theme.ColorNameBackground, theme.ColorNameOverlayBackground:
 			return transparencyKey
+		case theme.ColorNameForeground:
+			return color.NRGBA{R: 34, G: 34, B: 34, A: 255}
+		case theme.ColorNameDisabled:
+			return color.NRGBA{R: 140, G: 140, B: 140, A: 255}
+		case theme.ColorNameSeparator:
+			return color.NRGBA{R: 227, G: 227, B: 227, A: 255}
 		}
+		return t.base.Color(name, theme.VariantLight)
 	}
 
 	// Linux: always use dark variant colors for a consistent widget appearance,
@@ -328,26 +361,11 @@ func (t *widgetTheme) Color(name fyne.ThemeColorName, variant fyne.ThemeVariant)
 		return t.base.Color(name, theme.VariantDark)
 	}
 
-	return t.base.Color(name, variant)
+	return t.base.Color(name, theme.VariantDark)
 }
 
 func (t *widgetTheme) Font(style fyne.TextStyle) fyne.Resource {
-	fontMu.RLock()
-	defer fontMu.RUnlock()
-
-	if style.Bold && fontBold != nil {
-		return fontBold
-	}
-	if style.Italic && fontItalic != nil {
-		return fontItalic
-	}
-	if fontRegular != nil {
-		return fontRegular
-	}
-	if t.base != nil {
-		return t.base.Font(style)
-	}
-	return theme.DefaultTheme().Font(style)
+	return activeFont(style, t.base)
 }
 
 func (t *widgetTheme) Icon(name fyne.ThemeIconName) fyne.Resource {
@@ -356,4 +374,52 @@ func (t *widgetTheme) Icon(name fyne.ThemeIconName) fyne.Resource {
 
 func (t *widgetTheme) Size(name fyne.ThemeSizeName) float32 {
 	return t.base.Size(name)
+}
+
+// settingsTheme is a Fyne theme specifically for the settings dialog window.
+// It forces a clean, crisp Light Mode theme (matching the user's preferred
+// Image 4 design: solid white background, high-contrast dark text and clean widgets)
+// regardless of whether Windows OS is in light mode or dark mode, and ensures
+// the widget's transparency key (#010101) never leaks into the settings window.
+type settingsTheme struct {
+	base fyne.Theme
+}
+
+// NewSettingsTheme returns a theme configured for the settings dialog.
+func NewSettingsTheme(base fyne.Theme) fyne.Theme {
+	return &settingsTheme{base: base}
+}
+
+func (s *settingsTheme) Color(name fyne.ThemeColorName, _ fyne.ThemeVariant) color.Color {
+	switch name {
+	case theme.ColorNameBackground:
+		return color.NRGBA{R: 255, G: 255, B: 255, A: 255}
+	case theme.ColorNameOverlayBackground:
+		return color.NRGBA{R: 255, G: 255, B: 255, A: 255}
+	case theme.ColorNameForeground:
+		return color.NRGBA{R: 34, G: 34, B: 34, A: 255}
+	case theme.ColorNameInputBackground:
+		return color.NRGBA{R: 245, G: 245, B: 245, A: 255}
+	case theme.ColorNameSeparator:
+		return color.NRGBA{R: 227, G: 227, B: 227, A: 255}
+	case theme.ColorNameDisabled:
+		return color.NRGBA{R: 140, G: 140, B: 140, A: 255}
+	case theme.ColorNamePlaceHolder:
+		return color.NRGBA{R: 120, G: 120, B: 120, A: 255}
+	case theme.ColorNamePrimary:
+		return color.NRGBA{R: 26, G: 115, B: 232, A: 255}
+	}
+	return s.base.Color(name, theme.VariantLight)
+}
+
+func (s *settingsTheme) Font(style fyne.TextStyle) fyne.Resource {
+	return activeFont(style, s.base)
+}
+
+func (s *settingsTheme) Icon(name fyne.ThemeIconName) fyne.Resource {
+	return s.base.Icon(name)
+}
+
+func (s *settingsTheme) Size(name fyne.ThemeSizeName) float32 {
+	return s.base.Size(name)
 }

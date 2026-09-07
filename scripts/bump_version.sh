@@ -10,6 +10,7 @@ set -e
 # This updates:
 #   - release (source of truth)
 #   - internal/i18n/locales/*.json (About tab version display)
+#   - winres/winres.json (Windows binary resource version)
 #   - installer/AppxManifest.xml (MSIX package version, 4-part)
 #   - docs/site/index.html (hero badge version)
 #   - README.md (example commands)
@@ -71,7 +72,36 @@ if [ -d "$LOCALE_DIR" ]; then
     done
 fi
 
-# --- 3. Update installer/AppxManifest.xml (needs 4-part version) ---
+# --- 3. Update winres/winres.json (Windows binary resource version) ---
+WINRES_FILE="$PROJECT_ROOT/winres/winres.json"
+if [ -f "$WINRES_FILE" ]; then
+    if sed -i '' -E \
+        -e "s/(\"version\":[[:space:]]*\")[^\"]*(\")/\1${NEW_VERSION}\2/" \
+        -e "s/(\"file_version\":[[:space:]]*\")[^\"]*(\")/\1${NEW_VERSION}\2/" \
+        -e "s/(\"product_version\":[[:space:]]*\")[^\"]*(\")/\1${NEW_VERSION}\2/" \
+        -e "s/(\"FileVersion\":[[:space:]]*\")[^\"]*(\")/\1${NEW_VERSION}\2/" \
+        -e "s/(\"ProductVersion\":[[:space:]]*\")[^\"]*(\")/\1${NEW_VERSION}\2/" \
+        "$WINRES_FILE" 2>/dev/null; then
+        echo "  [OK] winres/winres.json"
+        UPDATED=$((UPDATED + 1))
+    else
+        if sed -i -E \
+            -e "s/(\"version\":[[:space:]]*\")[^\"]*(\")/\1${NEW_VERSION}\2/" \
+            -e "s/(\"file_version\":[[:space:]]*\")[^\"]*(\")/\1${NEW_VERSION}\2/" \
+            -e "s/(\"product_version\":[[:space:]]*\")[^\"]*(\")/\1${NEW_VERSION}\2/" \
+            -e "s/(\"FileVersion\":[[:space:]]*\")[^\"]*(\")/\1${NEW_VERSION}\2/" \
+            -e "s/(\"ProductVersion\":[[:space:]]*\")[^\"]*(\")/\1${NEW_VERSION}\2/" \
+            "$WINRES_FILE" 2>/dev/null; then
+            echo "  [OK] winres/winres.json"
+            UPDATED=$((UPDATED + 1))
+        else
+            echo "  [FAIL] winres/winres.json"
+            FAILED=$((FAILED + 1))
+        fi
+    fi
+fi
+
+# --- 4. Update installer/AppxManifest.xml (needs 4-part version) ---
 MANIFEST_FILE="$PROJECT_ROOT/installer/AppxManifest.xml"
 if [ -f "$MANIFEST_FILE" ]; then
     # AppxManifest requires exactly 4-part version (Major.Minor.Patch.Build)
@@ -97,7 +127,7 @@ if [ -f "$MANIFEST_FILE" ]; then
     fi
 fi
 
-# --- 4. Update docs/site/index.html (hero badge) ---
+# --- 5. Update docs/site/index.html (hero badge) ---
 INDEX_HTML="$PROJECT_ROOT/docs/site/index.html"
 if [ -f "$INDEX_HTML" ]; then
     # Match: <span id="app-version">v0.0.6.1</span>
@@ -115,7 +145,7 @@ if [ -f "$INDEX_HTML" ]; then
     fi
 fi
 
-# --- 5. Update README.md (example MSI build commands) ---
+# --- 6. Update README.md (example MSI build commands) ---
 README_FILE="$PROJECT_ROOT/README.md"
 if [ -f "$README_FILE" ]; then
     # Match: -Version "X.Y.Z.W" or -Version "X.Y.Z"

@@ -7,6 +7,7 @@
 # This updates:
 #   - release (source of truth)
 #   - internal/i18n/locales/*.json (About tab version display)
+#   - winres/winres.json (Windows binary resource version)
 #   - installer/AppxManifest.xml (MSIX package version, 4-part)
 #   - docs/site/index.html (hero badge version)
 #   - README.md (example commands)
@@ -66,7 +67,30 @@ if (Test-Path $localeDir) {
     }
 }
 
-# --- 3. Update installer/AppxManifest.xml (needs 4-part version) ---
+# --- 3. Update winres/winres.json (Windows binary resource version) ---
+$winresFile = Join-Path $ProjectRoot "winres" "winres.json"
+if (Test-Path $winresFile) {
+    try {
+        $content = Get-Content $winresFile -Raw
+        $newContent = $content -replace '("version":\s*")[^"]*(")', "`${1}$NewVersion`${2}"
+        $newContent = $newContent -replace '("file_version":\s*")[^"]*(")', "`${1}$NewVersion`${2}"
+        $newContent = $newContent -replace '("product_version":\s*")[^"]*(")', "`${1}$NewVersion`${2}"
+        $newContent = $newContent -replace '("FileVersion":\s*")[^"]*(")', "`${1}$NewVersion`${2}"
+        $newContent = $newContent -replace '("ProductVersion":\s*")[^"]*(")', "`${1}$NewVersion`${2}"
+        if ($newContent -ne $content) {
+            Set-Content -Path $winresFile -Value $newContent -NoNewline
+            $updated += "winres/winres.json"
+            Write-Host "  [OK] winres/winres.json" -ForegroundColor Green
+        } else {
+            Write-Host "  [--] winres/winres.json (no change)" -ForegroundColor Gray
+        }
+    } catch {
+        $failed += "winres/winres.json: $_"
+        Write-Host "  [FAIL] winres/winres.json: $_" -ForegroundColor Red
+    }
+}
+
+# --- 4. Update installer/AppxManifest.xml (needs 4-part version) ---
 $manifestFile = Join-Path $ProjectRoot "installer" "AppxManifest.xml"
 if (Test-Path $manifestFile) {
     try {
@@ -93,7 +117,7 @@ if (Test-Path $manifestFile) {
     }
 }
 
-# --- 4. Update docs/site/index.html (hero badge) ---
+# --- 5. Update docs/site/index.html (hero badge) ---
 $indexHtml = Join-Path $ProjectRoot "docs" "site" "index.html"
 if (Test-Path $indexHtml) {
     try {
@@ -113,7 +137,7 @@ if (Test-Path $indexHtml) {
     }
 }
 
-# --- 5. Update README.md (example MSI build commands) ---
+# --- 6. Update README.md (example MSI build commands) ---
 $readmeFile = Join-Path $ProjectRoot "README.md"
 if (Test-Path $readmeFile) {
     try {

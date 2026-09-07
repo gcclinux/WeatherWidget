@@ -3,6 +3,7 @@ package panel
 import (
 	"fmt"
 	"image"
+	"image/color"
 	"log"
 	"sync"
 	"time"
@@ -10,7 +11,6 @@ import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
-	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 
 	"weatherwidget/assets"
@@ -230,61 +230,61 @@ func NewSimpleCityPanel(lm *i18n.LocaleManager) *SimpleCityPanel {
 	p.errorIcon.Hide()
 
 	// Labels with appealing typography (matching original commit f94faa19).
-	p.cityText = canvas.NewText(p.translate("panel.placeholder.city", "City, RG"), theme.ForegroundColor())
+	p.cityText = canvas.NewText(p.translate("panel.placeholder.city", "City, RG"), color.White)
 	p.cityText.TextSize = 18
 	p.cityText.TextStyle = fyne.TextStyle{Bold: true}
 	p.cityText.Alignment = fyne.TextAlignCenter
 
-	p.tempText = canvas.NewText(p.translate("panel.placeholder.temp", "--°C"), theme.ForegroundColor())
+	p.tempText = canvas.NewText(p.translate("panel.placeholder.temp", "--°C"), color.White)
 	p.tempText.TextSize = 42
 	p.tempText.TextStyle = fyne.TextStyle{Bold: true}
 	p.tempText.Alignment = fyne.TextAlignCenter
 
-	p.descText = canvas.NewText(p.translate("panel.placeholder.desc", "--"), theme.ForegroundColor())
+	p.descText = canvas.NewText(p.translate("panel.placeholder.desc", "--"), color.White)
 	p.descText.TextSize = 12
 	p.descText.TextStyle = fyne.TextStyle{Italic: true}
 	p.descText.Alignment = fyne.TextAlignCenter
 
-	p.humidityText = canvas.NewText(p.translate("panel.placeholder.humidity", "💧 Hum --%"), theme.ForegroundColor())
+	p.humidityText = canvas.NewText(p.translate("panel.placeholder.humidity", "💧 Hum --%"), color.White)
 	p.humidityText.TextSize = 12
 	p.humidityText.TextStyle = fyne.TextStyle{Italic: true}
 	p.humidityText.Alignment = fyne.TextAlignCenter
 
-	p.windText = canvas.NewText(p.translate("panel.placeholder.wind", "💨 -- km/h"), theme.ForegroundColor())
+	p.windText = canvas.NewText(p.translate("panel.placeholder.wind", "💨 -- km/h"), color.White)
 	p.windText.TextSize = 12
 	p.windText.TextStyle = fyne.TextStyle{Italic: true}
 	p.windText.Alignment = fyne.TextAlignCenter
 
-	p.timeText = canvas.NewText(p.translate("panel.placeholder.time", "00:00:00"), theme.ForegroundColor())
+	p.timeText = canvas.NewText(p.translate("panel.placeholder.time", "00:00:00"), color.White)
 	p.timeText.TextSize = 22
 	p.timeText.TextStyle = fyne.TextStyle{Bold: true}
 	p.timeText.Alignment = fyne.TextAlignCenter
 
-	p.dateText = canvas.NewText(p.translate("panel.placeholder.date", "Monday, Jan 02"), theme.ForegroundColor())
+	p.dateText = canvas.NewText(p.translate("panel.placeholder.date", "Monday, Jan 02"), color.White)
 	p.dateText.TextSize = 11
 	p.dateText.Alignment = fyne.TextAlignCenter
 
-	p.windGustText = canvas.NewText("", theme.ForegroundColor())
+	p.windGustText = canvas.NewText("", color.White)
 	p.windGustText.TextSize = 12
 	p.windGustText.TextStyle = fyne.TextStyle{Italic: true}
 	p.windGustText.Alignment = fyne.TextAlignCenter
 
-	p.dewPointText = canvas.NewText("", theme.ForegroundColor())
+	p.dewPointText = canvas.NewText("", color.White)
 	p.dewPointText.TextSize = 12
 	p.dewPointText.TextStyle = fyne.TextStyle{Italic: true}
 	p.dewPointText.Alignment = fyne.TextAlignCenter
 
-	p.pressureText = canvas.NewText("", theme.ForegroundColor())
+	p.pressureText = canvas.NewText("", color.White)
 	p.pressureText.TextSize = 12
 	p.pressureText.TextStyle = fyne.TextStyle{Italic: true}
 	p.pressureText.Alignment = fyne.TextAlignCenter
 
-	p.uvIndexText = canvas.NewText("", theme.ForegroundColor())
+	p.uvIndexText = canvas.NewText("", color.White)
 	p.uvIndexText.TextSize = 12
 	p.uvIndexText.TextStyle = fyne.TextStyle{Italic: true}
 	p.uvIndexText.Alignment = fyne.TextAlignCenter
 
-	p.windDirText = canvas.NewText("", theme.ForegroundColor())
+	p.windDirText = canvas.NewText("", color.White)
 	p.windDirText.TextSize = 12
 	p.windDirText.TextStyle = fyne.TextStyle{Italic: true}
 	p.windDirText.Alignment = fyne.TextAlignCenter
@@ -296,7 +296,7 @@ func NewSimpleCityPanel(lm *i18n.LocaleManager) *SimpleCityPanel {
 		icon.FillMode = canvas.ImageFillContain
 		icon.SetMinSize(fyne.NewSize(18, 18))
 
-		value := canvas.NewText("", theme.ForegroundColor())
+		value := canvas.NewText("", color.White)
 		value.TextSize = 12
 		value.TextStyle = fyne.TextStyle{Italic: true}
 		value.Alignment = fyne.TextAlignCenter

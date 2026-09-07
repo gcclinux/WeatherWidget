@@ -35,6 +35,10 @@ type UIManager struct {
 	lastTempUnit  config.TemperatureUnit
 	lastWindUnit  config.WindSpeedUnit
 	lastIconTheme []config.IconTheme
+
+	cornerPosition string
+	monitorIndex   int
+	isCustomPos    bool
 }
 
 // NewUIManager creates a new UIManager and its main widget window.
@@ -223,6 +227,9 @@ func (u *UIManager) resizeToContent(count int) {
 			u.widget.Resize(u.widget.Content().MinSize())
 		}
 	}
+	if !u.isCustomPos && u.cornerPosition != "" {
+		u.SetCorner(u.cornerPosition, u.monitorIndex)
+	}
 }
 
 // GetViewMode returns the current view mode.
@@ -257,6 +264,7 @@ func (u *UIManager) UpdatePanels(data []weather.WeatherData, tempUnit config.Tem
 			d := data[i]
 			p.Update(&d, tempUnit, windUnit, iconTheme...)
 		}
+		u.resizeToContent(len(u.panels))
 	}
 }
 
@@ -328,35 +336,38 @@ func (u *UIManager) Panels() []*panel.CityPanel {
 func (u *UIManager) SimplePanels() []*panel.SimpleCityPanel {
 	return u.simplePanels
 }
-
 // SetCorner repositions the widget window to the specified screen corner
 // on the given monitor. Valid positions: "top-left", "top-right",
 // "bottom-left", "bottom-right". Unrecognised values default to "bottom-right".
 func (u *UIManager) SetCorner(position string, monitorIndex int) {
+	u.cornerPosition = position
+	u.monitorIndex = monitorIndex
+	u.isCustomPos = false
+
 	monX, monY, monW, monH := getMonitorBounds(monitorIndex)
-	winSize := u.widget.Canvas().Size()
-	ww := int(winSize.Width)
-	wh := int(winSize.Height)
 
-	count := len(u.panels)
+	var ww, wh int
 	if u.viewMode == config.ViewModeSimple {
-		count = len(u.simplePanels)
-	}
-	if count == 0 {
-		count = 1
-	}
-
-	var calcW, calcH int
-	if u.viewMode == config.ViewModeSimple {
-		calcW, calcH = u.calcSimpleLayout(count)
+		count := len(u.simplePanels)
+		if count < 1 {
+			count = 1
+		}
+		ww, wh = u.calcSimpleLayout(count)
 	} else {
-		calcW, calcH, _ = CalculateLayoutWithPollution(count, u.curDisplayFields, u.curPollutionFields)
-	}
-
-	// If canvas hasn't reported a size yet, or is stale across mode switch, use calculated size.
-	if ww == 0 || wh == 0 || (u.viewMode == config.ViewModeSimple && ww != calcW) || (u.viewMode == config.ViewModeEnhanced && ww != PanelWidth) {
-		ww = calcW
-		wh = calcH
+		if u.widget.Content() != nil {
+			minSize := u.widget.Content().MinSize()
+			ww = int(minSize.Width)
+			wh = int(minSize.Height)
+		}
+		if ww <= 0 || wh <= 0 {
+			count := len(u.panels)
+			if count < 1 {
+				count = 1
+			}
+			calcW, calcH, _ := CalculateLayoutWithPollution(count, u.curDisplayFields, u.curPollutionFields)
+			ww = calcW
+			wh = calcH
+		}
 	}
 
 	var x, y int
@@ -374,6 +385,14 @@ func (u *UIManager) SetCorner(position string, monitorIndex int) {
 		y = monY + monH - wh
 	}
 
+	// Clamp so widget doesn't get pushed off top or left edges of the screen
+	if y < monY {
+		y = monY
+	}
+	if x < monX {
+		x = monX
+	}
+
 	// Fyne doesn't expose a direct MoveWindow API, so we use the
 	// platform-specific helper on Windows and a no-op elsewhere.
 	moveWindow(u.widget, x, y)
@@ -388,11 +407,17 @@ func (u *UIManager) GetMonitorCount() int {
 // onDragEnd is called after the user finishes dragging so the caller can
 // persist the new position. Must be called after the window is shown.
 func (u *UIManager) EnableDrag(onDragEnd func()) {
-	enableWindowDrag(onDragEnd)
+	enableWindowDrag(func() {
+		u.isCustomPos = true
+		if onDragEnd != nil {
+			onDragEnd()
+		}
+	})
 }
 
 // SetPosition moves the widget window to exact pixel coordinates.
 func (u *UIManager) SetPosition(x, y int) {
+	u.isCustomPos = true
 	moveWindow(u.widget, x, y)
 }
 

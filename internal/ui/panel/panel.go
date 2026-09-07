@@ -11,7 +11,6 @@ import (
 	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/layout"
-	"fyne.io/fyne/v2/theme"
 
 	"weatherwidget/assets"
 	"weatherwidget/internal/config"
@@ -262,13 +261,13 @@ var metricBorderColor = color.NRGBA{R: 255, G: 255, B: 255, A: 36}
 // given emoji glyph, the metric name, and an (initially empty) value label.
 // Content is centered both horizontally and vertically within the cell.
 func newMetricTile(emoji, name string) *metricTileWidget {
-	emojiText := canvas.NewText(emoji, theme.ForegroundColor())
+	emojiText := canvas.NewText(emoji, color.White)
 	emojiText.TextSize = 15
 
 	nameText := canvas.NewText(name, color.NRGBA{R: 221, G: 221, B: 221, A: 255})
 	nameText.TextSize = 12
 
-	valueText := canvas.NewText("", theme.ForegroundColor())
+	valueText := canvas.NewText("", color.White)
 	valueText.TextSize = 15
 	valueText.TextStyle = fyne.TextStyle{Bold: true}
 
@@ -320,27 +319,27 @@ func NewCityPanel(lm *i18n.LocaleManager) *CityPanel {
 	p.errorIcon.Hide()
 
 	// ── Left info block ──────────────────────────────────────────────────────
-	p.cityText = canvas.NewText(p.translate("panel.placeholder.city", "📍 City, RG"), theme.ForegroundColor())
+	p.cityText = canvas.NewText(p.translate("panel.placeholder.city", "📍 City, RG"), color.White)
 	p.cityText.TextSize = 18
 	p.cityText.TextStyle = fyne.TextStyle{Bold: true}
 	p.cityText.Alignment = fyne.TextAlignLeading
 
-	p.tempText = canvas.NewText(p.translate("panel.placeholder.temp", "--°C"), theme.ForegroundColor())
+	p.tempText = canvas.NewText(p.translate("panel.placeholder.temp", "--°C"), color.White)
 	p.tempText.TextSize = 44
 	p.tempText.TextStyle = fyne.TextStyle{Bold: true}
 	p.tempText.Alignment = fyne.TextAlignCenter
 
-	p.descText = canvas.NewText(p.translate("panel.placeholder.desc", "--"), theme.ForegroundColor())
+	p.descText = canvas.NewText(p.translate("panel.placeholder.desc", "--"), color.White)
 	p.descText.TextSize = 13
 	p.descText.TextStyle = fyne.TextStyle{Italic: true}
 	p.descText.Alignment = fyne.TextAlignCenter
 
-	p.timeText = canvas.NewText(p.translate("panel.placeholder.time", "00:00:00"), theme.ForegroundColor())
+	p.timeText = canvas.NewText(p.translate("panel.placeholder.time", "00:00:00"), color.White)
 	p.timeText.TextSize = 24
 	p.timeText.TextStyle = fyne.TextStyle{Bold: true}
 	p.timeText.Alignment = fyne.TextAlignCenter
 
-	p.dateText = canvas.NewText(p.translate("panel.placeholder.date", "Monday, Jan 02"), theme.ForegroundColor())
+	p.dateText = canvas.NewText(p.translate("panel.placeholder.date", "Monday, Jan 02"), color.White)
 	p.dateText.TextSize = 12
 	p.dateText.Alignment = fyne.TextAlignCenter
 
@@ -363,7 +362,7 @@ func NewCityPanel(lm *i18n.LocaleManager) *CityPanel {
 		name.TextSize = 10
 		name.Alignment = fyne.TextAlignCenter
 
-		value := canvas.NewText("", theme.ForegroundColor())
+		value := canvas.NewText("", color.White)
 		value.TextSize = 12
 		value.TextStyle = fyne.TextStyle{Bold: true}
 		value.Alignment = fyne.TextAlignCenter

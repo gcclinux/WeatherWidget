@@ -53,7 +53,8 @@ func findHWND(title string) uintptr {
 }
 
 // applyToolWindowStyle sets WS_EX_TOOLWINDOW (removes from taskbar),
-// removes the title bar (WS_CAPTION), and makes the window always-on-top.
+// removes the title bar (WS_CAPTION), makes the window always-on-top,
+// and configures WS_EX_LAYERED with color-key transparency (#010101).
 func applyToolWindowStyle(title string) {
 	hwnd := findHWND(title)
 	if hwnd == 0 {
@@ -71,10 +72,15 @@ func applyToolWindowStyle(title string) {
 	newStyle := style &^ (wsCaption | wsThickFrame | wsSysMenu | wsMinimizeBox | wsMaximizeBox)
 	procSetWindowLongW.Call(hwnd, gwlStyle, newStyle)
 
-	// 2. Get current extended style and set tool-window behavior.
+	// 2. Get current extended style and set tool-window + layered behavior.
 	exStyle, _, _ := procGetWindowLongW.Call(hwnd, gwlExStyle)
-	newExStyle := (exStyle | wsExToolWindow) &^ wsExAppWindow
+	newExStyle := (exStyle | wsExToolWindow | wsExLayered) &^ wsExAppWindow
 	procSetWindowLongW.Call(hwnd, gwlExStyle, newExStyle)
+
+	// Set initial layered window attributes: color key transparent, content fully opaque.
+	colorKey := uintptr(0x00010101)
+	procSetLayeredWindowAttributes.Call(hwnd, colorKey, 255, lwaColorKey|lwaAlpha)
+	SetTransparencyActive(true)
 
 	// 3. Set HWND_BOTTOM (behind all other windows) and force frame refresh.
 	procSetWindowPos.Call(hwnd, hwndBottom, 0, 0, 0, 0,
@@ -125,12 +131,13 @@ func getWindowPosition() (int, int) {
 // The background color (#010101) is always made invisible via color key, and
 // the overall window alpha controls how see-through the content appears:
 //
-//	100% → no layered style (fully opaque)
+//	100% → alpha 255 (fully opaque content, transparent background)
 //	 75% → alpha 230 (mostly opaque, subtle transparency)
 //	 50% → alpha 180 (noticeably transparent)
 //	 25% → alpha 130 (very transparent)
 //
-// At 100% the layered style is removed and the window is fully opaque.
+// Even at 100% opacity the layered style is kept so the window canvas background
+// remains completely transparent, leaving no rectangular background box or panel.
 func setWindowOpacity(opacityPercent int) {
 	hwnd := findHWND(widgetTitle)
 	if hwnd == 0 {
@@ -141,14 +148,7 @@ func setWindowOpacity(opacityPercent int) {
 
 	exStyle, _, _ := procGetWindowLongW.Call(hwnd, gwlExStyle)
 
-	if opacityPercent >= 100 {
-		// Remove layered style — fully opaque, normal rendering.
-		procSetWindowLongW.Call(hwnd, gwlExStyle, exStyle&^wsExLayered)
-		SetTransparencyActive(false)
-		return
-	}
-
-	// Enable layered window.
+	// Always ensure WS_EX_LAYERED is set so the background color key is transparent.
 	procSetWindowLongW.Call(hwnd, gwlExStyle, exStyle|wsExLayered)
 	SetTransparencyActive(true)
 
@@ -159,8 +159,10 @@ func setWindowOpacity(opacityPercent int) {
 		alpha = 130
 	case opacityPercent <= 50:
 		alpha = 180
-	default: // 75%
+	case opacityPercent <= 75:
 		alpha = 230
+	default: // 100%
+		alpha = 255
 	}
 
 	// Color key: R=1, G=1, B=1 as a COLORREF (0x00BBGGRR).

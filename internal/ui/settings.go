@@ -97,6 +97,23 @@ func (u *UIManager) tFmt(key string, args ...interface{}) string {
 	return fmt.Sprintf(tmpl, args...)
 }
 
+func (u *UIManager) showSettingsInfo(title, msg string, win fyne.Window, th fyne.Theme) {
+	lbl := widget.NewLabel(msg)
+	lbl.Wrapping = fyne.TextWrapWord
+	d := dialog.NewCustom(title, "OK", container.NewThemeOverride(container.NewPadded(lbl), th), win)
+	d.Show()
+}
+
+func (u *UIManager) showSettingsError(err error, win fyne.Window, th fyne.Theme) {
+	if err == nil {
+		return
+	}
+	lbl := widget.NewLabel(err.Error())
+	lbl.Wrapping = fyne.TextWrapWord
+	d := dialog.NewCustom("Error", "OK", container.NewThemeOverride(container.NewPadded(lbl), th), win)
+	d.Show()
+}
+
 // ShowSettings opens a settings dialog window.
 func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config) error) {
 	if u.settings != nil {
@@ -107,6 +124,14 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 	win := u.app.NewWindow(u.t("settings.title"))
 	u.settings = win
 	win.SetFixedSize(false)
+
+	settingsTh := NewSettingsTheme(theme.DefaultTheme())
+	showError := func(err error) {
+		u.showSettingsError(err, win, settingsTh)
+	}
+	showInfo := func(title, msg string) {
+		u.showSettingsInfo(title, msg, win, settingsTh)
+	}
 
 	screenW, screenH := getScreenSize()
 	winW := float32(945)
@@ -743,12 +768,12 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 		addBtn := widget.NewButton(u.t("settings.locations.addBtn"), func() {
 			// Block adding cities in free mode (no license).
 			if !cfg.HasLicense() {
-				dialog.ShowError(fmt.Errorf("%s", u.t("error.settings.licenseRequired")), win)
+				showError(fmt.Errorf("%s", u.t("error.settings.licenseRequired")))
 				return
 			}
 			name := strings.TrimSpace(addNameEntry.Text)
 			if name == "" {
-				dialog.ShowError(fmt.Errorf("%s", u.t("error.settings.cityNameRequired")), win)
+				showError(fmt.Errorf("%s", u.t("error.settings.cityNameRequired")))
 				return
 			}
 			newCity := config.CityConfig{
@@ -759,7 +784,7 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 			if lat := strings.TrimSpace(addLatEntry.Text); lat != "" {
 				v, err := strconv.ParseFloat(lat, 64)
 				if err != nil {
-					dialog.ShowError(fmt.Errorf("%s", u.tFmt("error.settings.invalidLat", err)), win)
+					showError(fmt.Errorf("%s", u.tFmt("error.settings.invalidLat", err)))
 					return
 				}
 				newCity.Latitude = v
@@ -767,7 +792,7 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 			if lon := strings.TrimSpace(addLonEntry.Text); lon != "" {
 				v, err := strconv.ParseFloat(lon, 64)
 				if err != nil {
-					dialog.ShowError(fmt.Errorf("%s", u.tFmt("error.settings.invalidLon", err)), win)
+					showError(fmt.Errorf("%s", u.tFmt("error.settings.invalidLon", err)))
 					return
 				}
 				newCity.Longitude = v
@@ -800,7 +825,7 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 						}
 					})
 				} else {
-					dialog.ShowError(err, win)
+					showError(err)
 				}
 				return
 			}
@@ -817,18 +842,18 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 		searchBtn = widget.NewButton(u.t("settings.locations.searchBtn"), func() {
 			// Block searching for cities in free mode (no license).
 			if !cfg.HasLicense() {
-				dialog.ShowError(fmt.Errorf("%s", u.t("error.settings.licenseRequired")), win)
+				showError(fmt.Errorf("%s", u.t("error.settings.licenseRequired")))
 				return
 			}
 			name := strings.TrimSpace(addNameEntry.Text)
 			if name == "" {
-				dialog.ShowError(fmt.Errorf("%s", u.t("error.settings.cityNameRequiredSearch")), win)
+				showError(fmt.Errorf("%s", u.t("error.settings.cityNameRequiredSearch")))
 				return
 			}
 
 			apiKey := strings.TrimSpace(apiKeyEntry.Text)
 			if apiKey == "" {
-				dialog.ShowError(fmt.Errorf("%s", u.t("error.settings.apiKeyRequired")), win)
+				showError(fmt.Errorf("%s", u.t("error.settings.apiKeyRequired")))
 				return
 			}
 
@@ -841,7 +866,7 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 			case "easyweatherwidget":
 				region := strings.TrimSpace(addRegionEntry.Text)
 				if region == "" {
-					dialog.ShowError(fmt.Errorf("%s", u.t("error.settings.regionRequiredEww")), win)
+					showError(fmt.Errorf("%s", u.t("error.settings.regionRequiredEww")))
 					searchBtn.SetText(u.t("settings.locations.searchBtn"))
 					searchBtn.Enable()
 					return
@@ -858,21 +883,21 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 						url.PathEscape(searchKey), url.PathEscape(query))
 					resp, err := http.Get(uStr)
 					if err != nil {
-						fyne.Do(func() { dialog.ShowError(fmt.Errorf("%s", u.tFmt("error.settings.searchFailed", err)), win) })
+						fyne.Do(func() { showError(fmt.Errorf("%s", u.tFmt("error.settings.searchFailed", err))) })
 						return
 					}
 					defer resp.Body.Close()
 
 					if resp.StatusCode != http.StatusOK {
 						fyne.Do(func() {
-							dialog.ShowError(fmt.Errorf("%s", u.tFmt("error.settings.searchApiError", resp.StatusCode)), win)
+							showError(fmt.Errorf("%s", u.tFmt("error.settings.searchApiError", resp.StatusCode)))
 						})
 						return
 					}
 
 					body, err := io.ReadAll(resp.Body)
 					if err != nil {
-						fyne.Do(func() { dialog.ShowError(fmt.Errorf("%s", u.tFmt("error.settings.readError", err)), win) })
+						fyne.Do(func() { showError(fmt.Errorf("%s", u.tFmt("error.settings.readError", err))) })
 						return
 					}
 
@@ -883,13 +908,13 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 						Lon          float64 `json:"Lon"`
 					}
 					if err := json.Unmarshal(body, &result); err != nil {
-						fyne.Do(func() { dialog.ShowError(fmt.Errorf("%s", u.tFmt("error.settings.parseFailed", err)), win) })
+						fyne.Do(func() { showError(fmt.Errorf("%s", u.tFmt("error.settings.parseFailed", err))) })
 						return
 					}
 
 					if result.Neighborhood == "" {
 						fyne.Do(func() {
-							dialog.ShowError(fmt.Errorf("%s", u.tFmt("error.settings.noCityFound", searchName)), win)
+							showError(fmt.Errorf("%s", u.tFmt("error.settings.noCityFound", searchName)))
 						})
 						return
 					}
@@ -917,21 +942,21 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 					uStr := fmt.Sprintf("http://api.openweathermap.org/geo/1.0/direct?q=%s&limit=1&appid=%s", url.QueryEscape(searchName), url.QueryEscape(searchKey))
 					resp, err := http.Get(uStr)
 					if err != nil {
-						fyne.Do(func() { dialog.ShowError(fmt.Errorf("%s", u.tFmt("error.settings.searchFailed", err)), win) })
+						fyne.Do(func() { showError(fmt.Errorf("%s", u.tFmt("error.settings.searchFailed", err))) })
 						return
 					}
 					defer resp.Body.Close()
 
 					if resp.StatusCode != http.StatusOK {
 						fyne.Do(func() {
-							dialog.ShowError(fmt.Errorf("%s", u.tFmt("error.settings.searchApiError", resp.StatusCode)), win)
+							showError(fmt.Errorf("%s", u.tFmt("error.settings.searchApiError", resp.StatusCode)))
 						})
 						return
 					}
 
 					body, err := io.ReadAll(resp.Body)
 					if err != nil {
-						fyne.Do(func() { dialog.ShowError(fmt.Errorf("%s", u.tFmt("error.settings.readError", err)), win) })
+						fyne.Do(func() { showError(fmt.Errorf("%s", u.tFmt("error.settings.readError", err))) })
 						return
 					}
 
@@ -943,13 +968,13 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 						State   string  `json:"state"`
 					}
 					if err := json.Unmarshal(body, &results); err != nil {
-						fyne.Do(func() { dialog.ShowError(fmt.Errorf("%s", u.tFmt("error.settings.parseFailed", err)), win) })
+						fyne.Do(func() { showError(fmt.Errorf("%s", u.tFmt("error.settings.parseFailed", err))) })
 						return
 					}
 
 					if len(results) == 0 {
 						fyne.Do(func() {
-							dialog.ShowError(fmt.Errorf("%s", u.tFmt("error.settings.noCityFound", searchName)), win)
+							showError(fmt.Errorf("%s", u.tFmt("error.settings.noCityFound", searchName)))
 						})
 						return
 					}
@@ -1009,7 +1034,7 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 		autoStartCheck.SetChecked(isAutoStartEnabled())
 		autoStartCheck.OnChanged = func(checked bool) {
 			if err := setAutoStartEnabled(checked); err != nil {
-				dialog.ShowError(fmt.Errorf("%s", u.tFmt("error.settings.autoStartFailed", err)), win)
+				showError(fmt.Errorf("%s", u.tFmt("error.settings.autoStartFailed", err)))
 				// Revert the checkbox to the actual state.
 				autoStartCheck.SetChecked(isAutoStartEnabled())
 			}
@@ -1367,7 +1392,7 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 				autoStartCheck,
 			),
 		)))
-		appearanceTab := container.NewTabItemWithIcon(u.t("settings.tab.appearance"), theme.ColorPaletteIcon(), appearanceContent)
+		appearanceTab := container.NewTabItemWithIcon(u.t("settings.tab.appearance"), theme.ColorPaletteIcon(), container.NewThemeOverride(appearanceContent, settingsTh))
 
 		// ── Widget tab ────────────────────────────────────────────────────────
 		widgetContent := container.NewPadded(container.NewVScroll(container.NewVBox(
@@ -1384,14 +1409,14 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 				windUnitRadio,
 			),
 		)))
-		widgetTab := container.NewTabItemWithIcon(u.t("settings.tab.widget"), theme.ComputerIcon(), widgetContent)
+		widgetTab := container.NewTabItemWithIcon(u.t("settings.tab.widget"), theme.ComputerIcon(), container.NewThemeOverride(widgetContent, settingsTh))
 
 		// ── Language tab ──────────────────────────────────────────────────────
 		globeIcon := canvas.NewText("🌐", color.NRGBA{R: 56, G: 189, B: 248, A: 255})
 		globeIcon.TextSize = 18
 		globeIcon.TextStyle = fyne.TextStyle{Bold: true}
 
-		langHeaderTitle := canvas.NewText(u.t("settings.language.title"), color.NRGBA{R: 248, G: 250, B: 252, A: 255})
+		langHeaderTitle := canvas.NewText(u.t("settings.language.title"), color.NRGBA{R: 30, G: 41, B: 59, A: 255})
 		langHeaderTitle.TextSize = 16
 		langHeaderTitle.TextStyle = fyne.TextStyle{Bold: true}
 
@@ -1416,14 +1441,14 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 			widget.NewSeparator(),
 			langGrid,
 		)))
-		languageTab := container.NewTabItemWithIcon(u.t("settings.tab.language"), theme.MailComposeIcon(), languageContent)
+		languageTab := container.NewTabItemWithIcon(u.t("settings.tab.language"), theme.MailComposeIcon(), container.NewThemeOverride(languageContent, settingsTh))
 
 		providerContent := container.NewPadded(container.NewVScroll(container.NewVBox(
 			widget.NewCard(u.t("settings.provider.title"), u.t("settings.provider.subtitle"),
 				apiSection,
 			),
 		)))
-		providerTab := container.NewTabItemWithIcon(u.t("settings.tab.provider"), theme.SettingsIcon(), providerContent)
+		providerTab := container.NewTabItemWithIcon(u.t("settings.tab.provider"), theme.SettingsIcon(), container.NewThemeOverride(providerContent, settingsTh))
 
 		proNoteBg := canvas.NewRectangle(color.NRGBA{R: 14, G: 165, B: 233, A: 25})
 		proNoteBg.CornerRadius = 8
@@ -1447,14 +1472,18 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 				widget.NewCard(u.t("settings.locations.savedTitle"), u.t("settings.locations.savedSubtitle"), cityListScroll),
 			),
 		)
-		locationsTab := container.NewTabItemWithIcon(u.t("settings.tab.locations"), theme.ListIcon(), locationsContent)
+		locationsTab := container.NewTabItemWithIcon(u.t("settings.tab.locations"), theme.ListIcon(), container.NewThemeOverride(locationsContent, settingsTh))
 
 		// ── About tab ─────────────────────────────────────────────────────────
 		aboutDesc := widget.NewLabel(u.t("settings.about.description"))
 		aboutDesc.Wrapping = fyne.TextWrapWord
 
-		// Combine app name and version in the card title.
-		aboutTitle := u.t("settings.about.appName") + " (version: 1.2.0)"
+		// Combine app name and version dynamically from i18n in the card title.
+		verStr := strings.TrimSpace(strings.ReplaceAll(u.t("settings.about.version"), "*", ""))
+		if idx := strings.LastIndex(verStr, ":"); idx >= 0 && idx+1 < len(verStr) {
+			verStr = strings.TrimSpace(verStr[idx+1:])
+		}
+		aboutTitle := fmt.Sprintf("%s (version: %s)", u.t("settings.about.appName"), verStr)
 
 		websiteLink := widget.NewHyperlink("easysmartapps.co.uk/weatherwidget", parseURL("https://easysmartapps.co.uk/weatherwidget"))
 		manualLink := widget.NewHyperlink("easysmartapps.co.uk/weatherwidget-manual", parseURL("https://easysmartapps.co.uk/weatherwidget-manual"))
@@ -1546,7 +1575,7 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 			previewLabel,
 			previewGrid,
 		)))
-		aboutTab := container.NewTabItemWithIcon(u.t("settings.tab.about"), theme.InfoIcon(), aboutContent)
+		aboutTab := container.NewTabItemWithIcon(u.t("settings.tab.about"), theme.InfoIcon(), container.NewThemeOverride(aboutContent, settingsTh))
 
 		tabs = container.NewAppTabs(appearanceTab, widgetTab, providerTab, locationsTab, languageTab, aboutTab)
 		tabs.SetTabLocation(container.TabLocationLeading)
@@ -1566,15 +1595,15 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 				for _, e := range errs {
 					msgs = append(msgs, e.Field+": "+e.Message)
 				}
-				dialog.ShowError(fmt.Errorf("%s", strings.Join(msgs, "\n")), win)
+				showError(fmt.Errorf("%s", strings.Join(msgs, "\n")))
 				return
 			}
 			if err := onSave(newCfg); err != nil {
-				dialog.ShowError(err, win)
+				showError(err)
 				return
 			}
 			state.saved = true
-			dialog.ShowInformation(u.t("settings.dialog.saved"), u.t("settings.dialog.savedMsg"), win)
+			showInfo(u.t("settings.dialog.saved"), u.t("settings.dialog.savedMsg"))
 		})
 
 		cancelBtn := widget.NewButton(u.t("settings.cancel"), func() {
@@ -1593,7 +1622,10 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 			container.NewPadded(container.NewPadded(container.NewHBox(layout.NewSpacer(), saveBtnContainer, cancelBtnContainer))),
 		)
 
-		win.SetContent(container.NewBorder(nil, saveBar, nil, nil, tabs))
+		bg := canvas.NewRectangle(color.White)
+		mainBorder := container.NewBorder(nil, saveBar, nil, nil, tabs)
+		themedContent := container.NewThemeOverride(mainBorder, settingsTh)
+		win.SetContent(container.NewStack(bg, themedContent))
 	}
 
 	buildSettingsUI()
@@ -1828,7 +1860,8 @@ func (u *UIManager) showProUpgradeDialog(win fyne.Window, onGoToProvider func())
 		buttons,
 	)
 
-	d = dialog.NewCustomWithoutButtons(u.t("dialog.pro.title"), dialogContent, win)
+	st := NewSettingsTheme(theme.DefaultTheme())
+	d = dialog.NewCustomWithoutButtons(u.t("dialog.pro.title"), container.NewThemeOverride(dialogContent, st), win)
 	d.Resize(fyne.NewSize(460, 360))
 	d.Show()
 }

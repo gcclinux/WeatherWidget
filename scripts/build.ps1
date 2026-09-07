@@ -43,10 +43,28 @@ function Update-LocaleVersions {
     }
 }
 
+# Update version in winres/winres.json so Windows executable properties match.
+function Update-WinresVersion {
+    param([string]$Ver)
+    $winresFile = Join-Path $ProjectRoot "winres/winres.json"
+    if (Test-Path $winresFile) {
+        $content = Get-Content $winresFile -Raw
+        $updated = $content -replace '("version":\s*")[^"]*(")', "`${1}$Ver`${2}"
+        $updated = $updated -replace '("file_version":\s*")[^"]*(")', "`${1}$Ver`${2}"
+        $updated = $updated -replace '("product_version":\s*")[^"]*(")', "`${1}$Ver`${2}"
+        $updated = $updated -replace '("FileVersion":\s*")[^"]*(")', "`${1}$Ver`${2}"
+        $updated = $updated -replace '("ProductVersion":\s*")[^"]*(")', "`${1}$Ver`${2}"
+        if ($updated -ne $content) {
+            Set-Content -Path $winresFile -Value $updated -NoNewline
+        }
+    }
+}
+
 switch ($Target) {
     "build" {
         Write-Host "Building $BinaryName v$Version..."
         Update-LocaleVersions -Ver $Version
+        Update-WinresVersion -Ver $Version
         go build -ldflags="$LdFlags" -o $BinaryName $CmdPath
         if ($LASTEXITCODE -eq 0) {
             Write-Host "Build successful: $BinaryName (v$Version)"

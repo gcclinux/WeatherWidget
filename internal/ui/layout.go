@@ -60,29 +60,37 @@ func CalculateLayoutWithPollution(cityCount int, df *config.DisplayFields, pf *c
 		df = config.DefaultDisplayFields()
 	}
 
-	// Per-card height is dominated by the left info block. The air row only
-	// adds height when at least one pollution metric is visible.
-	perCard := heightPadding
-	if anyPollutionVisible(pf) {
-		perCard += heightAirRow
+	// In the horizontal card, the middle region places the weather icon and the
+	// info column (time, date, temp, condition) side-by-side in an HBox, with
+	// the 3x2 metrics grid beside them. Their heights do not sum vertically.
+	infoColHeight := 0
+	if df.ShowTime {
+		infoColHeight += heightTime
 	}
+	if df.ShowDate {
+		infoColHeight += heightDate
+	}
+	if df.ShowTemp {
+		infoColHeight += heightTemp
+	}
+	if df.ShowDesc {
+		infoColHeight += heightDesc
+	}
+
+	middleHeight := infoColHeight
+	if df.ShowIcon && heightIcon > middleHeight {
+		middleHeight = heightIcon
+	}
+	if middleHeight < 110 {
+		middleHeight = 110 // metrics grid minimum height
+	}
+
+	perCard := heightPadding + middleHeight
 	if df.ShowCity {
 		perCard += heightCity
 	}
-	if df.ShowIcon {
-		perCard += heightIcon
-	}
-	if df.ShowTime {
-		perCard += heightTime
-	}
-	if df.ShowDate {
-		perCard += heightDate
-	}
-	if df.ShowTemp {
-		perCard += heightTemp
-	}
-	if df.ShowDesc {
-		perCard += heightDesc
+	if anyPollutionVisible(pf) {
+		perCard += heightAirRow
 	}
 
 	return PanelWidth, cityCount * perCard, cityCount
