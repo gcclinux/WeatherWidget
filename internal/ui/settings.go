@@ -1329,6 +1329,16 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 				u.ApplyPollutionFields(state.pollutionFields)
 				// Re-render panels with current unit settings
 				u.RerenderPanels(state.selectedUnit, state.selectedWindUnit, state.selectedIconTheme)
+				// Ensure Win32 styles, transparency, and position are updated
+				u.ApplyWin32Styles()
+				if val, ok := opacityMap[opacityRadio.Selected]; ok {
+					u.SetOpacity(val)
+				}
+				if state.customX != nil && state.customY != nil {
+					u.SetPosition(*state.customX, *state.customY)
+				} else {
+					u.SetCorner(cfg.CornerPosition, cfg.MonitorIndex)
+				}
 			},
 		)
 		viewModeRadio.Horizontal = true

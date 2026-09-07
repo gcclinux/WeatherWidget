@@ -97,3 +97,133 @@ func anyPollutionVisible(pf *config.PollutionFields) bool {
 	return pf.ShowCO || pf.ShowNO || pf.ShowNO2 || pf.ShowO3 ||
 		pf.ShowSO2 || pf.ShowNH3 || pf.ShowPM25 || pf.ShowPM10 || pf.ShowAQI
 }
+
+// SimplePanelWidth is the width of a single CityPanel in Simple (Classic) view.
+const SimplePanelWidth = 160
+
+// SimplePanelHeight is the default height of a single CityPanel in Simple (Classic) view.
+const SimplePanelHeight = 185
+
+// Simple element height contributions in dip (approximate).
+const (
+	simpleHeightCity      = 24 // city name text + spacing
+	simpleHeightIcon      = 70 // icon (64) + spacing
+	simpleHeightTemp      = 48 // large temperature text + spacing
+	simpleHeightDesc      = 18 // description text + spacing
+	simpleHeightHumidity  = 18 // humidity row + spacing
+	simpleHeightWindRow   = 18 // wind speed + direction row + spacing
+	simpleHeightTime      = 26 // time text
+	simpleHeightDate      = 18 // date text
+	simpleHeightSeparator = 8  // separator line + spacing
+	simpleHeightPadding   = 16 // container padding (top + bottom)
+	simpleHeightSpacers   = 10 // spacers between sections
+	simpleHeightInfoRow      = 18 // generic info row height (wind gust, dew point, pressure, UV, wind dir)
+	simpleHeightPollutionRow = 18 // pollution row height
+)
+
+// CalculateSimpleLayout computes the widget dimensions for Simple view.
+func CalculateSimpleLayout(cityCount int) (width, height, slots int) {
+	if cityCount < 1 {
+		cityCount = 1
+	}
+	return cityCount * SimplePanelWidth, SimplePanelHeight, cityCount
+}
+
+// CalculateSimpleLayoutWithFields computes the widget dimensions for Simple view
+// accounting for which display fields are visible.
+func CalculateSimpleLayoutWithFields(cityCount int, df *config.DisplayFields) (width, height, slots int) {
+	return CalculateSimpleLayoutWithPollution(cityCount, df, nil)
+}
+
+// CalculateSimpleLayoutWithPollution computes the widget dimensions for Simple view
+// accounting for visible display fields and air quality / pollution metrics.
+func CalculateSimpleLayoutWithPollution(cityCount int, df *config.DisplayFields, pf *config.PollutionFields) (width, height, slots int) {
+	count := 0
+	if pf != nil {
+		if pf.ShowAQI {
+			count++
+		}
+		if pf.ShowCO {
+			count++
+		}
+		if pf.ShowNO {
+			count++
+		}
+		if pf.ShowNO2 {
+			count++
+		}
+		if pf.ShowO3 {
+			count++
+		}
+		if pf.ShowSO2 {
+			count++
+		}
+		if pf.ShowNH3 {
+			count++
+		}
+		if pf.ShowPM25 {
+			count++
+		}
+		if pf.ShowPM10 {
+			count++
+		}
+	}
+	return CalculateSimpleLayoutWithPollutionRows(cityCount, df, count)
+}
+
+// CalculateSimpleLayoutWithPollutionRows computes the widget dimensions for Simple view
+// given the exact number of visible pollution rows.
+func CalculateSimpleLayoutWithPollutionRows(cityCount int, df *config.DisplayFields, pollutionRowCount int) (width, height, slots int) {
+	if cityCount < 1 {
+		cityCount = 1
+	}
+	if df == nil {
+		df = config.DefaultDisplayFields()
+	}
+
+	h := simpleHeightPadding + simpleHeightSpacers
+	if df.ShowCity {
+		h += simpleHeightCity
+	}
+	if df.ShowIcon {
+		h += simpleHeightIcon
+	}
+	if df.ShowTemp {
+		h += simpleHeightTemp
+	}
+	if df.ShowDesc {
+		h += simpleHeightDesc
+	}
+	if df.ShowHumidity {
+		h += simpleHeightHumidity
+	}
+	if df.ShowWind {
+		h += simpleHeightWindRow
+	}
+	if df.ShowWindGust {
+		h += simpleHeightInfoRow
+	}
+	if df.ShowDewPoint {
+		h += simpleHeightInfoRow
+	}
+	if df.ShowPressure {
+		h += simpleHeightInfoRow
+	}
+	if df.ShowUVIndex {
+		h += simpleHeightInfoRow
+	}
+	if pollutionRowCount > 0 {
+		h += pollutionRowCount * simpleHeightPollutionRow
+	}
+	if df.ShowTime || df.ShowDate {
+		h += simpleHeightSeparator
+	}
+	if df.ShowTime {
+		h += simpleHeightTime
+	}
+	if df.ShowDate {
+		h += simpleHeightDate
+	}
+
+	return cityCount * SimplePanelWidth, h, cityCount
+}

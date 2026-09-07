@@ -1,8 +1,8 @@
 package panel
 
 import (
+	"fmt"
 	"image"
-	"image/color"
 	"log"
 	"sync"
 	"time"
@@ -11,6 +11,7 @@ import (
 	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/theme"
+	"fyne.io/fyne/v2/widget"
 
 	"weatherwidget/assets"
 	"weatherwidget/internal/config"
@@ -27,50 +28,38 @@ type simplePollutionCell struct {
 }
 
 // SimpleCityPanel renders weather data for a single city in the Simple (Classic) view.
-//
-// The Simple view displays a vertical column of weather information:
-// - City name at the top
-// - Weather icon
-// - Time and date
-// - Temperature (large)
-// - Condition description
-// - Weather details (humidity, wind, etc.) in a vertical list
-// - Pollution metrics in a vertical list
-//
-// Multiple SimpleCityPanels are arranged side-by-side (horizontally) to show
-// multiple cities.
+// It reproduces the original horizontal side-by-side classic weatherwidget design
+// with transparent desktop background, supporting weather metrics and air quality.
 type SimpleCityPanel struct {
-	lm        *i18n.LocaleManager
-	container *fyne.Container
+	lm            *i18n.LocaleManager
+	container     *fyne.Container
+	iconWidget    *canvas.Image
+	iconRow       *fyne.Container
+	tempText      *canvas.Text
+	descText      *canvas.Text
+	humidityText  *canvas.Text
+	windText      *canvas.Text
+	cityText      *canvas.Text
+	timeText      *canvas.Text
+	dateText      *canvas.Text
+	windGustText  *canvas.Text
+	dewPointText  *canvas.Text
+	pressureText  *canvas.Text
+	uvIndexText   *canvas.Text
+	windDirText   *canvas.Text
+	separatorRow  *fyne.Container
+	errorIcon     *canvas.Image
 
-	// Main display elements
-	iconWidget *canvas.Image
-	iconRow    *fyne.Container
-	cityText   *canvas.Text
-	timeText   *canvas.Text
-	dateText   *canvas.Text
-	tempText   *canvas.Text
-	descText   *canvas.Text
-
-	// Weather detail texts (vertical list format)
-	humidityText *canvas.Text
-	windText     *canvas.Text
-	windGustText *canvas.Text
-	dewPointText *canvas.Text
-	uvIndexText  *canvas.Text
-
-	// Pollution cells (vertical list)
-	pollutionCells map[weather.PollutionMetric]*simplePollutionCell
-	pollutionBox   *fyne.Container
-
-	errorIcon *canvas.Image
-
-	lastData        *weather.WeatherData
-	lastTempUnit    config.TemperatureUnit
-	lastWindUnit    config.WindSpeedUnit
-	lastIconTheme   config.IconTheme
-	displayFields   *config.DisplayFields
+	// Air quality & pollution metrics
+	pollutionCells  map[weather.PollutionMetric]*simplePollutionCell
+	pollutionBox    *fyne.Container
 	pollutionFields *config.PollutionFields
+
+	lastData      *weather.WeatherData  // cached for re-render on unit change
+	lastTempUnit  config.TemperatureUnit
+	lastWindUnit  config.WindSpeedUnit
+	lastIconTheme config.IconTheme
+	displayFields *config.DisplayFields // current visibility config
 
 	mu         sync.Mutex
 	timeTicker *time.Ticker
@@ -155,8 +144,72 @@ func (p *SimpleCityPanel) StopAnimation() {
 	}
 }
 
+// simpleColumnLayout ensures each city panel maintains a minimum width
+// so columns are never squished together horizontally.
+type simpleColumnLayout struct {
+	minWidth float32
+}
+
+func (l *simpleColumnLayout) MinSize(objects []fyne.CanvasObject) fyne.Size {
+	var w, h float32
+	for _, o := range objects {
+		if o.Visible() {
+			s := o.MinSize()
+			if s.Width > w {
+				w = s.Width
+			}
+			if s.Height > h {
+				h = s.Height
+			}
+		}
+	}
+	if w < l.minWidth {
+		w = l.minWidth
+	}
+	return fyne.NewSize(w, h)
+}
+
+func (l *simpleColumnLayout) Layout(objects []fyne.CanvasObject, size fyne.Size) {
+	for _, o := range objects {
+		if o.Visible() {
+			o.Resize(size)
+			o.Move(fyne.NewPos(0, 0))
+		}
+	}
+}
+
+// tightVBoxLayout arranges objects vertically with zero spacing between them.
+type tightVBoxLayout struct{}
+
+func (t *tightVBoxLayout) MinSize(objects []fyne.CanvasObject) fyne.Size {
+	var w, h float32
+	for _, o := range objects {
+		if !o.Visible() {
+			continue
+		}
+		s := o.MinSize()
+		if s.Width > w {
+			w = s.Width
+		}
+		h += s.Height
+	}
+	return fyne.NewSize(w, h)
+}
+
+func (t *tightVBoxLayout) Layout(objects []fyne.CanvasObject, containerSize fyne.Size) {
+	var y float32
+	for _, o := range objects {
+		if !o.Visible() {
+			continue
+		}
+		s := o.MinSize()
+		o.Resize(fyne.NewSize(containerSize.Width, s.Height))
+		o.Move(fyne.NewPos(0, y))
+		y += s.Height
+	}
+}
+
 // NewSimpleCityPanel creates a new SimpleCityPanel with placeholder content.
-// If lm is nil, hardcoded English defaults are used for placeholder text.
 func NewSimpleCityPanel(lm *i18n.LocaleManager) *SimpleCityPanel {
 	p := &SimpleCityPanel{
 		lm:              lm,
@@ -164,7 +217,7 @@ func NewSimpleCityPanel(lm *i18n.LocaleManager) *SimpleCityPanel {
 		pollutionFields: config.DefaultPollutionFields(),
 	}
 
-	// Weather icon — start with the default cloudy icon.
+	// Weather icon — start with default cloudy icon.
 	p.iconWidget = canvas.NewImageFromResource(loadIconFromAssets(weather.IconCloudy))
 	p.iconWidget.FillMode = canvas.ImageFillContain
 	p.iconWidget.SetMinSize(fyne.NewSize(64, 64))
@@ -176,20 +229,11 @@ func NewSimpleCityPanel(lm *i18n.LocaleManager) *SimpleCityPanel {
 	p.errorIcon.SetMinSize(fyne.NewSize(16, 16))
 	p.errorIcon.Hide()
 
-	// Labels with appealing typography for the Simple vertical layout.
+	// Labels with appealing typography (matching original commit f94faa19).
 	p.cityText = canvas.NewText(p.translate("panel.placeholder.city", "City, RG"), theme.ForegroundColor())
 	p.cityText.TextSize = 18
 	p.cityText.TextStyle = fyne.TextStyle{Bold: true}
 	p.cityText.Alignment = fyne.TextAlignCenter
-
-	p.timeText = canvas.NewText(p.translate("panel.placeholder.time", "00:00:00"), theme.ForegroundColor())
-	p.timeText.TextSize = 22
-	p.timeText.TextStyle = fyne.TextStyle{Bold: true}
-	p.timeText.Alignment = fyne.TextAlignCenter
-
-	p.dateText = canvas.NewText(p.translate("panel.placeholder.date", "01/01/2026"), theme.ForegroundColor())
-	p.dateText.TextSize = 11
-	p.dateText.Alignment = fyne.TextAlignCenter
 
 	p.tempText = canvas.NewText(p.translate("panel.placeholder.temp", "--°C"), theme.ForegroundColor())
 	p.tempText.TextSize = 42
@@ -201,136 +245,179 @@ func NewSimpleCityPanel(lm *i18n.LocaleManager) *SimpleCityPanel {
 	p.descText.TextStyle = fyne.TextStyle{Italic: true}
 	p.descText.Alignment = fyne.TextAlignCenter
 
-	// Weather detail texts with emoji icons (vertical list format)
-	p.humidityText = canvas.NewText("💧 Hum --%", theme.ForegroundColor())
+	p.humidityText = canvas.NewText(p.translate("panel.placeholder.humidity", "💧 Hum --%"), theme.ForegroundColor())
 	p.humidityText.TextSize = 12
+	p.humidityText.TextStyle = fyne.TextStyle{Italic: true}
 	p.humidityText.Alignment = fyne.TextAlignCenter
 
-	p.windText = canvas.NewText("💨 -- km/h", theme.ForegroundColor())
+	p.windText = canvas.NewText(p.translate("panel.placeholder.wind", "💨 -- km/h"), theme.ForegroundColor())
 	p.windText.TextSize = 12
+	p.windText.TextStyle = fyne.TextStyle{Italic: true}
 	p.windText.Alignment = fyne.TextAlignCenter
 
-	p.windGustText = canvas.NewText("💨 Gust -- km/h", theme.ForegroundColor())
+	p.timeText = canvas.NewText(p.translate("panel.placeholder.time", "00:00:00"), theme.ForegroundColor())
+	p.timeText.TextSize = 22
+	p.timeText.TextStyle = fyne.TextStyle{Bold: true}
+	p.timeText.Alignment = fyne.TextAlignCenter
+
+	p.dateText = canvas.NewText(p.translate("panel.placeholder.date", "Monday, Jan 02"), theme.ForegroundColor())
+	p.dateText.TextSize = 11
+	p.dateText.Alignment = fyne.TextAlignCenter
+
+	p.windGustText = canvas.NewText("", theme.ForegroundColor())
 	p.windGustText.TextSize = 12
+	p.windGustText.TextStyle = fyne.TextStyle{Italic: true}
 	p.windGustText.Alignment = fyne.TextAlignCenter
 
-	p.dewPointText = canvas.NewText("💧 Dew --°C", theme.ForegroundColor())
+	p.dewPointText = canvas.NewText("", theme.ForegroundColor())
 	p.dewPointText.TextSize = 12
+	p.dewPointText.TextStyle = fyne.TextStyle{Italic: true}
 	p.dewPointText.Alignment = fyne.TextAlignCenter
 
-	p.uvIndexText = canvas.NewText("☀ UV --", theme.ForegroundColor())
+	p.pressureText = canvas.NewText("", theme.ForegroundColor())
+	p.pressureText.TextSize = 12
+	p.pressureText.TextStyle = fyne.TextStyle{Italic: true}
+	p.pressureText.Alignment = fyne.TextAlignCenter
+
+	p.uvIndexText = canvas.NewText("", theme.ForegroundColor())
 	p.uvIndexText.TextSize = 12
+	p.uvIndexText.TextStyle = fyne.TextStyle{Italic: true}
 	p.uvIndexText.Alignment = fyne.TextAlignCenter
 
-	// Pollution cells for vertical list
+	p.windDirText = canvas.NewText("", theme.ForegroundColor())
+	p.windDirText.TextSize = 12
+	p.windDirText.TextStyle = fyne.TextStyle{Italic: true}
+	p.windDirText.Alignment = fyne.TextAlignCenter
+
+	// Pollution cells (air quality & pollution)
 	p.pollutionCells = make(map[weather.PollutionMetric]*simplePollutionCell, len(weather.PollutionMetricOrder))
 	for _, m := range weather.PollutionMetricOrder {
 		icon := canvas.NewImageFromResource(loadSimpleAirIconResource(weather.AirIconFile(m)))
 		icon.FillMode = canvas.ImageFillContain
-		icon.SetMinSize(fyne.NewSize(20, 20))
+		icon.SetMinSize(fyne.NewSize(18, 18))
 
 		value := canvas.NewText("", theme.ForegroundColor())
-		value.TextSize = 11
-		value.Alignment = fyne.TextAlignLeading
+		value.TextSize = 12
+		value.TextStyle = fyne.TextStyle{Italic: true}
+		value.Alignment = fyne.TextAlignCenter
 
 		cell := &simplePollutionCell{
 			icon:  icon,
 			value: value,
 		}
-		cell.container = container.NewHBox(
-			icon,
-			value,
-		)
+		cell.container = container.NewCenter(container.NewHBox(icon, value))
 		cell.container.Hide()
 		p.pollutionCells[m] = cell
 	}
 
-	p.container = container.NewMax(p.buildLayout())
+	p.separatorRow = container.NewCenter(widget.NewSeparator())
+
+	p.container = container.New(&simpleColumnLayout{minWidth: 160}, p.buildLayout())
 	return p
 }
 
-// SimplePanelWidth is the fixed width of a single Simple view city card.
-const SimplePanelWidth = 180
-
-// buildLayout constructs the vertical layout for the Simple view.
+// buildLayout constructs the vertical layout hierarchy of labels.
 func (p *SimpleCityPanel) buildLayout() fyne.CanvasObject {
 	var objects []fyne.CanvasObject
 
-	// City name at top
 	if p.displayFields.ShowCity {
-		objects = append(objects, container.NewCenter(p.cityText))
+		objects = append(objects, p.cityText)
 	}
 
-	// Weather icon with error indicator
-	p.iconRow = container.NewBorder(nil, nil, nil, p.errorIcon, container.NewCenter(p.iconWidget))
+	p.iconRow = container.NewBorder(nil, nil, nil, nil, container.NewCenter(p.iconWidget), p.errorIcon)
+
 	if p.displayFields.ShowIcon {
-		objects = append(objects, container.NewCenter(p.iconRow))
+		objects = append(objects, p.iconRow)
 	}
 
-	// Time and date
-	if p.displayFields.ShowTime {
-		objects = append(objects, container.NewCenter(p.timeText))
-	}
-	if p.displayFields.ShowDate {
-		objects = append(objects, container.NewCenter(p.dateText))
-	}
-
-	// Temperature
 	if p.displayFields.ShowTemp {
-		objects = append(objects, container.NewCenter(p.tempText))
+		objects = append(objects, p.tempText)
 	}
 
-	// Condition description
 	if p.displayFields.ShowDesc {
-		objects = append(objects, container.NewCenter(p.descText))
+		objects = append(objects, p.descText)
 	}
 
-	// Weather details in a vertical list
 	if p.displayFields.ShowHumidity {
 		objects = append(objects, container.NewCenter(p.humidityText))
 	}
+
 	if p.displayFields.ShowWind {
-		objects = append(objects, container.NewCenter(p.windText))
-	}
-	if p.displayFields.ShowWindGust {
-		objects = append(objects, container.NewCenter(p.windGustText))
-	}
-	if p.displayFields.ShowDewPoint {
-		objects = append(objects, container.NewCenter(p.dewPointText))
-	}
-	if p.displayFields.ShowUVIndex {
-		objects = append(objects, container.NewCenter(p.uvIndexText))
+		objects = append(objects, container.NewCenter(container.NewHBox(p.windText, p.windDirText)))
 	}
 
-	// Pollution cells in a vertical list
-	p.pollutionBox = container.NewVBox()
-	for _, m := range weather.PollutionMetricOrder {
-		if cell := p.pollutionCells[m]; cell != nil {
-			p.pollutionBox.Add(container.NewCenter(cell.container))
+	// Dynamic sections: only show if fields are visible.
+	hasDynamicField := p.displayFields.ShowWindGust || p.displayFields.ShowDewPoint || p.displayFields.ShowPressure || p.displayFields.ShowUVIndex
+	if hasDynamicField {
+		var dynamicObjects []fyne.CanvasObject
+		if p.displayFields.ShowWindGust {
+			dynamicObjects = append(dynamicObjects, p.windGustText)
+		}
+		if p.displayFields.ShowDewPoint {
+			dynamicObjects = append(dynamicObjects, p.dewPointText)
+		}
+		if p.displayFields.ShowPressure {
+			dynamicObjects = append(dynamicObjects, p.pressureText)
+		}
+		if p.displayFields.ShowUVIndex {
+			dynamicObjects = append(dynamicObjects, p.uvIndexText)
+		}
+
+		if len(dynamicObjects) > 0 {
+			objects = append(objects, container.New(&tightVBoxLayout{}, dynamicObjects...))
 		}
 	}
+
+	// Pollution metrics (air quality)
+	p.pollutionBox = container.New(&tightVBoxLayout{})
+	for _, m := range weather.PollutionMetricOrder {
+		if cell := p.pollutionCells[m]; cell != nil {
+			p.pollutionBox.Add(cell.container)
+		}
+	}
+	p.pollutionBox.Hide()
 	objects = append(objects, p.pollutionBox)
 
-	content := container.NewVBox(objects...)
+	if p.displayFields.ShowTime || p.displayFields.ShowDate {
+		objects = append(objects, p.separatorRow)
+		var timeObjects []fyne.CanvasObject
+		if p.displayFields.ShowTime {
+			timeObjects = append(timeObjects, p.timeText)
+		}
+		if p.displayFields.ShowDate {
+			timeObjects = append(timeObjects, container.NewCenter(p.dateText))
+		}
+		objects = append(objects, container.New(&tightVBoxLayout{}, timeObjects...))
+	}
 
-	// Wrap content in a rounded, bordered card with separator line at top
-	card := newSimpleCardBackground()
-	
-	// Add a vertical line separator on the left side for visual separation between cities
-	separator := canvas.NewRectangle(color.NRGBA{R: 90, G: 90, B: 96, A: 180})
-	separator.SetMinSize(fyne.NewSize(1, 0))
-	
-	cardWithContent := container.NewStack(card, container.NewPadded(content))
-	return container.NewBorder(nil, nil, separator, nil, cardWithContent)
+	return container.NewVBox(objects...)
 }
 
-// newSimpleCardBackground creates the rounded rectangle for a Simple view card.
-func newSimpleCardBackground() *canvas.Rectangle {
-	rect := canvas.NewRectangle(color.NRGBA{R: 44, G: 44, B: 48, A: 235})
-	rect.CornerRadius = 8
-	rect.StrokeColor = color.NRGBA{R: 90, G: 90, B: 96, A: 128}
-	rect.StrokeWidth = 0
-	return rect
+// pollutionMetricShortLabel returns a concise label for a pollution metric
+// suitable for compact display in the Simple (Classic) view column.
+func pollutionMetricShortLabel(m weather.PollutionMetric) string {
+	switch m {
+	case weather.MetricAQI:
+		return "AQI"
+	case weather.MetricCO:
+		return "CO"
+	case weather.MetricNO:
+		return "NO"
+	case weather.MetricNO2:
+		return "NO₂"
+	case weather.MetricO3:
+		return "O₃"
+	case weather.MetricSO2:
+		return "SO₂"
+	case weather.MetricNH3:
+		return "NH₃"
+	case weather.MetricPM25:
+		return "PM2.5"
+	case weather.MetricPM10:
+		return "PM10"
+	default:
+		return ""
+	}
 }
 
 // ApplyDisplayFields updates the panel's visibility configuration and rebuilds the layout.
@@ -364,20 +451,32 @@ func (p *SimpleCityPanel) applyPollutionCells() {
 		planned[r.Metric] = r
 	}
 
+	hasAny := false
 	for _, m := range weather.PollutionMetricOrder {
 		cell := p.pollutionCells[m]
 		if cell == nil {
 			continue
 		}
 		if row, ok := planned[m]; ok {
-			cell.value.Text = row.ValueText
+			label := pollutionMetricShortLabel(m)
+			if label != "" {
+				cell.value.Text = fmt.Sprintf("%s: %s", label, row.ValueText)
+			} else {
+				cell.value.Text = row.ValueText
+			}
 			cell.value.Refresh()
 			cell.container.Show()
+			hasAny = true
 		} else {
 			cell.container.Hide()
 		}
 	}
 	if p.pollutionBox != nil {
+		if hasAny {
+			p.pollutionBox.Show()
+		} else {
+			p.pollutionBox.Hide()
+		}
 		p.pollutionBox.Refresh()
 	}
 }
@@ -392,7 +491,7 @@ func (p *SimpleCityPanel) Update(data *weather.WeatherData, tempUnit config.Temp
 	if data == nil {
 		return
 	}
-	p.lastData = data
+	p.lastData = data // cache for re-render
 	p.lastTempUnit = tempUnit
 	p.lastWindUnit = windUnit
 	if len(iconTheme) > 0 && iconTheme[0] != "" {
@@ -405,22 +504,21 @@ func (p *SimpleCityPanel) Update(data *weather.WeatherData, tempUnit config.Temp
 	iconCode := weather.MapConditionToIconWithTheme(data.IconCode, data.LocalTime, p.lastIconTheme)
 	p.updateIcon(iconCode)
 
-	// Update labels
-	p.cityText.Text = weather.FormatCityRegion(data.CityName, data.Region)
-	p.cityText.Refresh()
-
+	// Update labels.
 	p.tempText.Text = weather.FormatTemperature(data.Temperature, tempUnit)
 	p.tempText.Refresh()
 
 	p.descText.Text = weather.FormatDescription(data.Description, p.lm)
 	p.descText.Refresh()
 
-	// Weather details
 	p.humidityText.Text = weather.FormatHumidity(data.Humidity, p.lm)
 	p.humidityText.Refresh()
 
-	p.windText.Text = weather.FormatWind(data.WindSpeed, windUnit) + " " + weather.FormatWindDir(data.WindDirection)
+	p.windText.Text = weather.FormatWind(data.WindSpeed, windUnit)
 	p.windText.Refresh()
+
+	p.cityText.Text = weather.FormatCityRegion(data.CityName, data.Region)
+	p.cityText.Refresh()
 
 	p.windGustText.Text = weather.FormatWindGust(data.WindGust, windUnit, p.lm)
 	p.windGustText.Refresh()
@@ -428,17 +526,20 @@ func (p *SimpleCityPanel) Update(data *weather.WeatherData, tempUnit config.Temp
 	p.dewPointText.Text = weather.FormatDewPoint(data.DewPoint, p.lm)
 	p.dewPointText.Refresh()
 
+	p.pressureText.Text = weather.FormatPressure(data.Pressure)
+	p.pressureText.Refresh()
+
 	p.uvIndexText.Text = weather.FormatUVIndex(data.UVIndex)
 	p.uvIndexText.Refresh()
 
+	p.windDirText.Text = weather.FormatWindDir(data.WindDirection)
+	p.windDirText.Refresh()
+
+	// Update air quality and pollution metrics.
+	p.applyPollutionCells()
+
 	// Hide error indicator on successful update.
 	p.errorIcon.Hide()
-
-	// Rebuild the layout and refresh pollution cells
-	p.container.RemoveAll()
-	p.container.Add(p.buildLayout())
-	p.applyPollutionCells()
-	p.container.Refresh()
 }
 
 // Rerender re-applies the last cached WeatherData with new units or icon theme.
@@ -479,7 +580,7 @@ func (p *SimpleCityPanel) ShowError(stale bool) {
 // with the current time in the given IANA timezone.
 func (p *SimpleCityPanel) StartClock(timezone string) {
 	log.Printf("SimpleCityPanel: starting clock for timezone %s", timezone)
-	p.StopClock()
+	p.StopClock() // stop any existing clock first
 
 	p.mu.Lock()
 	defer p.mu.Unlock()

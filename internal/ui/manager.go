@@ -20,15 +20,21 @@ type UIManager struct {
 	lm       *i18n.LocaleManager
 	widget   fyne.Window
 	settings fyne.Window
-	panels   []*panel.CityPanel        // Enhanced view panels
-	simplePanels []*panel.SimpleCityPanel // Simple view panels
-	viewMode config.ViewMode            // Current view mode
+	panels       []*panel.CityPanel        // Enhanced view panels
+	simplePanels []*panel.SimpleCityPanel  // Simple view panels
+	viewMode     config.ViewMode           // Current view mode
 
 	// curDisplayFields and curPollutionFields track the most recently applied
 	// visibility config so the window can be resized to fit the actual content
 	// whenever either changes.
 	curDisplayFields   *config.DisplayFields
 	curPollutionFields *config.PollutionFields
+
+	// Cached weather data and units for instant restoration when toggling view modes
+	lastData      []weather.WeatherData
+	lastTempUnit  config.TemperatureUnit
+	lastWindUnit  config.WindSpeedUnit
+	lastIconTheme []config.IconTheme
 }
 
 // NewUIManager creates a new UIManager and its main widget window.
@@ -76,6 +82,14 @@ func (u *UIManager) ShowWidget(cities []config.CityConfig) {
 // Enhanced mode: cities stacked vertically with horizontal data grid.
 // Simple mode: cities displayed side-by-side with vertical data list.
 func (u *UIManager) ShowWidgetWithMode(cities []config.CityConfig, viewMode config.ViewMode) {
+	// Stop clocks on previous panels before replacing
+	for _, p := range u.simplePanels {
+		p.StopClock()
+	}
+	for _, p := range u.panels {
+		p.StopClock()
+	}
+
 	count := len(cities)
 	if count == 0 {
 		count = 1
@@ -95,11 +109,35 @@ func (u *UIManager) ShowWidgetWithMode(cities []config.CityConfig, viewMode conf
 			p := panel.NewSimpleCityPanel(u.lm)
 			u.simplePanels[i] = p
 			objects[i] = p.Container()
+			if i < len(cities) && cities[i].Timezone != "" {
+				p.StartClock(cities[i].Timezone)
+			} else {
+				p.StartClock("UTC")
+			}
 		}
 
 		// Arrange cities horizontally (side-by-side)
 		grid := container.NewGridWithColumns(count, objects...)
 		u.widget.SetContent(grid)
+
+		if len(u.lastData) > 0 {
+			for i, p := range u.simplePanels {
+				if i < len(u.lastData) {
+					d := u.lastData[i]
+					p.Update(&d, u.lastTempUnit, u.lastWindUnit, u.lastIconTheme...)
+				}
+			}
+		}
+		if u.curDisplayFields != nil {
+			for _, p := range u.simplePanels {
+				p.ApplyDisplayFields(u.curDisplayFields)
+			}
+		}
+		if u.curPollutionFields != nil {
+			for _, p := range u.simplePanels {
+				p.ApplyPollutionFields(u.curPollutionFields)
+			}
+		}
 	} else {
 		// Enhanced view: cities stacked vertically with horizontal data grid
 		u.panels = make([]*panel.CityPanel, count)
@@ -109,25 +147,81 @@ func (u *UIManager) ShowWidgetWithMode(cities []config.CityConfig, viewMode conf
 			p := panel.NewCityPanel(u.lm)
 			u.panels[i] = p
 			objects[i] = p.Container()
+			if i < len(cities) && cities[i].Timezone != "" {
+				p.StartClock(cities[i].Timezone)
+			} else {
+				p.StartClock("UTC")
+			}
 		}
 
 		// Stack the city cards vertically — one card under another.
 		stack := container.NewVBox(objects...)
 		u.widget.SetContent(stack)
+
+		if len(u.lastData) > 0 {
+			for i, p := range u.panels {
+				if i < len(u.lastData) {
+					d := u.lastData[i]
+					p.Update(&d, u.lastTempUnit, u.lastWindUnit, u.lastIconTheme...)
+				}
+			}
+		}
+		if u.curDisplayFields != nil {
+			for _, p := range u.panels {
+				p.ApplyDisplayFields(u.curDisplayFields)
+			}
+		}
+		if u.curPollutionFields != nil {
+			for _, p := range u.panels {
+				p.ApplyPollutionFields(u.curPollutionFields)
+			}
+		}
 	}
 
 	u.resizeToContent(count)
 	u.widget.Show()
 }
 
+// maxPollutionRows returns the maximum number of planned pollution rows across all cached city data.
+func (u *UIManager) maxPollutionRows() int {
+	if u.curPollutionFields == nil {
+		return 0
+	}
+	if len(u.lastData) == 0 {
+		return 0
+	}
+	maxR := 0
+	for _, d := range u.lastData {
+		r := len(weather.PlanPollutionRows(u.curPollutionFields, weather.PollutionOf(&d)))
+		if r > maxR {
+			maxR = r
+		}
+	}
+	return maxR
+}
+
+func (u *UIManager) calcSimpleLayout(count int) (int, int) {
+	if count < 1 {
+		count = len(u.simplePanels)
+	}
+	if count < 1 {
+		count = 1
+	}
+	rows := u.maxPollutionRows()
+	w, h, _ := CalculateSimpleLayoutWithPollutionRows(count, u.curDisplayFields, rows)
+	return w, h
+}
+
 // resizeToContent resizes the widget window to fit the given number of city
 // cards using the currently applied display and pollution field visibility.
 func (u *UIManager) resizeToContent(count int) {
-	// Let the content's minimum size drive the window size. This is more
-	// reliable than calculating a fixed height because Fyne containers (VBox,
-	// Padded, Stack) compute their own minimum size from their children.
-	if u.widget.Content() != nil {
-		u.widget.Resize(u.widget.Content().MinSize())
+	if u.viewMode == config.ViewModeSimple {
+		w, h := u.calcSimpleLayout(count)
+		u.widget.Resize(fyne.NewSize(float32(w), float32(h)))
+	} else {
+		if u.widget.Content() != nil {
+			u.widget.Resize(u.widget.Content().MinSize())
+		}
 	}
 }
 
@@ -139,6 +233,11 @@ func (u *UIManager) GetViewMode() config.ViewMode {
 // UpdatePanels updates each CityPanel with the corresponding weather data, units, and icon theme.
 // Panels and data are matched by index; extra data entries are ignored.
 func (u *UIManager) UpdatePanels(data []weather.WeatherData, tempUnit config.TemperatureUnit, windUnit config.WindSpeedUnit, iconTheme ...config.IconTheme) {
+	u.lastData = data
+	u.lastTempUnit = tempUnit
+	u.lastWindUnit = windUnit
+	u.lastIconTheme = iconTheme
+
 	if u.viewMode == config.ViewModeSimple {
 		log.Printf("UIManager: updating %d simple panels with %d data entries", len(u.simplePanels), len(data))
 		for i, p := range u.simplePanels {
@@ -148,6 +247,7 @@ func (u *UIManager) UpdatePanels(data []weather.WeatherData, tempUnit config.Tem
 			d := data[i]
 			p.Update(&d, tempUnit, windUnit, iconTheme...)
 		}
+		u.resizeToContent(len(u.simplePanels))
 	} else {
 		log.Printf("UIManager: updating %d panels with %d data entries", len(u.panels), len(data))
 		for i, p := range u.panels {
@@ -204,6 +304,10 @@ func (u *UIManager) ApplyPollutionFields(pf *config.PollutionFields) {
 // RerenderPanels re-renders all panels using their cached data with new units or icon theme.
 // Used when only the temperature, wind speed unit, or icon theme changes, avoiding a new weather fetch.
 func (u *UIManager) RerenderPanels(tempUnit config.TemperatureUnit, windUnit config.WindSpeedUnit, iconTheme ...config.IconTheme) {
+	u.lastTempUnit = tempUnit
+	u.lastWindUnit = windUnit
+	u.lastIconTheme = iconTheme
+
 	if u.viewMode == config.ViewModeSimple {
 		for _, p := range u.simplePanels {
 			p.Rerender(tempUnit, windUnit, iconTheme...)
@@ -234,16 +338,25 @@ func (u *UIManager) SetCorner(position string, monitorIndex int) {
 	ww := int(winSize.Width)
 	wh := int(winSize.Height)
 
-	// Fallback if canvas hasn't reported a size yet.
-	if ww == 0 || wh == 0 {
-		count := len(u.panels)
-		if u.viewMode == config.ViewModeSimple {
-			count = len(u.simplePanels)
-		}
-		if count == 0 {
-			count = 1
-		}
-		ww, wh, _ = CalculateLayoutWithPollution(count, u.curDisplayFields, u.curPollutionFields)
+	count := len(u.panels)
+	if u.viewMode == config.ViewModeSimple {
+		count = len(u.simplePanels)
+	}
+	if count == 0 {
+		count = 1
+	}
+
+	var calcW, calcH int
+	if u.viewMode == config.ViewModeSimple {
+		calcW, calcH = u.calcSimpleLayout(count)
+	} else {
+		calcW, calcH, _ = CalculateLayoutWithPollution(count, u.curDisplayFields, u.curPollutionFields)
+	}
+
+	// If canvas hasn't reported a size yet, or is stale across mode switch, use calculated size.
+	if ww == 0 || wh == 0 || (u.viewMode == config.ViewModeSimple && ww != calcW) || (u.viewMode == config.ViewModeEnhanced && ww != PanelWidth) {
+		ww = calcW
+		wh = calcH
 	}
 
 	var x, y int
