@@ -98,21 +98,63 @@ func (u *UIManager) tFmt(key string, args ...interface{}) string {
 }
 
 func (u *UIManager) showSettingsInfo(title, msg string, win fyne.Window, th fyne.Theme) {
-	lbl := widget.NewLabel(msg)
-	lbl.Wrapping = fyne.TextWrapWord
-	d := dialog.NewCustom(title, "OK", container.NewThemeOverride(container.NewPadded(lbl), th), win)
-	d.Show()
+	u.showSettingsPopup(title, msg, false, win, th)
 }
 
 func (u *UIManager) showSettingsError(err error, win fyne.Window, th fyne.Theme) {
 	if err == nil {
 		return
 	}
-	lbl := widget.NewLabel(err.Error())
-	lbl.Wrapping = fyne.TextWrapWord
-	d := dialog.NewCustom("Error", "OK", container.NewThemeOverride(container.NewPadded(lbl), th), win)
-	d.Show()
+	u.showSettingsPopup("Error", err.Error(), true, win, th)
 }
+
+// showSettingsPopup shows a clean, correctly-sized info/error popup centred
+// over the settings window. It uses the settings light theme and enforces a
+// minimum width of 340 dp so text never wraps into a narrow column.
+func (u *UIManager) showSettingsPopup(title, msg string, isError bool, win fyne.Window, th fyne.Theme) {
+	// Title label — bold, slightly larger.
+	titleCol := color.NRGBA{R: 34, G: 34, B: 34, A: 255}
+	if isError {
+		titleCol = color.NRGBA{R: 192, G: 32, B: 32, A: 255}
+	}
+	titleLbl := canvas.NewText(title, titleCol)
+	titleLbl.TextStyle = fyne.TextStyle{Bold: true}
+	titleLbl.TextSize = 16
+
+	// Message label — wraps at a sensible width.
+	msgLbl := widget.NewLabel(msg)
+	msgLbl.Wrapping = fyne.TextWrapWord
+
+	// Spacer rectangle forces the popup to be at least 340 dp wide.
+	minWidthSpacer := canvas.NewRectangle(color.Transparent)
+	minWidthSpacer.SetMinSize(fyne.NewSize(340, 1))
+
+	var pop *widget.PopUp
+	okBtn := widget.NewButton("OK", func() {
+		if pop != nil {
+			pop.Hide()
+		}
+	})
+	okBtn.Importance = widget.HighImportance
+
+	content := container.NewThemeOverride(
+		container.NewVBox(
+			titleLbl,
+			widget.NewSeparator(),
+			msgLbl,
+			minWidthSpacer,
+			container.NewPadded(container.NewCenter(okBtn)),
+		),
+		th,
+	)
+
+	pop = widget.NewModalPopUp(
+		container.NewPadded(content),
+		win.Canvas(),
+	)
+	pop.Show()
+}
+
 
 // ShowSettings opens a settings dialog window.
 func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config) error) {
@@ -128,9 +170,6 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 	settingsTh := NewSettingsTheme(theme.DefaultTheme())
 	showError := func(err error) {
 		u.showSettingsError(err, win, settingsTh)
-	}
-	showInfo := func(title, msg string) {
-		u.showSettingsInfo(title, msg, win, settingsTh)
 	}
 
 	screenW, screenH := getScreenSize()
@@ -1603,7 +1642,7 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 				return
 			}
 			state.saved = true
-			showInfo(u.t("settings.dialog.saved"), u.t("settings.dialog.savedMsg"))
+			// Confirmation popup suppressed — save is silent.
 		})
 
 		cancelBtn := widget.NewButton(u.t("settings.cancel"), func() {

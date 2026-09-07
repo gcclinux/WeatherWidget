@@ -21,3 +21,8 @@ var Fonts embed.FS
 //
 //go:embed air/*
 var AirIcons embed.FS
+
+// Backgrounds embeds the day/night card background images.
+//
+//go:embed backgrounds/*
+var Backgrounds embed.FS

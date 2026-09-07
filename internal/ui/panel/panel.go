@@ -155,6 +155,13 @@ type CityPanel struct {
 
 	errorIcon *canvas.Image
 
+	// cardBgImg is the background image for the card (day.jpg or night.jpg).
+	// cardBgOverlay is a semi-transparent dark rect stacked over it to keep
+	// white text readable regardless of the image brightness.
+	// Both are stored so they can be swapped live when day/night changes.
+	cardBgImg     *canvas.Image
+	cardBgOverlay *canvas.Rectangle
+
 	lastData        *weather.WeatherData // cached for re-render on unit change
 	lastTempUnit    config.TemperatureUnit
 	lastWindUnit    config.WindSpeedUnit
@@ -504,29 +511,87 @@ func (p *CityPanel) buildLayout() fyne.CanvasObject {
 	contentObjects = append(contentObjects, middle, bottom)
 	content := container.NewVBox(contentObjects...)
 
-	// Wrap content in a rounded, bordered card. The card background extends to
-	// the full panel bounds so there's no gap between stacked cards. This
-	// minimizes visible black from Fyne's GL clear (which can't be transparent).
-	card := newCardBackground()
-	return container.NewStack(card, container.NewPadded(content))
+	// Wrap content in a rounded, bordered card backed by a day/night image.
+	// Reuse existing image widget if already created (avoids re-decoding the
+	// resource on every layout rebuild triggered by displayFields changes).
+	if p.cardBgImg == nil {
+		isNight := false
+		if p.lastData != nil {
+			isNight = weather.IsNight(p.lastData.LocalTime)
+		}
+		p.cardBgImg = newCardBgImage(isNight)
+		p.cardBgOverlay = newCardBgOverlay()
+	}
+	return container.NewStack(p.cardBgImg, p.cardBgOverlay, container.NewPadded(content))
 }
 
-// cardCornerRadius, cardStrokeWidth and the card colors define the rounded,
-// bordered look applied behind each city panel. The values mirror the GTK UI
-// (16px radius) so both UIs look consistent.
+// cardCornerRadius and cardStrokeWidth define the rounded, bordered card geometry.
 const (
 	cardCornerRadius = 12
 	cardStrokeWidth  = 1
 )
 
-// newCardBackground creates the rounded rectangle drawn behind a city card:
-// a slightly lighter fill than the window background with a subtle border.
-func newCardBackground() *canvas.Rectangle {
-	rect := canvas.NewRectangle(color.NRGBA{R: 44, G: 44, B: 48, A: 235})
+// Lazily-loaded background image resources so we only decode each file once.
+var (
+	bgDayOnce   sync.Once
+	bgDayRes    fyne.Resource
+	bgNightOnce sync.Once
+	bgNightRes  fyne.Resource
+)
+
+// loadBgResource reads a background image from the embedded Backgrounds FS,
+// caching the result so subsequent calls are instant.
+func loadBgResource(name string, once *sync.Once, res *fyne.Resource) fyne.Resource {
+	once.Do(func() {
+		data, err := assets.Backgrounds.ReadFile("backgrounds/" + name)
+		if err != nil {
+			log.Printf("panel: failed to load background %s: %v", name, err)
+			return
+		}
+		*res = fyne.NewStaticResource(name, data)
+	})
+	return *res
+}
+
+// dayBgResource returns the embedded daytime background image resource.
+func dayBgResource() fyne.Resource { return loadBgResource("day.jpg", &bgDayOnce, &bgDayRes) }
+
+// nightBgResource returns the embedded nighttime background image resource.
+func nightBgResource() fyne.Resource { return loadBgResource("night.jpg", &bgNightOnce, &bgNightRes) }
+
+// newCardBgImage creates a canvas.Image pre-loaded with the day or night
+// background, sized to fill its parent via ImageFillStretch.
+func newCardBgImage(isNight bool) *canvas.Image {
+	res := dayBgResource()
+	if isNight {
+		res = nightBgResource()
+	}
+	img := canvas.NewImageFromResource(res)
+	img.FillMode = canvas.ImageFillStretch
+	img.ScaleMode = canvas.ImageScaleFastest
+	return img
+}
+
+// newCardBgOverlay returns a semi-transparent dark rectangle to overlay on top
+// of the background image so that white text remains readable.
+func newCardBgOverlay() *canvas.Rectangle {
+	rect := canvas.NewRectangle(color.NRGBA{R: 0, G: 0, B: 0, A: 120})
 	rect.CornerRadius = cardCornerRadius
-	rect.StrokeColor = color.NRGBA{R: 90, G: 90, B: 96, A: 255}
-	rect.StrokeWidth = cardStrokeWidth
 	return rect
+}
+
+// applyDayNightBg swaps the card background image to the day or night variant.
+// Must be called on the Fyne main goroutine.
+func (p *CityPanel) applyDayNightBg(isNight bool) {
+	if p.cardBgImg == nil {
+		return
+	}
+	if isNight {
+		p.cardBgImg.Resource = nightBgResource()
+	} else {
+		p.cardBgImg.Resource = dayBgResource()
+	}
+	p.cardBgImg.Refresh()
 }
 
 // ApplyDisplayFields updates the panel's visibility configuration and rebuilds the layout.
@@ -698,6 +763,9 @@ func (p *CityPanel) StartClock(timezone string) {
 
 	lastNight := weather.IsNight(now.In(loc))
 
+	// Apply the initial background immediately (before the first tick).
+	p.applyDayNightBg(lastNight)
+
 	go func(loc *time.Location, initialNight bool) {
 		currentNight := initialNight
 		for {
@@ -718,6 +786,8 @@ func (p *CityPanel) StartClock(timezone string) {
 
 					if isNightNow != currentNight {
 						currentNight = isNightNow
+						// Recolor the card background for the new day/night state.
+						p.applyDayNightBg(isNightNow)
 						if p.lastData != nil {
 							p.lastData.LocalTime = localNow
 							iconCode := weather.MapConditionToIconWithTheme(p.lastData.IconCode, localNow, p.lastIconTheme)

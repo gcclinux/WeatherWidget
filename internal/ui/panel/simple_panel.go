@@ -55,6 +55,12 @@ type SimpleCityPanel struct {
 	pollutionBox    *fyne.Container
 	pollutionFields *config.PollutionFields
 
+	// cardBgImg is the background image for the card (day.jpg or night.jpg).
+	// cardBgOverlay is a semi-transparent dark rect stacked over it to keep
+	// white text readable regardless of the image brightness.
+	cardBgImg     *canvas.Image
+	cardBgOverlay *canvas.Rectangle
+
 	lastData      *weather.WeatherData  // cached for re-render on unit change
 	lastTempUnit  config.TemperatureUnit
 	lastWindUnit  config.WindSpeedUnit
@@ -312,7 +318,13 @@ func NewSimpleCityPanel(lm *i18n.LocaleManager) *SimpleCityPanel {
 
 	p.separatorRow = container.NewCenter(widget.NewSeparator())
 
-	p.container = container.New(&simpleColumnLayout{minWidth: 160}, p.buildLayout())
+	// Build the initial card background (daytime by default; StartClock will
+	// swap it once the city timezone is known).
+	p.cardBgImg = newCardBgImage(false)
+	p.cardBgOverlay = newCardBgOverlay()
+
+	inner := container.New(&simpleColumnLayout{minWidth: 160}, p.buildLayout())
+	p.container = container.NewStack(p.cardBgImg, p.cardBgOverlay, inner)
 	return p
 }
 
@@ -391,6 +403,20 @@ func (p *SimpleCityPanel) buildLayout() fyne.CanvasObject {
 	}
 
 	return container.NewVBox(objects...)
+}
+
+// applyDayNightBg swaps the card background image to the day or night variant.
+// Must be called on the Fyne main goroutine.
+func (p *SimpleCityPanel) applyDayNightBg(isNight bool) {
+	if p.cardBgImg == nil {
+		return
+	}
+	if isNight {
+		p.cardBgImg.Resource = nightBgResource()
+	} else {
+		p.cardBgImg.Resource = dayBgResource()
+	}
+	p.cardBgImg.Refresh()
 }
 
 // pollutionMetricShortLabel returns a concise label for a pollution metric
@@ -602,6 +628,9 @@ func (p *SimpleCityPanel) StartClock(timezone string) {
 
 	lastNight := weather.IsNight(now.In(loc))
 
+	// Apply the initial background immediately (before the first tick).
+	p.applyDayNightBg(lastNight)
+
 	go func(loc *time.Location, initialNight bool) {
 		currentNight := initialNight
 		for {
@@ -622,6 +651,8 @@ func (p *SimpleCityPanel) StartClock(timezone string) {
 
 					if isNightNow != currentNight {
 						currentNight = isNightNow
+						// Recolor the card background for the new day/night state.
+						p.applyDayNightBg(isNightNow)
 						if p.lastData != nil {
 							p.lastData.LocalTime = localNow
 							iconCode := weather.MapConditionToIconWithTheme(p.lastData.IconCode, localNow, p.lastIconTheme)
