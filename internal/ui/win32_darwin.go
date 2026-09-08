@@ -242,16 +242,15 @@ func applyDarwinWindowSetup() {
 }
 
 // setWindowOpacity applies transparency to the widget window on macOS.
-// Transparency is applied only to the WWidgetBackgroundView CALayer so that
-// text labels and weather icons remain at full opacity.
-func setWindowOpacity(opacityPercent int) {
+// Transparency is always fixed to 100% (full opacity for content).
+func setWindowOpacity(_ int) {
 	handle := getNSWindowHandle()
 	if handle == 0 {
 		log.Println("macOS: setWindowOpacity — could not get NSWindow handle")
 		return
 	}
-	C.setDarwinBackgroundAlpha(handle, C.int(opacityPercent))
-	log.Printf("macOS: setWindowOpacity %d%%", opacityPercent)
+	C.setDarwinBackgroundAlpha(handle, C.int(100))
+	log.Printf("macOS: setWindowOpacity 100%%")
 }
 
 // getMonitorCount returns the number of display monitors on macOS.

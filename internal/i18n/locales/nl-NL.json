@@ -45,6 +45,7 @@
   "settings.provider.note": "Opmerking: \nGratis = verversingsinterval van 120 minuten (beperkt). \nPro = verversingsinterval van 10 minuten (onbeperkt).",
   "settings.provider.apiKeyActivation.title": "Uw Pro API-sleutel",
   "settings.provider.apiKeyActivation.message": "Bewaar deze sleutel veilig. Hij wordt geactiveerd zodra uw abonnement is bevestigd en gedeactiveerd als het abonnement wordt opgezegd.",
+  "settings.provider.proFeaturesNote": "⭐ EasyWeatherWidget Pro: Geniet van vervuilingsgegevens plus de mogelijkheid om tot 5 steden tegelijk vooraf in te stellen",
   "settings.locations.savedTitle": "Opgeslagen steden",
   "settings.locations.savedSubtitle": "Beheer uw bijgehouden locaties (1–5 steden).",
   "settings.locations.proNote": "⭐ De gratis versie staat maximaal 3 steden toe. Abonneer u op Pro in het tabblad Data Provider voor maximaal 5 steden, updates elke 10 minuten en extra weergegevens!",

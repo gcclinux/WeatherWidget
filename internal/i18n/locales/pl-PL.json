@@ -45,6 +45,7 @@
   "settings.provider.note": "Uwaga: \nDarmowe = interwał odświeżania 120 minut (ograniczony). \nPro = interwał odświeżania 10 minut (nieograniczony).",
   "settings.provider.apiKeyActivation.title": "Twój klucz API Pro",
   "settings.provider.apiKeyActivation.message": "Zachowaj ten klucz w bezpiecznym miejscu. Zostanie aktywowany po potwierdzeniu subskrypcji i dezaktywowany w przypadku jej anulowania.",
+  "settings.provider.proFeaturesNote": "⭐ EasyWeatherWidget Pro: Ciesz się danymi o zanieczyszczeniach oraz możliwością ustawienia do 5 miast jednocześnie",
   "settings.locations.savedTitle": "Zapisane miasta",
   "settings.locations.savedSubtitle": "Zarządzaj śledzonymi lokalizacjami (1–5 miast).",
   "settings.locations.proNote": "⭐ Wersja bezpłatna pozwala na maksymalnie 3 miasta. Subskrybuj Pro w zakładce Dostawca danych, aby uzyskać do 5 miast, 10-minutowe odświeżanie i rozszerzone dane!",

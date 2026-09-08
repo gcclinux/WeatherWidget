@@ -45,6 +45,7 @@
   "settings.provider.note": "Nota: \nGratuito = intervallo di aggiornamento di 120 minuti (limitato). \nPro = intervallo di aggiornamento di 10 minuti (illimitato).",
   "settings.provider.apiKeyActivation.title": "La tua chiave API Pro",
   "settings.provider.apiKeyActivation.message": "Conserva questa chiave al sicuro. Verrà attivata una volta confermato l'abbonamento e disattivata in caso di cancellazione.",
+  "settings.provider.proFeaturesNote": "⭐ EasyWeatherWidget Pro: Approfitta dei dati sull'inquinamento e della possibilità di preimpostare fino a 5 città contemporaneamente",
   "settings.locations.savedTitle": "Città salvate",
   "settings.locations.savedSubtitle": "Gestisci le tue posizioni monitorate (1–5 città).",
   "settings.locations.proNote": "⭐ Il piano gratuito consente fino a 3 città. Abbonati a Pro nella scheda Provider per avere fino a 5 città, aggiornamenti ogni 10 minuti e dati meteo estesi!",

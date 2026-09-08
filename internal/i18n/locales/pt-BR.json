@@ -45,6 +45,7 @@
   "settings.provider.note": "Nota: \nGratuito = taxa de atualização de 120 minutos (limitado). \nPro = taxa de atualização de 10 minutos (ilimitado).",
   "settings.provider.apiKeyActivation.title": "Sua Chave API Pro",
   "settings.provider.apiKeyActivation.message": "Guarde esta chave com segurança. Ela será ativada assim que a sua assinatura for confirmada e será desativada se a assinatura for cancelada.",
+  "settings.provider.proFeaturesNote": "⭐ EasyWeatherWidget Pro: Aproveite dados de poluição e a capacidade de predefinir até 5 cidades de uma só vez",
   "settings.locations.savedTitle": "Cidades Salvas",
   "settings.locations.savedSubtitle": "Gerencie suas localizações rastreadas (1–5 cidades).",
   "settings.locations.proNote": "⭐ A versão gratuita permite até 3 cidades. Assine o Pro na aba Provedor de Dados para ter até 5 cidades, atualizações a cada 10 minutos e dados adicionais!",

@@ -46,6 +46,7 @@
   "settings.provider.note": "注: \n無料版 = 120分更新 (制限あり)。 \nPro版 = 10分更新 (無制限)。",
   "settings.provider.apiKeyActivation.title": "Pro APIキー",
   "settings.provider.apiKeyActivation.message": "このキーを安全に保管してください。サブスクリプション確認後に有効化されます。",
+  "settings.provider.proFeaturesNote": "⭐ EasyWeatherWidget Pro: 大気汚染データに加え、最大5都市まで同時に事前設定可能",
   "settings.locations.savedTitle": "保存された都市",
   "settings.locations.savedSubtitle": "追跡する場所を管理します (1〜5都市)。",
   "settings.locations.proNote": "⭐ 無料版では最大3都市まで設定可能です。最大5都市、10分更新、拡張気象データを利用するにはデータプロバイダータブでProをご購読ください！",

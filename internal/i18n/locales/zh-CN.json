@@ -46,6 +46,7 @@
   "settings.provider.note": "说明: \n免费版 = 120 分钟刷新间隔 (受限)。 \nPro 专业版 = 10 分钟快速刷新 (无限制)。",
   "settings.provider.apiKeyActivation.title": "您的 Pro API 密钥",
   "settings.provider.apiKeyActivation.message": "请妥善保管此密钥。您的订阅确认后将自动激活。",
+  "settings.provider.proFeaturesNote": "⭐ EasyWeatherWidget Pro: 畅享空气污染监测数据，并支持同时预设多达 5 个城市",
   "settings.locations.savedTitle": "已保存城市",
   "settings.locations.savedSubtitle": "管理您关注的城市列表 (1–5 个城市)。",
   "settings.locations.proNote": "⭐ 免费版最多支持 3 个城市。请在“数据源”标签页订阅 Pro 专业版以解锁最多 5 个城市、10 分钟快速刷新及更多天气详情！",

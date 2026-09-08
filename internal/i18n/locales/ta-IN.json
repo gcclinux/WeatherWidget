@@ -46,6 +46,7 @@
   "settings.provider.note": "குறிப்பு: \nஇலவசம் = 120 நிமிட புதுப்பிப்பு விகிதம். \nப்ரோ = 10 நிமிட புதுப்பிப்பு விகிதம்.",
   "settings.provider.apiKeyActivation.title": "உங்கள் புரோ API விசை",
   "settings.provider.apiKeyActivation.message": "இந்த விசையை பாதுகாப்பாக வைத்திருங்கள். உங்கள் சந்தா உறுதிசெய்யப்பட்டவுடன் இது செயல்படுத்தப்படும்.",
+  "settings.provider.proFeaturesNote": "⭐ EasyWeatherWidget Pro: மாசு தரவு மற்றும் ஒரே நேரத்தில் 5 நகரங்கள் வரை முன்னமைக்கும் திறனைப் பெறுங்கள்",
   "settings.locations.savedTitle": "சேமிக்கப்பட்ட நகரங்கள்",
   "settings.locations.savedSubtitle": "நீங்கள் கண்காணிக்கும் இடங்களை நிர்வகிக்கவும் (1–5 நகரங்கள்).",
   "settings.locations.proNote": "⭐ இலவச பதிப்பு 3 நகரங்கள் வரை அனுமதிக்கிறது. 5 நகரங்கள், 10 நிமிட புதுப்பிப்பு மற்றும் கூடுதல் வானிலை தரவுகளுக்கு தரவு வழங்குநர் தாவலில் Pro க்கு குழுசேரவும்!",

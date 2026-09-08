@@ -45,6 +45,7 @@
   "settings.provider.note": "Not: \nÜcretsiz = 120 dakika yenileme aralığı (sınırlı). \nPro = 10 dakika yenileme aralığı (sınırsız).",
   "settings.provider.apiKeyActivation.title": "Pro API Anahtarınız",
   "settings.provider.apiKeyActivation.message": "Bu anahtarı güvende tutun. Aboneliğiniz onaylandıktan sonra etkinleştirilecek, iptal edilirse devre dışı bırakılacaktır.",
+  "settings.provider.proFeaturesNote": "⭐ EasyWeatherWidget Pro: Kirlilik verilerinin yanı sıra aynı anda 5 şehre kadar önceden ayarlama özelliğinin keyfini çıkarın",
   "settings.locations.savedTitle": "Kayıtlı Şehirler",
   "settings.locations.savedSubtitle": "Takip ettiğiniz konumları yönetin (1–5 şehir).",
   "settings.locations.proNote": "⭐ Ücretsiz sürüm en fazla 3 şehre izin verir. 5 şehre kadar, 10 dakikada bir yenileme ve genişletilmiş veriler için Veri Sağlayıcı sekmesinden Pro'ya abone olun!",

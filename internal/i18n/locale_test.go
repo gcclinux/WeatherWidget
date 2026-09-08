@@ -417,6 +417,7 @@ func TestEnGBCompleteness(t *testing.T) {
 		"settings.provider.getFreeApi",
 		"settings.provider.getProApi",
 		"settings.provider.note",
+		"settings.provider.proFeaturesNote",
 		"settings.locations.savedTitle",
 		"settings.locations.savedSubtitle",
 		"settings.locations.proNote",

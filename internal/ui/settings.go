@@ -204,10 +204,6 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 	}
 
 	// Capture original values for live preview revert on close without save.
-	origOpacity := cfg.Opacity
-	if origOpacity == 0 {
-		origOpacity = 100
-	}
 	origPosition := cfg.CornerPosition
 	origMonitor := cfg.MonitorIndex
 	origUnit := config.NormalizeTemperatureUnit(cfg.TemperatureUnit)
@@ -302,6 +298,7 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 			parsedURL, _ := url.Parse("https://openweathermap.org/")
 			_ = u.app.OpenURL(parsedURL)
 		})
+		getApiBtn.Importance = widget.HighImportance
 		if providerSelect.Selected == "EasyWeatherWidget (Pro)" {
 			getApiBtn.SetText(u.t("settings.provider.getProApi"))
 			getApiBtn.OnTapped = handleGetProAPI
@@ -309,6 +306,24 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 
 		noteLabel := widget.NewLabel(u.t("settings.provider.note"))
 		noteLabel.Wrapping = fyne.TextWrapWord
+
+		noteBg := canvas.NewRectangle(color.NRGBA{R: 248, G: 250, B: 252, A: 255})
+		noteBg.CornerRadius = 8
+		noteBorder := canvas.NewRectangle(color.Transparent)
+		noteBorder.StrokeColor = color.NRGBA{R: 226, G: 232, B: 240, A: 255}
+		noteBorder.StrokeWidth = 1
+		noteBorder.CornerRadius = 8
+		noteCard := container.NewStack(noteBg, noteBorder, container.NewPadded(noteLabel))
+
+		providerProNoteBg := canvas.NewRectangle(color.NRGBA{R: 14, G: 165, B: 233, A: 25})
+		providerProNoteBg.CornerRadius = 8
+		providerProNoteBorder := canvas.NewRectangle(color.Transparent)
+		providerProNoteBorder.StrokeColor = color.NRGBA{R: 56, G: 189, B: 248, A: 100}
+		providerProNoteBorder.StrokeWidth = 1
+		providerProNoteBorder.CornerRadius = 8
+		providerProNoteLabel := widget.NewLabel(u.t("settings.provider.proFeaturesNote"))
+		providerProNoteLabel.Wrapping = fyne.TextWrapWord
+		providerProNoteCard := container.NewStack(providerProNoteBg, providerProNoteBorder, container.NewPadded(providerProNoteLabel))
 
 		// ── Refresh interval ─────────────────────────────────────────────────
 		intervalSlider := widget.NewSlider(10, 120)
@@ -365,8 +380,9 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 				widget.NewFormItem(u.t("settings.provider.apiKeyLabel"), apiKeyEntry),
 				widget.NewFormItem(u.t("settings.interval.title"), container.NewHBox(intervalSlider, intervalLabel)),
 			),
-			noteLabel,
+			noteCard,
 			activationCard,
+			providerProNoteCard,
 		)
 
 		// ── Position ─────────────────────────────────────────────────────────
@@ -404,6 +420,7 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 				moveAndSaveCustom(x, y)
 			}
 		})
+		applyPosBtn.Importance = widget.HighImportance
 		xEntry.OnSubmitted = func(_ string) { applyPosBtn.OnTapped() }
 		yEntry.OnSubmitted = func(_ string) { applyPosBtn.OnTapped() }
 
@@ -540,28 +557,6 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 				positionItems = append(positionItems, monitorLabel, monitorSelect)
 			}
 			positionItems = append(positionItems, posRow)
-		}
-
-		// ── Transparency ─────────────────────────────────────────────────────
-		opacityRadio := widget.NewRadioGroup([]string{"25%", "50%", "75%", "100%"}, nil)
-		opacityRadio.Horizontal = true
-		opacityMap := map[string]int{"25%": 25, "50%": 50, "75%": 75, "100%": 100}
-		opacityLabelMap := map[int]string{25: "25%", 50: "50%", 75: "75%", 100: "100%"}
-		currentOpacity := cfg.Opacity
-		if currentOpacity == 0 {
-			currentOpacity = 100
-		}
-		if label, ok := opacityLabelMap[currentOpacity]; ok {
-			opacityRadio.SetSelected(label)
-		} else {
-			opacityRadio.SetSelected("100%")
-		}
-
-		// Live preview: apply opacity change immediately to the widget.
-		opacityRadio.OnChanged = func(selected string) {
-			if val, ok := opacityMap[selected]; ok {
-				u.SetOpacity(val)
-			}
 		}
 
 		// ── Weather Icons ────────────────────────────────────────────────────
@@ -804,7 +799,7 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 		addTimezoneEntry := widget.NewEntry()
 		addTimezoneEntry.SetPlaceHolder(u.t("settings.locations.tzPlaceholder"))
 
-		addBtn := widget.NewButton(u.t("settings.locations.addBtn"), func() {
+		addBtn := widget.NewButtonWithIcon(u.t("settings.locations.addBtn"), theme.ContentAddIcon(), func() {
 			// Block adding cities in free mode (no license).
 			if !cfg.HasLicense() {
 				showError(fmt.Errorf("%s", u.t("error.settings.licenseRequired")))
@@ -876,9 +871,10 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 			addTimezoneEntry.SetText("")
 			refreshCityList()
 		})
+		addBtn.Importance = widget.HighImportance
 
 		var searchBtn *widget.Button
-		searchBtn = widget.NewButton(u.t("settings.locations.searchBtn"), func() {
+		searchBtn = widget.NewButtonWithIcon(u.t("settings.locations.searchBtn"), theme.SearchIcon(), func() {
 			// Block searching for cities in free mode (no license).
 			if !cfg.HasLicense() {
 				showError(fmt.Errorf("%s", u.t("error.settings.licenseRequired")))
@@ -1037,6 +1033,7 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 				}(name, apiKey)
 			}
 		})
+		searchBtn.Importance = widget.MediumImportance
 
 		nameItemContent := container.NewBorder(nil, nil, nil, searchBtn, addNameEntry)
 
@@ -1217,14 +1214,60 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 
 		// ── Tabs Assembly ─────────────────────────────────────────────────────
 
-		// sectionBlock builds a consistent section with a bold title, a muted
-		// subtitle, and the content below.
-		sectionBlock := func(title, subtitle string, content fyne.CanvasObject) *fyne.Container {
+		// sectionCard builds an elevated modern card with rounded corners, a subtle
+		// border, an accent icon badge, bold title, and muted subtitle.
+		sectionCard := func(title, subtitle, iconEmoji string, accentColor color.NRGBA, content fyne.CanvasObject) *fyne.Container {
+			cardBg := canvas.NewRectangle(color.White)
+			cardBg.CornerRadius = 10
+
+			cardBorder := canvas.NewRectangle(color.Transparent)
+			cardBorder.StrokeColor = color.NRGBA{R: 226, G: 232, B: 240, A: 255}
+			cardBorder.StrokeWidth = 1
+			cardBorder.CornerRadius = 10
+
 			titleLabel := widget.NewLabel(title)
 			titleLabel.TextStyle = fyne.TextStyle{Bold: true}
-			subtitleLabel := widget.NewLabel(subtitle)
-			subtitleLabel.TextStyle = fyne.TextStyle{Italic: true}
-			return container.NewVBox(titleLabel, subtitleLabel, content, widget.NewSeparator())
+
+			var titleVBox *fyne.Container
+			if subtitle != "" {
+				subLabel := widget.NewLabel(subtitle)
+				subLabel.TextStyle = fyne.TextStyle{Italic: true}
+				titleVBox = container.NewVBox(titleLabel, subLabel)
+			} else {
+				titleVBox = container.NewVBox(titleLabel)
+			}
+
+			var header fyne.CanvasObject
+			if iconEmoji != "" {
+				badgeBg := canvas.NewRectangle(color.NRGBA{R: accentColor.R, G: accentColor.G, B: accentColor.B, A: 30})
+				badgeBg.CornerRadius = 8
+				badgeBorder := canvas.NewRectangle(color.Transparent)
+				badgeBorder.StrokeColor = color.NRGBA{R: accentColor.R, G: accentColor.G, B: accentColor.B, A: 70}
+				badgeBorder.StrokeWidth = 1
+				badgeBorder.CornerRadius = 8
+				badgeEmoji := canvas.NewText(iconEmoji, color.White)
+				badgeEmoji.TextSize = 16
+				badgeEmoji.Alignment = fyne.TextAlignCenter
+				badgeStack := container.NewStack(
+					badgeBg,
+					badgeBorder,
+					container.NewCenter(badgeEmoji),
+				)
+				badgeSizer := canvas.NewRectangle(color.Transparent)
+				badgeSizer.SetMinSize(fyne.NewSize(34, 34))
+				badgeContainer := container.NewMax(badgeSizer, badgeStack)
+				header = container.NewHBox(badgeContainer, titleVBox)
+			} else {
+				header = titleVBox
+			}
+
+			cardVBox := container.NewVBox(
+				header,
+				widget.NewSeparator(),
+				content,
+			)
+
+			return container.NewStack(cardBg, cardBorder, container.NewPadded(cardVBox))
 		}
 
 		// ── Panel Display checkboxes ─────────────────────────────────────────
@@ -1293,16 +1336,6 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 		// ── Pollution Section ────────────────────────────────────────────────
 		isPro := (providerDisplayToValue[providerSelect.Selected] == "easyweatherwidget" && strings.TrimSpace(apiKeyEntry.Text) != "") || cfg.IsPro()
 
-		pollutionProNoteBg := canvas.NewRectangle(color.NRGBA{R: 14, G: 165, B: 233, A: 25})
-		pollutionProNoteBg.CornerRadius = 8
-		pollutionProNoteBorder := canvas.NewRectangle(color.Transparent)
-		pollutionProNoteBorder.StrokeColor = color.NRGBA{R: 56, G: 189, B: 248, A: 100}
-		pollutionProNoteBorder.StrokeWidth = 1
-		pollutionProNoteBorder.CornerRadius = 8
-		pollutionProNoteLabel := widget.NewLabel(u.t("settings.pollution.proNote"))
-		pollutionProNoteLabel.Wrapping = fyne.TextWrapWord
-		pollutionProNoteCard := container.NewStack(pollutionProNoteBg, pollutionProNoteBorder, container.NewPadded(pollutionProNoteLabel))
-
 		pf := cfg.GetPollutionFields()
 		chkAQI := widget.NewCheck(u.t("settings.pollution.aqi"), nil)
 		chkAQI.Checked = pf.ShowAQI
@@ -1365,7 +1398,6 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 		)
 
 		pollutionSection := container.NewVBox(
-			pollutionProNoteCard,
 			pollutionChecks,
 		)
 
@@ -1395,9 +1427,7 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 				u.RerenderPanels(state.selectedUnit, state.selectedWindUnit, state.selectedIconTheme)
 				// Ensure Win32 styles, transparency, and position are updated
 				u.ApplyWin32Styles()
-				if val, ok := opacityMap[opacityRadio.Selected]; ok {
-					u.SetOpacity(val)
-				}
+				u.SetOpacity(100)
 				if state.customX != nil && state.customY != nil {
 					u.SetPosition(*state.customX, *state.customY)
 				} else {
@@ -1415,37 +1445,34 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 		}
 
 		appearanceContent := container.NewPadded(container.NewVScroll(container.NewVBox(
-			sectionBlock(u.t("settings.viewMode.title"), u.t("settings.viewMode.subtitle"),
-				viewModeRadio,
+			sectionCard(u.t("settings.viewMode.title"), u.t("settings.viewMode.subtitle"),
+				"🎨", color.NRGBA{R: 99, G: 102, B: 241, A: 255}, viewModeRadio,
 			),
-			sectionBlock(u.t("settings.position.title"), u.t("settings.position.subtitle"),
-				container.NewVBox(positionItems...),
+			sectionCard(u.t("settings.position.title"), u.t("settings.position.subtitle"),
+				"📍", color.NRGBA{R: 225, G: 29, B: 72, A: 255}, container.NewVBox(positionItems...),
 			),
-			sectionBlock(u.t("settings.transparency.title"), u.t("settings.transparency.subtitle"),
-				opacityRadio,
+			sectionCard(u.t("settings.icons.title"), u.t("settings.icons.subtitle"),
+				"☀️", color.NRGBA{R: 217, G: 119, B: 6, A: 255}, iconThemeRadio,
 			),
-			sectionBlock(u.t("settings.icons.title"), u.t("settings.icons.subtitle"),
-				iconThemeRadio,
-			),
-			sectionBlock(u.t("settings.startup.title"), u.t("settings.startup.subtitle"),
-				autoStartCheck,
+			sectionCard(u.t("settings.startup.title"), u.t("settings.startup.subtitle"),
+				"🚀", color.NRGBA{R: 5, G: 150, B: 105, A: 255}, autoStartCheck,
 			),
 		)))
 		appearanceTab := container.NewTabItemWithIcon(u.t("settings.tab.appearance"), theme.ColorPaletteIcon(), container.NewThemeOverride(appearanceContent, settingsTh))
 
 		// ── Widget tab ────────────────────────────────────────────────────────
 		widgetContent := container.NewPadded(container.NewVScroll(container.NewVBox(
-			sectionBlock(u.t("settings.display.title"), u.t("settings.display.subtitle"),
-				displayChecks,
+			sectionCard(u.t("settings.display.title"), u.t("settings.display.subtitle"),
+				"📋", color.NRGBA{R: 2, G: 132, B: 199, A: 255}, displayChecks,
 			),
-			sectionBlock(u.t("settings.pollution.title"), u.t("settings.pollution.subtitle"),
-				pollutionSection,
+			sectionCard(u.t("settings.pollution.title"), u.t("settings.pollution.subtitle"),
+				"🍃", color.NRGBA{R: 16, G: 185, B: 129, A: 255}, pollutionSection,
 			),
-			sectionBlock(u.t("settings.temperature.title"), u.t("settings.temperature.subtitle"),
-				unitRadio,
+			sectionCard(u.t("settings.temperature.title"), u.t("settings.temperature.subtitle"),
+				"🌡️", color.NRGBA{R: 234, G: 88, B: 12, A: 255}, unitRadio,
 			),
-			sectionBlock(u.t("settings.windspeed.title"), u.t("settings.windspeed.subtitle"),
-				windUnitRadio,
+			sectionCard(u.t("settings.windspeed.title"), u.t("settings.windspeed.subtitle"),
+				"💨", color.NRGBA{R: 8, G: 145, B: 178, A: 255}, windUnitRadio,
 			),
 		)))
 		widgetTab := container.NewTabItemWithIcon(u.t("settings.tab.widget"), theme.ComputerIcon(), container.NewThemeOverride(widgetContent, settingsTh))
@@ -1475,40 +1502,41 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 		langHeaderRow := container.NewBorder(nil, nil, langHeaderLeft, langBadge)
 
 		langGrid := container.NewGridWithColumns(2, langCardObjects...)
-		languageContent := container.NewPadded(container.NewVScroll(container.NewVBox(
+
+		langCardBg := canvas.NewRectangle(color.White)
+		langCardBg.CornerRadius = 10
+		langCardBorder := canvas.NewRectangle(color.Transparent)
+		langCardBorder.StrokeColor = color.NRGBA{R: 226, G: 232, B: 240, A: 255}
+		langCardBorder.StrokeWidth = 1
+		langCardBorder.CornerRadius = 10
+		langCardInner := container.NewPadded(container.NewVBox(
 			langHeaderRow,
 			widget.NewSeparator(),
 			langGrid,
-		)))
+		))
+		languageContent := container.NewPadded(container.NewVScroll(
+			container.NewStack(langCardBg, langCardBorder, langCardInner),
+		))
 		languageTab := container.NewTabItemWithIcon(u.t("settings.tab.language"), theme.MailComposeIcon(), container.NewThemeOverride(languageContent, settingsTh))
 
 		providerContent := container.NewPadded(container.NewVScroll(container.NewVBox(
-			widget.NewCard(u.t("settings.provider.title"), u.t("settings.provider.subtitle"),
-				apiSection,
+			sectionCard(u.t("settings.provider.title"), u.t("settings.provider.subtitle"),
+				"☁️", color.NRGBA{R: 37, G: 99, B: 235, A: 255}, apiSection,
 			),
 		)))
 		providerTab := container.NewTabItemWithIcon(u.t("settings.tab.provider"), theme.SettingsIcon(), container.NewThemeOverride(providerContent, settingsTh))
 
-		proNoteBg := canvas.NewRectangle(color.NRGBA{R: 14, G: 165, B: 233, A: 25})
-		proNoteBg.CornerRadius = 8
-		proNoteBorder := canvas.NewRectangle(color.Transparent)
-		proNoteBorder.StrokeColor = color.NRGBA{R: 56, G: 189, B: 248, A: 100}
-		proNoteBorder.StrokeWidth = 1
-		proNoteBorder.CornerRadius = 8
-		proNoteLabel := widget.NewLabel(u.t("settings.locations.proNote"))
-		proNoteLabel.Wrapping = fyne.TextWrapWord
-		proNoteCard := container.NewStack(proNoteBg, proNoteBorder, container.NewPadded(proNoteLabel))
-
 		locationsContent := container.NewPadded(
 			container.NewBorder(
 				nil,
-				container.NewVBox(
-					proNoteCard,
-					widget.NewCard(u.t("settings.locations.addTitle"), "", addForm),
+				sectionCard(u.t("settings.locations.addTitle"), "",
+					"➕", color.NRGBA{R: 16, G: 185, B: 129, A: 255}, addForm,
 				),
 				nil,
 				nil,
-				widget.NewCard(u.t("settings.locations.savedTitle"), u.t("settings.locations.savedSubtitle"), cityListScroll),
+				sectionCard(u.t("settings.locations.savedTitle"), u.t("settings.locations.savedSubtitle"),
+					"🏙️", color.NRGBA{R: 37, G: 99, B: 235, A: 255}, cityListScroll,
+				),
 			),
 		)
 		locationsTab := container.NewTabItemWithIcon(u.t("settings.tab.locations"), theme.ListIcon(), container.NewThemeOverride(locationsContent, settingsTh))
@@ -1602,15 +1630,20 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 
 		previewLabel := widget.NewRichTextFromMarkdown("**" + u.t("settings.about.previewLabel") + "**")
 
-		aboutContent := container.NewPadded(container.NewVScroll(container.NewVBox(
-			widget.NewCard(aboutTitle, "", container.NewVBox(
+		aboutCard := sectionCard(aboutTitle, "",
+			"ℹ️", color.NRGBA{R: 99, G: 102, B: 241, A: 255},
+			container.NewVBox(
 				aboutDesc,
 				container.NewGridWithColumns(2,
 					widget.NewLabel(u.t("settings.about.websiteLabel")), websiteLink,
 					widget.NewLabel(u.t("settings.about.manualLabel")), manualLink,
 					widget.NewLabel(u.t("settings.about.airIndexLabel")), airIndexLink,
 				),
-			)),
+			),
+		)
+
+		aboutContent := container.NewPadded(container.NewVScroll(container.NewVBox(
+			aboutCard,
 			previewLabel,
 			previewGrid,
 		)))
@@ -1623,10 +1656,10 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 		}
 
 		// ── SAVE BAR (full width, pinned at bottom) ───────────────────────────
-		saveBtn := widget.NewButton(u.t("settings.save"), func() {
+		saveBtn := widget.NewButtonWithIcon(u.t("settings.save"), theme.DocumentSaveIcon(), func() {
 			newCfg := buildConfigFromUI(
 				providerSelect, apiKeyEntry,
-				intervalSlider, state, positionValueMap, positionRadio, monitorSelect, opacityRadio, opacityMap, cfg,
+				intervalSlider, state, positionValueMap, positionRadio, monitorSelect, cfg,
 			)
 			errs := config.Validate(newCfg, nil)
 			if len(errs) > 0 {
@@ -1644,24 +1677,34 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 			state.saved = true
 			// Confirmation popup suppressed — save is silent.
 		})
+		saveBtn.Importance = widget.HighImportance
 
-		cancelBtn := widget.NewButton(u.t("settings.cancel"), func() {
+		cancelBtn := widget.NewButtonWithIcon(u.t("settings.cancel"), theme.CancelIcon(), func() {
 			win.Close()
 		})
+		cancelBtn.Importance = widget.LowImportance
+
 		cancelBtnSizer := canvas.NewRectangle(color.Transparent)
-		cancelBtnSizer.SetMinSize(fyne.NewSize(120, 0))
+		cancelBtnSizer.SetMinSize(fyne.NewSize(120, 36))
 		cancelBtnContainer := container.NewMax(cancelBtnSizer, cancelBtn)
 
 		saveBtnSizer := canvas.NewRectangle(color.Transparent)
-		saveBtnSizer.SetMinSize(fyne.NewSize(160, 0))
+		saveBtnSizer.SetMinSize(fyne.NewSize(150, 36))
 		saveBtnContainer := container.NewMax(saveBtnSizer, saveBtn)
 
-		saveBar := container.NewBorder(
-			widget.NewSeparator(), nil, nil, nil,
-			container.NewPadded(container.NewPadded(container.NewHBox(layout.NewSpacer(), saveBtnContainer, cancelBtnContainer))),
+		saveBarBg := canvas.NewRectangle(color.White)
+		saveBarBorder := canvas.NewRectangle(color.NRGBA{R: 226, G: 232, B: 240, A: 255})
+		saveBarBorderSizer := canvas.NewRectangle(color.Transparent)
+		saveBarBorderSizer.SetMinSize(fyne.NewSize(0, 1))
+		saveBarTopLine := container.NewMax(saveBarBorderSizer, saveBarBorder)
+
+		saveBarContent := container.NewPadded(container.NewHBox(layout.NewSpacer(), saveBtnContainer, cancelBtnContainer))
+		saveBar := container.NewStack(
+			saveBarBg,
+			container.NewBorder(saveBarTopLine, nil, nil, nil, saveBarContent),
 		)
 
-		bg := canvas.NewRectangle(color.White)
+		bg := canvas.NewRectangle(color.NRGBA{R: 245, G: 247, B: 250, A: 255})
 		mainBorder := container.NewBorder(nil, saveBar, nil, nil, tabs)
 		themedContent := container.NewThemeOverride(mainBorder, settingsTh)
 		win.SetContent(container.NewStack(bg, themedContent))
@@ -1679,7 +1722,6 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 		}
 		// Revert live preview changes if the user closed without saving.
 		if !state.saved {
-			u.SetOpacity(origOpacity)
 			// Revert view mode if it was changed
 			if u.GetViewMode() != origViewMode {
 				u.ShowWidgetWithMode(cfg.Cities, origViewMode)
@@ -1705,8 +1747,6 @@ func buildConfigFromUI(
 	positionValueMap map[string]string,
 	positionRadio *widget.RadioGroup,
 	monitorSelect *widget.Select,
-	opacityRadio *widget.RadioGroup,
-	opacityMap map[string]int,
 	current *config.Config,
 ) *config.Config {
 	cornerPosition := current.CornerPosition
@@ -1719,10 +1759,7 @@ func buildConfigFromUI(
 		}
 	}
 
-	opacity := opacityMap[opacityRadio.Selected]
-	if opacity == 0 {
-		opacity = 100
-	}
+	opacity := 100
 	// Custom coordinates logic: if state.customX/Y are set, use them;
 	// otherwise if no corner was selected, preserve existing custom coordinates.
 	var customX, customY *int

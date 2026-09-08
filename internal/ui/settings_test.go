@@ -144,20 +144,19 @@ func TestBuildConfigFromUI_IncludesLocale(t *testing.T) {
 	monitorSelect := widget.NewSelect([]string{"Monitor 1"}, nil)
 	monitorSelect.SetSelected("Monitor 1")
 
-	opacityRadio := widget.NewRadioGroup([]string{"100%"}, nil)
-	opacityRadio.SetSelected("100%")
-	opacityMap := map[string]int{"100%": 100}
-
 	current := config.DefaultConfig()
 
 	cfg := buildConfigFromUI(
 		providerSelect, apiKeyEntry, intervalSlider,
 		state, positionValueMap, positionRadio, monitorSelect,
-		opacityRadio, opacityMap, current,
+		current,
 	)
 
 	if cfg.Locale != "pt-BR" {
 		t.Errorf("buildConfigFromUI Locale = %q, want %q", cfg.Locale, "pt-BR")
+	}
+	if cfg.Opacity != 100 {
+		t.Errorf("buildConfigFromUI Opacity = %d, want 100", cfg.Opacity)
 	}
 }
 
@@ -186,20 +185,19 @@ func TestBuildConfigFromUI_DefaultLocale(t *testing.T) {
 	monitorSelect := widget.NewSelect([]string{"Monitor 1"}, nil)
 	monitorSelect.SetSelected("Monitor 1")
 
-	opacityRadio := widget.NewRadioGroup([]string{"100%"}, nil)
-	opacityRadio.SetSelected("100%")
-	opacityMap := map[string]int{"100%": 100}
-
 	current := config.DefaultConfig()
 
 	cfg := buildConfigFromUI(
 		providerSelect, apiKeyEntry, intervalSlider,
 		state, positionValueMap, positionRadio, monitorSelect,
-		opacityRadio, opacityMap, current,
+		current,
 	)
 
 	if cfg.Locale != "en-GB" {
 		t.Errorf("buildConfigFromUI Locale = %q, want %q", cfg.Locale, "en-GB")
+	}
+	if cfg.Opacity != 100 {
+		t.Errorf("buildConfigFromUI Opacity = %d, want 100", cfg.Opacity)
 	}
 }
 
@@ -228,16 +226,12 @@ func buildConfigFromUIHelper(t *testing.T, state *settingsState) *config.Config 
 	monitorSelect := widget.NewSelect([]string{"Monitor 1"}, nil)
 	monitorSelect.SetSelected("Monitor 1")
 
-	opacityRadio := widget.NewRadioGroup([]string{"100%"}, nil)
-	opacityRadio.SetSelected("100%")
-	opacityMap := map[string]int{"100%": 100}
-
 	current := config.DefaultConfig()
 
 	return buildConfigFromUI(
 		providerSelect, apiKeyEntry, intervalSlider,
 		state, positionValueMap, positionRadio, monitorSelect,
-		opacityRadio, opacityMap, current,
+		current,
 	)
 }
 

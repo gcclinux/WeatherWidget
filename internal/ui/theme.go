@@ -397,17 +397,25 @@ func (s *settingsTheme) Color(name fyne.ThemeColorName, _ fyne.ThemeVariant) col
 	case theme.ColorNameOverlayBackground:
 		return color.NRGBA{R: 255, G: 255, B: 255, A: 255}
 	case theme.ColorNameForeground:
-		return color.NRGBA{R: 34, G: 34, B: 34, A: 255}
+		return color.NRGBA{R: 15, G: 23, B: 42, A: 255} // Slate-900 (deep, crisp, premium)
 	case theme.ColorNameInputBackground:
-		return color.NRGBA{R: 245, G: 245, B: 245, A: 255}
+		return color.NRGBA{R: 248, G: 250, B: 252, A: 255} // Slate-50
 	case theme.ColorNameSeparator:
-		return color.NRGBA{R: 227, G: 227, B: 227, A: 255}
+		return color.NRGBA{R: 226, G: 232, B: 240, A: 255} // Slate-200
 	case theme.ColorNameDisabled:
-		return color.NRGBA{R: 140, G: 140, B: 140, A: 255}
+		return color.NRGBA{R: 148, G: 163, B: 184, A: 255} // Slate-400
 	case theme.ColorNamePlaceHolder:
-		return color.NRGBA{R: 120, G: 120, B: 120, A: 255}
+		return color.NRGBA{R: 148, G: 163, B: 184, A: 255} // Slate-400
 	case theme.ColorNamePrimary:
-		return color.NRGBA{R: 26, G: 115, B: 232, A: 255}
+		return color.NRGBA{R: 37, G: 99, B: 235, A: 255} // Blue-600 (vibrant accent)
+	case theme.ColorNameHover:
+		return color.NRGBA{R: 239, G: 246, B: 255, A: 255} // Blue-50
+	case theme.ColorNameFocus:
+		return color.NRGBA{R: 147, G: 197, B: 253, A: 255} // Blue-300
+	case theme.ColorNameSelection:
+		return color.NRGBA{R: 191, G: 219, B: 254, A: 255} // Blue-200
+	case theme.ColorNameButton:
+		return color.NRGBA{R: 241, G: 245, B: 249, A: 255} // Slate-100
 	}
 	return s.base.Color(name, theme.VariantLight)
 }

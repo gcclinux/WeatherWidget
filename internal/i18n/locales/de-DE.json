@@ -45,6 +45,7 @@
   "settings.provider.note": "Hinweis: \nKostenlos = Aktualisierungsintervall 120 Minuten (begrenzt). \nPro = Aktualisierungsintervall 10 Minuten (unbegrenzt).",
   "settings.provider.apiKeyActivation.title": "Ihr Pro-API-Schlüssel",
   "settings.provider.apiKeyActivation.message": "Bewahren Sie diesen Schlüssel sicher auf. Er wird aktiviert, sobald Ihr Abonnement bestätigt wurde, und deaktiviert, wenn das Abonnement gekündigt wird.",
+  "settings.provider.proFeaturesNote": "⭐ EasyWeatherWidget Pro: Genießen Sie Schadstoffdaten und die Möglichkeit, bis zu 5 Städte gleichzeitig voreinzustellen",
   "settings.locations.savedTitle": "Gespeicherte Städte",
   "settings.locations.savedSubtitle": "Verwalten Sie Ihre verfolgten Standorte (1–5 Städte).",
   "settings.locations.proNote": "⭐ Die kostenlose Version erlaubt bis zu 3 Städte. Upgraden Sie im Datenanbieter-Tab auf Pro für bis zu 5 Städte, 10-Minuten-Aktualisierungen und erweiterte Wetterdaten!",
