@@ -37,14 +37,16 @@ plugs:
     default-provider: gtk-common-themes
 
 environment:
-  # Library paths
-  LD_LIBRARY_PATH: $SNAP/gnome-platform/usr/lib/x86_64-linux-gnu:$SNAP/gnome-platform/usr/lib:$SNAP/usr/lib/x86_64-linux-gnu:$SNAP/usr/lib:$LD_LIBRARY_PATH
+  # Library paths — arch-aware. $CRAFT_ARCH_TRIPLET_BUILD_FOR is expanded by
+  # snapcraft at build time (core22+) and baked into meta/snap.yaml, so this
+  # resolves to e.g. aarch64-linux-gnu on arm64 and x86_64-linux-gnu on amd64.
+  LD_LIBRARY_PATH: $SNAP/gnome-platform/usr/lib/$CRAFT_ARCH_TRIPLET_BUILD_FOR:$SNAP/usr/lib/$CRAFT_ARCH_TRIPLET_BUILD_FOR:$SNAP/gnome-platform/usr/lib:$SNAP/usr/lib:$LD_LIBRARY_PATH
   # GTK and GDK configuration
-  GTK_PATH: $SNAP/gnome-platform/usr/lib/x86_64-linux-gnu/gtk-3.0
+  GTK_PATH: $SNAP/gnome-platform/usr/lib/$CRAFT_ARCH_TRIPLET_BUILD_FOR/gtk-3.0
   GTK_EXE_PREFIX: $SNAP/gnome-platform/usr
-  GTK_IM_MODULE_DIR: $SNAP/gnome-platform/usr/lib/x86_64-linux-gnu/gtk-3.0/3.0.0/immodules
-  GTK_IM_MODULE_FILE: $SNAP/gnome-platform/usr/lib/x86_64-linux-gnu/gtk-3.0/3.0.0/immodules.cache
-  GDK_PIXBUF_MODULE_FILE: $SNAP/gnome-platform/usr/lib/x86_64-linux-gnu/gdk-pixbuf-2.0/2.10.0/loaders.cache
+  GTK_IM_MODULE_DIR: $SNAP/gnome-platform/usr/lib/$CRAFT_ARCH_TRIPLET_BUILD_FOR/gtk-3.0/3.0.0/immodules
+  GTK_IM_MODULE_FILE: $SNAP/gnome-platform/usr/lib/$CRAFT_ARCH_TRIPLET_BUILD_FOR/gtk-3.0/3.0.0/immodules.cache
+  GDK_PIXBUF_MODULE_FILE: $SNAP/gnome-platform/usr/lib/$CRAFT_ARCH_TRIPLET_BUILD_FOR/gdk-pixbuf-2.0/2.10.0/loaders.cache
   # XDG paths for themes, icons, and data
   XDG_DATA_DIRS: $SNAP/data-dir:$SNAP/gnome-platform/usr/share:$XDG_DATA_DIRS
   XDG_CONFIG_DIRS: $SNAP/gnome-platform/etc/xdg:$XDG_CONFIG_DIRS
@@ -57,8 +59,8 @@ environment:
   # backend, which triggers a harmless-but-noisy "cannot open shared object
   # file: libpxbackend-1.0.so" warning at startup. This app uses Go's net/http
   # directly and needs no GIO modules, so an empty dir silences it.
-  GIO_MODULE_DIR: $SNAP/usr/lib/x86_64-linux-gnu/gio/modules
-  GI_TYPELIB_PATH: $SNAP/gnome-platform/usr/lib/x86_64-linux-gnu/girepository-1.0:$SNAP/usr/lib/x86_64-linux-gnu/girepository-1.0
+  GIO_MODULE_DIR: $SNAP/usr/lib/$CRAFT_ARCH_TRIPLET_BUILD_FOR/gio/modules
+  GI_TYPELIB_PATH: $SNAP/gnome-platform/usr/lib/$CRAFT_ARCH_TRIPLET_BUILD_FOR/girepository-1.0:$SNAP/usr/lib/$CRAFT_ARCH_TRIPLET_BUILD_FOR/girepository-1.0
   # Locale
   LOCPATH: $SNAP/gnome-platform/usr/lib/locale
   # Force X11 for window positioning
@@ -82,10 +84,10 @@ apps:
       - gsettings
 
 layout:
-  /usr/lib/x86_64-linux-gnu/gdk-pixbuf-2.0:
-    bind: $SNAP/gnome-platform/usr/lib/x86_64-linux-gnu/gdk-pixbuf-2.0
-  /usr/lib/x86_64-linux-gnu/gtk-3.0:
-    bind: $SNAP/gnome-platform/usr/lib/x86_64-linux-gnu/gtk-3.0
+  /usr/lib/$CRAFT_ARCH_TRIPLET_BUILD_FOR/gdk-pixbuf-2.0:
+    bind: $SNAP/gnome-platform/usr/lib/$CRAFT_ARCH_TRIPLET_BUILD_FOR/gdk-pixbuf-2.0
+  /usr/lib/$CRAFT_ARCH_TRIPLET_BUILD_FOR/gtk-3.0:
+    bind: $SNAP/gnome-platform/usr/lib/$CRAFT_ARCH_TRIPLET_BUILD_FOR/gtk-3.0
   /usr/share/glib-2.0:
     bind: $SNAP/gnome-platform/usr/share/glib-2.0
   /usr/share/icons:
@@ -135,7 +137,7 @@ parts:
       mkdir -p "$DEST_DIR/gnome-platform"
       # Empty GIO modules dir so GIO_MODULE_DIR points somewhere valid but
       # without the broken libgiolibproxy.so from the gnome platform snap.
-      mkdir -p "$DEST_DIR/usr/lib/x86_64-linux-gnu/gio/modules"
+      mkdir -p "$DEST_DIR/usr/lib/$CRAFT_ARCH_TRIPLET_BUILD_FOR/gio/modules"
       unset CFLAGS CPPFLAGS LDFLAGS
       export CGO_CFLAGS="-Wno-deprecated-declarations $(pkg-config --cflags gtk+-3.0 ayatana-appindicator3-0.1 2>/dev/null)"
       export CGO_LDFLAGS="$(pkg-config --libs gtk+-3.0 ayatana-appindicator3-0.1 2>/dev/null)"
