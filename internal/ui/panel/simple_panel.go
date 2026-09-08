@@ -11,7 +11,6 @@ import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
-	"fyne.io/fyne/v2/widget"
 
 	"weatherwidget/assets"
 	"weatherwidget/internal/config"
@@ -47,19 +46,18 @@ type SimpleCityPanel struct {
 	pressureText  *canvas.Text
 	uvIndexText   *canvas.Text
 	windDirText   *canvas.Text
+	separatorLine *canvas.Rectangle
 	separatorRow  *fyne.Container
 	errorIcon     *canvas.Image
+
+	cardBg         *canvas.Rectangle
+	cornerMask     fyne.CanvasObject
+	innerContainer *fyne.Container
 
 	// Air quality & pollution metrics
 	pollutionCells  map[weather.PollutionMetric]*simplePollutionCell
 	pollutionBox    *fyne.Container
 	pollutionFields *config.PollutionFields
-
-	// cardBgImg is the background image for the card (day.jpg or night.jpg).
-	// cardBgOverlay is a semi-transparent dark rect stacked over it to keep
-	// white text readable regardless of the image brightness.
-	cardBgImg     *canvas.Image
-	cardBgOverlay *canvas.Rectangle
 
 	lastData      *weather.WeatherData  // cached for re-render on unit change
 	lastTempUnit  config.TemperatureUnit
@@ -71,6 +69,133 @@ type SimpleCityPanel struct {
 	timeTicker *time.Ticker
 	stopCh     chan struct{}
 	animStopCh chan struct{}
+}
+
+var (
+	simpleDarkThemeTextColor  color.Color = color.White
+	simpleLightThemeTextColor color.Color = color.NRGBA{R: 24, G: 24, B: 28, A: 255}
+	simpleDarkThemeSepColor   color.Color = color.NRGBA{R: 255, G: 255, B: 255, A: 60}
+	simpleLightThemeSepColor  color.Color = color.NRGBA{R: 0, G: 0, B: 0, A: 50}
+)
+
+// currentSimpleTextColor returns the text color for Simple View based on the OS theme.
+func currentSimpleTextColor() color.Color {
+	if isWindowsLightTheme() {
+		return simpleLightThemeTextColor
+	}
+	return simpleDarkThemeTextColor
+}
+
+// currentSimpleSeparatorColor returns the separator line color for Simple View.
+func currentSimpleSeparatorColor() color.Color {
+	if isWindowsLightTheme() {
+		return simpleLightThemeSepColor
+	}
+	return simpleDarkThemeSepColor
+}
+
+// newSimpleCardBg creates the frosted light card background shown in Windows Light Theme.
+func newSimpleCardBg() *canvas.Rectangle {
+	rect := canvas.NewRectangle(color.NRGBA{R: 245, G: 247, B: 252, A: 220})
+	rect.CornerRadius = cardCornerRadius
+	rect.StrokeColor = color.NRGBA{R: 255, G: 255, B: 255, A: 180}
+	rect.StrokeWidth = 1
+	return rect
+}
+
+// updateTheme applies the current theme's card background, corner mask, text, and separator colors.
+func (p *SimpleCityPanel) updateTheme() {
+	isLight := isWindowsLightTheme()
+	textColor := simpleDarkThemeTextColor
+	sepColor := simpleDarkThemeSepColor
+	if isLight {
+		textColor = simpleLightThemeTextColor
+		sepColor = simpleLightThemeSepColor
+	}
+
+	if p.cardBg != nil {
+		if isLight {
+			p.cardBg.Show()
+		} else {
+			p.cardBg.Hide()
+		}
+		p.cardBg.Refresh()
+	}
+
+	if p.cornerMask != nil {
+		if isLight {
+			p.cornerMask.Show()
+		} else {
+			p.cornerMask.Hide()
+		}
+		p.cornerMask.Refresh()
+	}
+
+	if p.cityText != nil {
+		p.cityText.Color = textColor
+		p.cityText.Refresh()
+	}
+	if p.tempText != nil {
+		p.tempText.Color = textColor
+		p.tempText.Refresh()
+	}
+	if p.descText != nil {
+		p.descText.Color = textColor
+		p.descText.Refresh()
+	}
+	if p.humidityText != nil {
+		p.humidityText.Color = textColor
+		p.humidityText.Refresh()
+	}
+	if p.windText != nil {
+		p.windText.Color = textColor
+		p.windText.Refresh()
+	}
+	if p.timeText != nil {
+		p.timeText.Color = textColor
+		p.timeText.Refresh()
+	}
+	if p.dateText != nil {
+		p.dateText.Color = textColor
+		p.dateText.Refresh()
+	}
+	if p.windGustText != nil {
+		p.windGustText.Color = textColor
+		p.windGustText.Refresh()
+	}
+	if p.dewPointText != nil {
+		p.dewPointText.Color = textColor
+		p.dewPointText.Refresh()
+	}
+	if p.pressureText != nil {
+		p.pressureText.Color = textColor
+		p.pressureText.Refresh()
+	}
+	if p.uvIndexText != nil {
+		p.uvIndexText.Color = textColor
+		p.uvIndexText.Refresh()
+	}
+	if p.windDirText != nil {
+		p.windDirText.Color = textColor
+		p.windDirText.Refresh()
+	}
+
+	for _, cell := range p.pollutionCells {
+		if cell != nil && cell.value != nil {
+			cell.value.Color = textColor
+			cell.value.Refresh()
+		}
+	}
+
+	if p.separatorLine != nil {
+		p.separatorLine.FillColor = sepColor
+		p.separatorLine.Refresh()
+	}
+}
+
+// updateTextColors is a backward-compatible wrapper around updateTheme.
+func (p *SimpleCityPanel) updateTextColors() {
+	p.updateTheme()
 }
 
 // loadSimpleAirIconResource reads an air-quality icon from the embedded AirIcons FS
@@ -236,61 +361,62 @@ func NewSimpleCityPanel(lm *i18n.LocaleManager) *SimpleCityPanel {
 	p.errorIcon.Hide()
 
 	// Labels with appealing typography (matching original commit f94faa19).
-	p.cityText = canvas.NewText(p.translate("panel.placeholder.city", "City, RG"), color.White)
+	textColor := currentSimpleTextColor()
+	p.cityText = canvas.NewText(p.translate("panel.placeholder.city", "City, RG"), textColor)
 	p.cityText.TextSize = 18
 	p.cityText.TextStyle = fyne.TextStyle{Bold: true}
 	p.cityText.Alignment = fyne.TextAlignCenter
 
-	p.tempText = canvas.NewText(p.translate("panel.placeholder.temp", "--°C"), color.White)
+	p.tempText = canvas.NewText(p.translate("panel.placeholder.temp", "--°C"), textColor)
 	p.tempText.TextSize = 42
 	p.tempText.TextStyle = fyne.TextStyle{Bold: true}
 	p.tempText.Alignment = fyne.TextAlignCenter
 
-	p.descText = canvas.NewText(p.translate("panel.placeholder.desc", "--"), color.White)
+	p.descText = canvas.NewText(p.translate("panel.placeholder.desc", "--"), textColor)
 	p.descText.TextSize = 12
 	p.descText.TextStyle = fyne.TextStyle{Italic: true}
 	p.descText.Alignment = fyne.TextAlignCenter
 
-	p.humidityText = canvas.NewText(p.translate("panel.placeholder.humidity", "💧 Hum --%"), color.White)
+	p.humidityText = canvas.NewText(p.translate("panel.placeholder.humidity", "💧 Hum --%"), textColor)
 	p.humidityText.TextSize = 12
 	p.humidityText.TextStyle = fyne.TextStyle{Italic: true}
 	p.humidityText.Alignment = fyne.TextAlignCenter
 
-	p.windText = canvas.NewText(p.translate("panel.placeholder.wind", "💨 -- km/h"), color.White)
+	p.windText = canvas.NewText(p.translate("panel.placeholder.wind", "💨 -- km/h"), textColor)
 	p.windText.TextSize = 12
 	p.windText.TextStyle = fyne.TextStyle{Italic: true}
 	p.windText.Alignment = fyne.TextAlignCenter
 
-	p.timeText = canvas.NewText(p.translate("panel.placeholder.time", "00:00:00"), color.White)
+	p.timeText = canvas.NewText(p.translate("panel.placeholder.time", "00:00:00"), textColor)
 	p.timeText.TextSize = 22
 	p.timeText.TextStyle = fyne.TextStyle{Bold: true}
 	p.timeText.Alignment = fyne.TextAlignCenter
 
-	p.dateText = canvas.NewText(p.translate("panel.placeholder.date", "Monday, Jan 02"), color.White)
+	p.dateText = canvas.NewText(p.translate("panel.placeholder.date", "Monday, Jan 02"), textColor)
 	p.dateText.TextSize = 11
 	p.dateText.Alignment = fyne.TextAlignCenter
 
-	p.windGustText = canvas.NewText("", color.White)
+	p.windGustText = canvas.NewText("", textColor)
 	p.windGustText.TextSize = 12
 	p.windGustText.TextStyle = fyne.TextStyle{Italic: true}
 	p.windGustText.Alignment = fyne.TextAlignCenter
 
-	p.dewPointText = canvas.NewText("", color.White)
+	p.dewPointText = canvas.NewText("", textColor)
 	p.dewPointText.TextSize = 12
 	p.dewPointText.TextStyle = fyne.TextStyle{Italic: true}
 	p.dewPointText.Alignment = fyne.TextAlignCenter
 
-	p.pressureText = canvas.NewText("", color.White)
+	p.pressureText = canvas.NewText("", textColor)
 	p.pressureText.TextSize = 12
 	p.pressureText.TextStyle = fyne.TextStyle{Italic: true}
 	p.pressureText.Alignment = fyne.TextAlignCenter
 
-	p.uvIndexText = canvas.NewText("", color.White)
+	p.uvIndexText = canvas.NewText("", textColor)
 	p.uvIndexText.TextSize = 12
 	p.uvIndexText.TextStyle = fyne.TextStyle{Italic: true}
 	p.uvIndexText.Alignment = fyne.TextAlignCenter
 
-	p.windDirText = canvas.NewText("", color.White)
+	p.windDirText = canvas.NewText("", textColor)
 	p.windDirText.TextSize = 12
 	p.windDirText.TextStyle = fyne.TextStyle{Italic: true}
 	p.windDirText.Alignment = fyne.TextAlignCenter
@@ -302,7 +428,7 @@ func NewSimpleCityPanel(lm *i18n.LocaleManager) *SimpleCityPanel {
 		icon.FillMode = canvas.ImageFillContain
 		icon.SetMinSize(fyne.NewSize(18, 18))
 
-		value := canvas.NewText("", color.White)
+		value := canvas.NewText("", textColor)
 		value.TextSize = 12
 		value.TextStyle = fyne.TextStyle{Italic: true}
 		value.Alignment = fyne.TextAlignCenter
@@ -316,23 +442,21 @@ func NewSimpleCityPanel(lm *i18n.LocaleManager) *SimpleCityPanel {
 		p.pollutionCells[m] = cell
 	}
 
-	p.separatorRow = container.NewCenter(widget.NewSeparator())
+	p.separatorLine = canvas.NewRectangle(currentSimpleSeparatorColor())
+	p.separatorLine.SetMinSize(fyne.NewSize(120, 1))
+	p.separatorRow = container.NewCenter(p.separatorLine)
 
-	// Build the initial card background (daytime by default; StartClock will
-	// swap it once the city timezone is known).
-	p.cardBgImg = newCardBgImage(false)
-	p.cardBgOverlay = newCardBgOverlay()
+	p.cardBg = newSimpleCardBg()
+	p.cornerMask = newCornerMask()
+	p.innerContainer = container.New(&simpleColumnLayout{minWidth: 160}, p.buildLayout())
 
-	inner := container.New(&simpleColumnLayout{minWidth: 160}, p.buildLayout())
-
-	// On Windows, add the color-key corner mask as the topmost layer so that
-	// corner pixels outside the rounded rect become transparent via LWA_COLORKEY.
-	// newCornerMask() returns nil on non-Windows platforms.
-	if mask := newCornerMask(); mask != nil {
-		p.container = container.NewStack(p.cardBgImg, p.cardBgOverlay, inner, mask)
+	if p.cornerMask != nil {
+		p.container = container.NewStack(p.cardBg, p.innerContainer, p.cornerMask)
 	} else {
-		p.container = container.NewStack(p.cardBgImg, p.cardBgOverlay, inner)
+		p.container = container.NewStack(p.cardBg, p.innerContainer)
 	}
+
+	p.updateTheme()
 	return p
 }
 
@@ -413,20 +537,6 @@ func (p *SimpleCityPanel) buildLayout() fyne.CanvasObject {
 	return container.NewVBox(objects...)
 }
 
-// applyDayNightBg swaps the card background image to the day or night variant.
-// Must be called on the Fyne main goroutine.
-func (p *SimpleCityPanel) applyDayNightBg(isNight bool) {
-	if p.cardBgImg == nil {
-		return
-	}
-	if isNight {
-		p.cardBgImg.Resource = nightBgResource()
-	} else {
-		p.cardBgImg.Resource = dayBgResource()
-	}
-	p.cardBgImg.Refresh()
-}
-
 // pollutionMetricShortLabel returns a concise label for a pollution metric
 // suitable for compact display in the Simple (Classic) view column.
 func pollutionMetricShortLabel(m weather.PollutionMetric) string {
@@ -460,9 +570,12 @@ func (p *SimpleCityPanel) ApplyDisplayFields(df *config.DisplayFields) {
 		df = config.DefaultDisplayFields()
 	}
 	p.displayFields = df
-	p.container.RemoveAll()
-	p.container.Add(p.buildLayout())
+	if p.innerContainer != nil {
+		p.innerContainer.RemoveAll()
+		p.innerContainer.Add(p.buildLayout())
+	}
 	p.applyPollutionCells()
+	p.updateTheme()
 	p.container.Refresh()
 }
 
@@ -498,6 +611,7 @@ func (p *SimpleCityPanel) applyPollutionCells() {
 			} else {
 				cell.value.Text = row.ValueText
 			}
+			cell.value.Color = currentSimpleTextColor()
 			cell.value.Refresh()
 			cell.container.Show()
 			hasAny = true
@@ -571,6 +685,7 @@ func (p *SimpleCityPanel) Update(data *weather.WeatherData, tempUnit config.Temp
 
 	// Update air quality and pollution metrics.
 	p.applyPollutionCells()
+	p.updateTextColors()
 
 	// Hide error indicator on successful update.
 	p.errorIcon.Hide()
@@ -635,12 +750,11 @@ func (p *SimpleCityPanel) StartClock(timezone string) {
 	p.dateText.Refresh()
 
 	lastNight := weather.IsNight(now.In(loc))
+	lastLightTheme := isWindowsLightTheme()
 
-	// Apply the initial background immediately (before the first tick).
-	p.applyDayNightBg(lastNight)
-
-	go func(loc *time.Location, initialNight bool) {
+	go func(loc *time.Location, initialNight bool, initialLightTheme bool) {
 		currentNight := initialNight
+		currentLightTheme := initialLightTheme
 		for {
 			select {
 			case <-p.stopCh:
@@ -650,6 +764,7 @@ func (p *SimpleCityPanel) StartClock(timezone string) {
 				timeStr := weather.FormatTime(t, timezone, p.lm)
 				dateStr := weather.FormatDate(t, timezone, p.lm)
 				isNightNow := weather.IsNight(localNow)
+				isLightNow := isWindowsLightTheme()
 
 				fyne.Do(func() {
 					p.timeText.Text = timeStr
@@ -657,10 +772,13 @@ func (p *SimpleCityPanel) StartClock(timezone string) {
 					p.dateText.Text = dateStr
 					p.dateText.Refresh()
 
+					if isLightNow != currentLightTheme {
+						currentLightTheme = isLightNow
+						p.updateTextColors()
+					}
+
 					if isNightNow != currentNight {
 						currentNight = isNightNow
-						// Recolor the card background for the new day/night state.
-						p.applyDayNightBg(isNightNow)
 						if p.lastData != nil {
 							p.lastData.LocalTime = localNow
 							iconCode := weather.MapConditionToIconWithTheme(p.lastData.IconCode, localNow, p.lastIconTheme)
@@ -670,7 +788,7 @@ func (p *SimpleCityPanel) StartClock(timezone string) {
 				})
 			}
 		}
-	}(loc, lastNight)
+	}(loc, lastNight, lastLightTheme)
 }
 
 // StopClock stops the time ticker goroutine and any icon animation.

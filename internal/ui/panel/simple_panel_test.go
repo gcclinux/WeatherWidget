@@ -194,3 +194,51 @@ func TestSimpleCityPanel_ApplyDisplayFieldsAndPollution(t *testing.T) {
 		t.Error("pollutionBox should be hidden when no pollution metrics are active")
 	}
 }
+
+func TestSimpleCityPanel_TextColors(t *testing.T) {
+	test.NewApp()
+	p := NewSimpleCityPanel(nil)
+
+	expectedTextColor := currentSimpleTextColor()
+	expectedSepColor := currentSimpleSeparatorColor()
+
+	if p.tempText.Color != expectedTextColor {
+		t.Errorf("tempText.Color = %v, want %v", p.tempText.Color, expectedTextColor)
+	}
+	if p.cityText.Color != expectedTextColor {
+		t.Errorf("cityText.Color = %v, want %v", p.cityText.Color, expectedTextColor)
+	}
+	if p.descText.Color != expectedTextColor {
+		t.Errorf("descText.Color = %v, want %v", p.descText.Color, expectedTextColor)
+	}
+	if p.timeText.Color != expectedTextColor {
+		t.Errorf("timeText.Color = %v, want %v", p.timeText.Color, expectedTextColor)
+	}
+	if p.separatorLine == nil {
+		t.Fatal("separatorLine should not be nil")
+	}
+	if p.separatorLine.FillColor != expectedSepColor {
+		t.Errorf("separatorLine.FillColor = %v, want %v", p.separatorLine.FillColor, expectedSepColor)
+	}
+
+	// Update with weather and pollution
+	aqiVal := 1
+	data := &weather.WeatherData{
+		CityName:    "Edinburgh",
+		Temperature: 15,
+		AQI:         &aqiVal,
+	}
+	p.ApplyPollutionFields(&config.PollutionFields{ShowAQI: true})
+	p.Update(data, config.TemperatureUnitCelsius, config.WindSpeedUnitKmh)
+
+	aqiCell := p.pollutionCells[weather.MetricAQI]
+	if aqiCell.value.Color != expectedTextColor {
+		t.Errorf("pollution cell value color = %v, want %v", aqiCell.value.Color, expectedTextColor)
+	}
+
+	// Verify updateTextColors refreshes all elements
+	p.updateTextColors()
+	if p.tempText.Color != expectedTextColor {
+		t.Errorf("after updateTextColors, tempText.Color = %v, want %v", p.tempText.Color, expectedTextColor)
+	}
+}
