@@ -1277,7 +1277,9 @@ func buildLocationsTab(m *manager, dlg *gtk.Dialog, initialCities []config.CityC
 					Lon          float64 `json:"Lon"`
 				}
 				if err := json.Unmarshal(body, &result); err != nil || result.Neighborhood == "" {
-					glib.IdleAdd(func() { statusLbl.SetText(fmt.Sprintf(m.t("error.settings.noCityFound"), name)) })
+					func(n string) {
+						glib.IdleAdd(func() { statusLbl.SetText(fmt.Sprintf(m.t("error.settings.noCityFound"), n)) })
+					}(name)
 					return
 				}
 				foundName = result.Neighborhood
@@ -1307,7 +1309,9 @@ func buildLocationsTab(m *manager, dlg *gtk.Dialog, initialCities []config.CityC
 					State   string  `json:"state"`
 				}
 				if err := json.Unmarshal(body, &results); err != nil || len(results) == 0 {
-					glib.IdleAdd(func() { statusLbl.SetText(fmt.Sprintf(m.t("error.settings.noCityFound"), name)) })
+					func(n string) {
+						glib.IdleAdd(func() { statusLbl.SetText(fmt.Sprintf(m.t("error.settings.noCityFound"), n)) })
+					}(name)
 					return
 				}
 				r := results[0]
@@ -1322,18 +1326,22 @@ func buildLocationsTab(m *manager, dlg *gtk.Dialog, initialCities []config.CityC
 			}
 
 			if searchErr != nil {
-				glib.IdleAdd(func() { statusLbl.SetText(fmt.Sprintf(m.t("error.settings.searchFailed"), searchErr)) })
+				func(err error) {
+					glib.IdleAdd(func() { statusLbl.SetText(fmt.Sprintf(m.t("error.settings.searchFailed"), err)) })
+				}(searchErr)
 				return
 			}
 
-			glib.IdleAdd(func() {
-				nameEntry.SetText(foundName)
-				regionEntry.SetText(foundRegion)
-				latEntry.SetText(fmt.Sprintf("%f", foundLat))
-				lonEntry.SetText(fmt.Sprintf("%f", foundLon))
-				tzEntry.SetText(foundTZ)
-				statusLbl.SetText("✓ " + foundName + ", " + foundRegion)
-			})
+			func(fName, fRegion, fTZ string, fLat, fLon float64) {
+				glib.IdleAdd(func() {
+					nameEntry.SetText(fName)
+					regionEntry.SetText(fRegion)
+					latEntry.SetText(fmt.Sprintf("%f", fLat))
+					lonEntry.SetText(fmt.Sprintf("%f", fLon))
+					tzEntry.SetText(fTZ)
+					statusLbl.SetText("✓ " + fName + ", " + fRegion)
+				})
+			}(foundName, foundRegion, foundTZ, foundLat, foundLon)
 		}()
 	})
 

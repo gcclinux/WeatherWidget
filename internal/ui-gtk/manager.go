@@ -191,7 +191,12 @@ func (m *manager) start(openSettings bool) error {
 	m.sched = scheduler.NewRefreshScheduler(interval, m.weather)
 	m.sched.SetCities(cfg.Cities)
 	m.sched.SetOnUpdate(func(results []weather.WeatherResult) {
-		glib.IdleAdd(func() { m.handleWeatherUpdate(results) })
+		// IIFE pattern: pass results by value to ensure it escapes to heap,
+		// preventing "invalid pointer found on stack" crashes when Go runtime
+		// performs stack management while the callback is pending in cgo.
+		func(r []weather.WeatherResult) {
+			glib.IdleAdd(func() { m.handleWeatherUpdate(r) })
+		}(results)
 	})
 	m.sched.SetOnError(func(city string, err error) {
 		log.Printf("weather error for %s: %v", city, err)

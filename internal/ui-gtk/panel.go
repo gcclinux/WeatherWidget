@@ -885,10 +885,19 @@ func (p *cityPanel) startClock() {
 				localT := t.In(loc)
 				timeStr := weather.FormatTime(localT, tz, p.lm)
 				dateStr := weather.FormatDate(localT, tz, p.lm)
-				glib.IdleAdd(func() {
-					p.timeLbl.SetText(timeStr)
-					p.dateLbl.SetText(dateStr)
-				})
+				// IIFE pattern: pass strings as parameters to force heap allocation.
+				// The inner closure captures the IIFE parameters (ts, ds) instead of
+				// the original local variables. When the IIFE is invoked, the values
+				// are copied into the new scope and the inner closure escapes to the
+				// heap (passed to glib.IdleAdd), taking its captured values with it.
+				// This prevents crashes from Go runtime stack shrinking invalidating
+				// stack-allocated string headers in cgo frames.
+				func(ts, ds string) {
+					glib.IdleAdd(func() {
+						p.timeLbl.SetText(ts)
+						p.dateLbl.SetText(ds)
+					})
+				}(timeStr, dateStr)
 			}
 		}
 	}()
