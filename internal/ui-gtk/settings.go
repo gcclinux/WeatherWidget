@@ -1239,7 +1239,8 @@ func buildLocationsTab(m *manager, dlg *gtk.Dialog, initialCities []config.CityC
 		region = strings.TrimSpace(region)
 
 		go func() {
-			defer glib.IdleAdd(func() { searchBtn.SetSensitive(true) })
+			reenable := func() { glib.IdleAdd(func() { searchBtn.SetSensitive(true) }) }
+			defer reenable()
 
 			var foundName, foundRegion, foundTZ string
 			var foundLat, foundLon float64
