@@ -522,6 +522,15 @@ func (p *CityPanel) buildLayout() fyne.CanvasObject {
 		p.cardBgImg = newCardBgImage(isNight)
 		p.cardBgOverlay = newCardBgOverlay()
 	}
+
+	// On Windows, stack a per-pixel corner mask on top of the card so that the
+	// four corner areas (outside the rounded rect) are painted with the Win32
+	// LWA_COLORKEY color and therefore become transparent — matching macOS
+	// where the NSWindow content-view layer clips to a corner radius.
+	// newCornerMask() returns nil on all non-Windows platforms and is a no-op.
+	if mask := newCornerMask(); mask != nil {
+		return container.NewStack(p.cardBgImg, p.cardBgOverlay, container.NewPadded(content), mask)
+	}
 	return container.NewStack(p.cardBgImg, p.cardBgOverlay, container.NewPadded(content))
 }
 

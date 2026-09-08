@@ -324,7 +324,15 @@ func NewSimpleCityPanel(lm *i18n.LocaleManager) *SimpleCityPanel {
 	p.cardBgOverlay = newCardBgOverlay()
 
 	inner := container.New(&simpleColumnLayout{minWidth: 160}, p.buildLayout())
-	p.container = container.NewStack(p.cardBgImg, p.cardBgOverlay, inner)
+
+	// On Windows, add the color-key corner mask as the topmost layer so that
+	// corner pixels outside the rounded rect become transparent via LWA_COLORKEY.
+	// newCornerMask() returns nil on non-Windows platforms.
+	if mask := newCornerMask(); mask != nil {
+		p.container = container.NewStack(p.cardBgImg, p.cardBgOverlay, inner, mask)
+	} else {
+		p.container = container.NewStack(p.cardBgImg, p.cardBgOverlay, inner)
+	}
 	return p
 }
 
