@@ -110,7 +110,6 @@ type manager struct {
 	panels []*cityPanel
 
 	noBackground bool   // whether panels show without background
-	noBorder     bool   // whether window decorations are hidden
 	opacity      int    // 25 / 50 / 75 / 100
 	css          string // current CSS applied to the window
 
@@ -156,7 +155,6 @@ func (m *manager) start(openSettings bool) error {
 		m.opacity = 100
 	}
 	m.noBackground = cfg.NoBackground
-	m.noBorder = cfg.NoBorder
 	m.fontSizeCityTime = cfg.GetFontSizeCityTime()
 	m.fontSizeTempIcon = cfg.GetFontSizeTempIcon()
 	m.fontSizeConditions = cfg.GetFontSizeConditions()
@@ -239,10 +237,9 @@ func (m *manager) buildWindow() error {
 	// Positioning is achieved through USPosition hints + repeated XMoveWindow calls.
 	win.SetTypeHint(gdk.WINDOW_TYPE_HINT_NORMAL)
 
-	// Remove title bar decorations if the user enabled no-border mode.
-	if m.noBorder {
-		removeDecorations(win)
-	}
+	// Window decorations are always hidden — the widget is a frameless
+	// desktop overlay, so only the weather content is ever visible.
+	removeDecorations(win)
 
 	// CSS provider — sets transparent window background and panel styles.
 	m.applyCSS()
@@ -532,18 +529,6 @@ func (m *manager) SetNoBackground(enable bool) {
 		p.setTintAlpha(alpha)
 	}
 	m.applyCSS()
-}
-
-// SetNoBorder toggles window decorations. Because the GTK titlebar override
-// must be applied before the window is shown, changing this setting requires
-// a window rebuild. The window is destroyed and recreated with the new setting.
-func (m *manager) SetNoBorder(enable bool) {
-	if m.noBorder == enable {
-		return
-	}
-	m.noBorder = enable
-	// Rebuild the window to apply the titlebar change.
-	m.rebuildPanels(m.cfg.Cities)
 }
 
 // rebuildPanels destroys existing panels and creates new ones from config.

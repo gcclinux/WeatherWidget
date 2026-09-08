@@ -95,7 +95,7 @@ func showSettingsDialog(m *manager) {
 	nb.AppendPage(langBox, langLabel)
 
 	// --- Appearance tab ---
-	appearanceBox, opacityScale, noBgCheck, noBorderCheck, iconThemeCombo := buildAppearanceTab(m)
+	appearanceBox, opacityScale, noBgCheck, iconThemeCombo := buildAppearanceTab(m)
 	appearanceLabel, _ := gtk.LabelNew(m.t("settings.tab.appearance"))
 	nb.AppendPage(appearanceBox, appearanceLabel)
 
@@ -122,12 +122,12 @@ func showSettingsDialog(m *manager) {
 		opacity := int(opacityScale.GetValue())
 		opacity = snapOpacity(opacity)
 		noBackground := noBgCheck.GetActive()
-		noBorder := noBorderCheck.GetActive()
 
 		newCfg := *m.cfg
 		newCfg.Opacity = opacity
 		newCfg.NoBackground = noBackground
-		newCfg.NoBorder = noBorder
+		// Window decorations are always hidden; persist the flag for consistency.
+		newCfg.NoBorder = true
 		newCfg.Cities = getCities()                     // collect current city list from the locations tab
 		newCfg.Locale = getLocale()                     // collect selected language
 		newCfg.DisplayFields = getDisplayFields()       // collect panel visibility
@@ -144,7 +144,6 @@ func showSettingsDialog(m *manager) {
 		// Apply live before saving so the user sees the change immediately.
 		m.SetOpacity(opacity)
 		m.SetNoBackground(noBackground)
-		m.SetNoBorder(noBorder)
 
 		_ = m.onSettingsSave(&newCfg)
 	} else {
@@ -303,6 +302,28 @@ func buildProviderTab(m *manager, parent *gtk.Dialog) *gtk.Box {
 
 	vbox.PackStart(activationFrame, false, false, 0)
 
+	// Pro features note banner.
+	providerProBox, _ := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 0)
+	providerProBoxSc, _ := providerProBox.GetStyleContext()
+	providerProNoteCSS, _ := gtk.CssProviderNew()
+	providerProNoteCSS.LoadFromData(`
+.pro-note-box {
+    border-radius: 8px;
+    padding: 8px 12px;
+    background: rgba(14, 165, 233, 0.1);
+    border: 1px solid rgba(56, 189, 248, 0.35);
+}
+`)
+	providerProBoxSc.AddProvider(providerProNoteCSS, gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
+	providerProBoxSc.AddClass("pro-note-box")
+
+	providerProNote, _ := gtk.LabelNew("")
+	providerProNote.SetMarkup(fmt.Sprintf("<span foreground='#38bdf8' font_size='9500'>%s</span>", glib.MarkupEscapeText(m.t("settings.provider.proFeaturesNote"))))
+	providerProNote.SetHAlign(gtk.ALIGN_START)
+	providerProNote.SetLineWrap(true)
+	providerProBox.PackStart(providerProNote, true, true, 0)
+	vbox.PackStart(providerProBox, false, false, 0)
+
 	// Save button (provider tab).
 	saveAPIBtn, _ := gtk.ButtonNewWithLabel(m.t("settings.save"))
 	saveAPIBtn.Connect("clicked", func() {
@@ -331,7 +352,7 @@ func buildProviderTab(m *manager, parent *gtk.Dialog) *gtk.Box {
 }
 
 // buildAppearanceTab creates the Appearance settings tab.
-func buildAppearanceTab(m *manager) (*gtk.Box, *gtk.Scale, *gtk.CheckButton, *gtk.CheckButton, *gtk.ComboBoxText) {
+func buildAppearanceTab(m *manager) (*gtk.Box, *gtk.Scale, *gtk.CheckButton, *gtk.ComboBoxText) {
 	vbox, _ := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 8)
 	vbox.SetMarginTop(8)
 	vbox.SetMarginStart(4)
@@ -371,19 +392,6 @@ func buildAppearanceTab(m *manager) (*gtk.Box, *gtk.Scale, *gtk.CheckButton, *gt
 	bgNote.SetHAlign(gtk.ALIGN_START)
 	bgNote.SetLineWrap(true)
 	vbox.PackStart(bgNote, false, false, 0)
-
-	// No-border toggle.
-	sep0, _ := gtk.SeparatorNew(gtk.ORIENTATION_HORIZONTAL)
-	vbox.PackStart(sep0, false, false, 4)
-
-	noBorderCheck, _ := gtk.CheckButtonNewWithLabel(m.t("settings.noBorder.checkbox"))
-	noBorderCheck.SetActive(m.noBorder)
-	vbox.PackStart(noBorderCheck, false, false, 0)
-
-	borderNote, _ := gtk.LabelNew(m.t("settings.noBorder.note"))
-	borderNote.SetHAlign(gtk.ALIGN_START)
-	borderNote.SetLineWrap(true)
-	vbox.PackStart(borderNote, false, false, 0)
 
 	// Autostart toggle.
 	sep, _ := gtk.SeparatorNew(gtk.ORIENTATION_HORIZONTAL)
@@ -538,7 +546,7 @@ func buildAppearanceTab(m *manager) (*gtk.Box, *gtk.Scale, *gtk.CheckButton, *gt
 		moveAndSave(x, y+nudge)
 	})
 
-	return vbox, opacityScale, noBgCheck, noBorderCheck, iconCombo
+	return vbox, opacityScale, noBgCheck, iconCombo
 }
 
 // showErrorDialog shows a simple error message dialog.
@@ -814,28 +822,6 @@ func buildWidgetTab(m *manager) (*gtk.Box, func() *config.DisplayFields, func() 
 	pollutionSubtitle.SetHAlign(gtk.ALIGN_START)
 	vbox.PackStart(pollutionSubtitle, false, false, 0)
 
-	// Pro note banner
-	proBox, _ := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 0)
-	proBoxSc, _ := proBox.GetStyleContext()
-	proNoteCSS, _ := gtk.CssProviderNew()
-	proNoteCSS.LoadFromData(`
-.pro-note-box {
-    border-radius: 8px;
-    padding: 8px 12px;
-    background: rgba(14, 165, 233, 0.1);
-    border: 1px solid rgba(56, 189, 248, 0.35);
-}
-`)
-	proBoxSc.AddProvider(proNoteCSS, gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
-	proBoxSc.AddClass("pro-note-box")
-
-	proNote, _ := gtk.LabelNew("")
-	proNote.SetMarkup(fmt.Sprintf("<span foreground='#38bdf8' font_size='9500'>%s</span>", glib.MarkupEscapeText(m.t("settings.pollution.proNote"))))
-	proNote.SetHAlign(gtk.ALIGN_START)
-	proNote.SetLineWrap(true)
-	proBox.PackStart(proNote, true, true, 0)
-	vbox.PackStart(proBox, false, false, 0)
-
 	pf := m.cfg.GetPollutionFields()
 	isPro := m.cfg.IsPro()
 
@@ -1023,30 +1009,6 @@ func buildLocationsTab(m *manager, dlg *gtk.Dialog, initialCities []config.CityC
 	subTitle, _ := gtk.LabelNew(m.t("settings.locations.savedSubtitle"))
 	subTitle.SetHAlign(gtk.ALIGN_START)
 	outer.PackStart(subTitle, false, false, 0)
-
-	// Callout box for Pro note
-	proBox, _ := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 8)
-	proBox.SetMarginTop(2)
-	proBox.SetMarginBottom(6)
-	proBoxSc, _ := proBox.GetStyleContext()
-	proNoteCSS, _ := gtk.CssProviderNew()
-	proNoteCSS.LoadFromData(`
-.pro-note-box {
-    border-radius: 8px;
-    padding: 8px 12px;
-    background: rgba(14, 165, 233, 0.1);
-    border: 1px solid rgba(56, 189, 248, 0.35);
-}
-`)
-	proBoxSc.AddProvider(proNoteCSS, gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
-	proBoxSc.AddClass("pro-note-box")
-
-	proNote, _ := gtk.LabelNew("")
-	proNote.SetMarkup(fmt.Sprintf("<span foreground='#38bdf8' font_size='9500'>%s</span>", glib.MarkupEscapeText(m.t("settings.locations.proNote"))))
-	proNote.SetHAlign(gtk.ALIGN_START)
-	proNote.SetLineWrap(true)
-	proBox.PackStart(proNote, true, true, 0)
-	outer.PackStart(proBox, false, false, 0)
 
 	// Scrollable city list.
 	scroll, _ := gtk.ScrolledWindowNew(nil, nil)
