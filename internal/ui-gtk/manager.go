@@ -602,9 +602,11 @@ func (m *manager) onSettingsSave(newCfg *config.Config) error {
 	}
 	m.cfg = newCfg
 
+	localeChanged := false
 	if m.lm != nil && oldCfg.Locale != newCfg.Locale {
 		_ = m.lm.SetLocale(newCfg.Locale)
 		m.updateTrayMenu()
+		localeChanged = true
 	}
 
 	newOpacity := newCfg.Opacity
@@ -620,7 +622,11 @@ func (m *manager) onSettingsSave(newCfg *config.Config) error {
 	m.viewMode = config.NormalizeViewMode(newCfg.ViewMode)
 
 	citiesChanged := len(oldCfg.Cities) != len(newCfg.Cities) || !sameCities(oldCfg.Cities, newCfg.Cities)
-	if citiesChanged || viewModeChanged {
+	// A locale change requires rebuilding panels because the enhanced panel's
+	// metric and pollution tile names are built once at construction time and
+	// are not re-translated on weather updates. Rebuilding re-runs the panel
+	// constructors with the now-updated locale manager.
+	if citiesChanged || viewModeChanged || localeChanged {
 		m.rebuildPanels(newCfg.Cities)
 	} else {
 		m.applyCSS()
