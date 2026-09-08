@@ -178,6 +178,10 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 		winW = float32(screenW) * 0.9
 	}
 	winH := float32(screenH) * 0.605
+	// macOS: Add 20% extra height to the settings panel for better layout
+	if runtime.GOOS == "darwin" {
+		winH = float32(screenH) * 0.726 // 0.605 * 1.20 = ~0.726
+	}
 	if winH < 616 {
 		winH = 616
 	}
@@ -220,6 +224,7 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 	var buildSettingsUI func()
 	buildSettingsUI = func() {
 		var tabs *container.AppTabs
+		var darwinSelectTab func(int) // macOS custom nav tab selector
 
 		// ── API config ───────────────────────────────────────────────────────
 		providerSelect := widget.NewSelect([]string{"OpenWeatherMap (Free)", "EasyWeatherWidget (Pro)"}, nil)
@@ -840,7 +845,9 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 			}
 			if !isPro && len(state.cities) >= config.MaxCitiesFree {
 				u.showProUpgradeDialog(win, func() {
-					if tabs != nil {
+					if useDarwinNav() && darwinSelectTab != nil {
+						darwinSelectTab(2)
+					} else if tabs != nil {
 						tabs.SelectIndex(2)
 					}
 				})
@@ -854,7 +861,9 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 			if err != nil {
 				if !isPro && len(state.cities) >= config.MaxCitiesFree {
 					u.showProUpgradeDialog(win, func() {
-						if tabs != nil {
+						if useDarwinNav() && darwinSelectTab != nil {
+							darwinSelectTab(2)
+						} else if tabs != nil {
 							tabs.SelectIndex(2)
 						}
 					})
@@ -1649,10 +1658,38 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 		)))
 		aboutTab := container.NewTabItemWithIcon(u.t("settings.tab.about"), theme.InfoIcon(), container.NewThemeOverride(aboutContent, settingsTh))
 
-		tabs = container.NewAppTabs(appearanceTab, widgetTab, providerTab, locationsTab, languageTab, aboutTab)
-		tabs.SetTabLocation(container.TabLocationLeading)
-		if selectedTabIndex > 0 && selectedTabIndex < len(tabs.Items) {
-			tabs.SelectIndex(selectedTabIndex)
+		// Create the main content area - use custom navigation on macOS to avoid
+		// the AppTabs hover bug where tab labels disappear
+		var mainContent fyne.CanvasObject
+
+		if useDarwinNav() {
+			// macOS: Use custom navigation sidebar
+			navItems := []struct {
+				icon    fyne.Resource
+				text    string
+				content fyne.CanvasObject
+			}{
+				{theme.ColorPaletteIcon(), u.t("settings.tab.appearance"), container.NewThemeOverride(appearanceContent, settingsTh)},
+				{theme.ComputerIcon(), u.t("settings.tab.widget"), container.NewThemeOverride(widgetContent, settingsTh)},
+				{theme.SettingsIcon(), u.t("settings.tab.provider"), container.NewThemeOverride(providerContent, settingsTh)},
+				{theme.ListIcon(), u.t("settings.tab.locations"), container.NewThemeOverride(locationsContent, settingsTh)},
+				{theme.MailComposeIcon(), u.t("settings.tab.language"), container.NewThemeOverride(languageContent, settingsTh)},
+				{theme.InfoIcon(), u.t("settings.tab.about"), container.NewThemeOverride(aboutContent, settingsTh)},
+			}
+			navContainer, selectFunc := buildSettingsNavDarwin(navItems)
+			mainContent = navContainer
+			darwinSelectTab = selectFunc
+			if selectedTabIndex > 0 && selectedTabIndex < len(navItems) && darwinSelectTab != nil {
+				darwinSelectTab(selectedTabIndex)
+			}
+		} else {
+			// Other platforms: Use standard AppTabs
+			tabs = container.NewAppTabs(appearanceTab, widgetTab, providerTab, locationsTab, languageTab, aboutTab)
+			tabs.SetTabLocation(container.TabLocationLeading)
+			if selectedTabIndex > 0 && selectedTabIndex < len(tabs.Items) {
+				tabs.SelectIndex(selectedTabIndex)
+			}
+			mainContent = tabs
 		}
 
 		// ── SAVE BAR (full width, pinned at bottom) ───────────────────────────
@@ -1705,7 +1742,7 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 		)
 
 		bg := canvas.NewRectangle(color.NRGBA{R: 245, G: 247, B: 250, A: 255})
-		mainBorder := container.NewBorder(nil, saveBar, nil, nil, tabs)
+		mainBorder := container.NewBorder(nil, saveBar, nil, nil, mainContent)
 		themedContent := container.NewThemeOverride(mainBorder, settingsTh)
 		win.SetContent(container.NewStack(bg, themedContent))
 	}
