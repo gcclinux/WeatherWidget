@@ -107,7 +107,9 @@ type manager struct {
 	guard      *guard.SingleInstanceGuard
 
 	win    *gtk.Window // main transparent widget window
-	panels []*cityPanel
+	panels []panelView // active city panels (enhanced or simple, per viewMode)
+
+	viewMode config.ViewMode // "enhanced" or "simple" layout
 
 	noBackground bool   // whether panels show without background
 	opacity      int    // 25 / 50 / 75 / 100
@@ -155,6 +157,7 @@ func (m *manager) start(openSettings bool) error {
 		m.opacity = 100
 	}
 	m.noBackground = cfg.NoBackground
+	m.viewMode = config.NormalizeViewMode(cfg.ViewMode)
 	m.fontSizeCityTime = cfg.GetFontSizeCityTime()
 	m.fontSizeTempIcon = cfg.GetFontSizeTempIcon()
 	m.fontSizeConditions = cfg.GetFontSizeConditions()
@@ -244,8 +247,15 @@ func (m *manager) buildWindow() error {
 	// CSS provider — sets transparent window background and panel styles.
 	m.applyCSS()
 
-	// City cards stacked vertically — one card under another.
-	vbox, err := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 3)
+	// Panel container. Enhanced view stacks city cards vertically (one under
+	// another); Simple view lays them out side-by-side (one column per city),
+	// matching the classic layout.
+	simple := m.viewMode == config.ViewModeSimple
+	orientation := gtk.ORIENTATION_VERTICAL
+	if simple {
+		orientation = gtk.ORIENTATION_HORIZONTAL
+	}
+	vbox, err := gtk.BoxNew(orientation, 3)
 	if err != nil {
 		return err
 	}
@@ -255,19 +265,30 @@ func (m *manager) buildWindow() error {
 	if len(cities) == 0 {
 		cities = config.DefaultCities()
 	}
-	m.panels = make([]*cityPanel, 0, len(cities))
+	m.panels = make([]panelView, 0, len(cities))
 	for _, city := range cities {
-		p, err := newCityPanel(city.Name, city.Region, city.Timezone, m.lm)
-		if err != nil {
-			log.Printf("failed to create panel for %s: %v", city.Name, err)
-			continue
+		var p panelView
+		if simple {
+			sp, err := newSimpleCityPanel(city.Name, city.Region, city.Timezone, m.lm)
+			if err != nil {
+				log.Printf("failed to create simple panel for %s: %v", city.Name, err)
+				continue
+			}
+			p = sp
+		} else {
+			ep, err := newCityPanel(city.Name, city.Region, city.Timezone, m.lm)
+			if err != nil {
+				log.Printf("failed to create panel for %s: %v", city.Name, err)
+				continue
+			}
+			p = ep
 		}
 		p.setNoBackground(m.noBackground)
 		p.setTintAlpha(panelAlpha(m.opacity, m.noBackground))
 		p.applyDisplayFields(m.cfg.GetDisplayFields())
 		p.applyPollutionRows(m.cfg.GetPollutionFields())
-		p.iconSize = 96
-		vbox.PackStart(p.root, false, false, 0)
+		p.setIconSize(96)
+		vbox.PackStart(p.rootBox(), false, false, 0)
 		m.panels = append(m.panels, p)
 	}
 
@@ -429,10 +450,10 @@ func (m *manager) paintCards(cr *cairoContext) {
 		b      = 20.0 / 255.0
 	)
 	for _, p := range m.panels {
-		if p == nil || p.root == nil {
+		if p == nil || p.rootBox() == nil {
 			continue
 		}
-		alloc := p.root.GetAllocation()
+		alloc := p.rootBox().GetAllocation()
 		x := float64(alloc.GetX()) + margin
 		y := float64(alloc.GetY()) + margin
 		wd := float64(alloc.GetWidth()) - 2*margin
@@ -473,7 +494,14 @@ func (m *manager) panelSize() (int, int) {
 	if count == 0 {
 		count = 1
 	}
-	// Each card is ~380px wide and ~250px tall; cards are separated by 3px.
+	if m.viewMode == config.ViewModeSimple {
+		// Simple view: narrow columns laid out side-by-side, separated by 3px.
+		// Height is a single tall column; width is the sum of column widths.
+		const simpleCardH = 560
+		return count*simpleCardWidth + (count-1)*3, simpleCardH
+	}
+	// Enhanced view: cards stacked vertically. Each card is ~380px wide and
+	// ~250px tall; cards are separated by 3px.
 	const cardH = 250
 	return cardWidth, count*cardH + (count-1)*3
 }
@@ -588,8 +616,11 @@ func (m *manager) onSettingsSave(newCfg *config.Config) error {
 	m.fontSizeTempIcon = newCfg.GetFontSizeTempIcon()
 	m.fontSizeConditions = newCfg.GetFontSizeConditions()
 
+	viewModeChanged := config.NormalizeViewMode(oldCfg.ViewMode) != config.NormalizeViewMode(newCfg.ViewMode)
+	m.viewMode = config.NormalizeViewMode(newCfg.ViewMode)
+
 	citiesChanged := len(oldCfg.Cities) != len(newCfg.Cities) || !sameCities(oldCfg.Cities, newCfg.Cities)
-	if citiesChanged {
+	if citiesChanged || viewModeChanged {
 		m.rebuildPanels(newCfg.Cities)
 	} else {
 		m.applyCSS()

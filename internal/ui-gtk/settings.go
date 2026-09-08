@@ -95,7 +95,7 @@ func showSettingsDialog(m *manager) {
 	nb.AppendPage(langBox, langLabel)
 
 	// --- Appearance tab ---
-	appearanceBox, opacityScale, noBgCheck, iconThemeCombo := buildAppearanceTab(m)
+	appearanceBox, opacityScale, noBgCheck, iconThemeCombo, getViewMode := buildAppearanceTab(m)
 	appearanceLabel, _ := gtk.LabelNew(m.t("settings.tab.appearance"))
 	nb.AppendPage(appearanceBox, appearanceLabel)
 
@@ -135,6 +135,7 @@ func showSettingsDialog(m *manager) {
 		newCfg.TemperatureUnit = getTempUnit()          // collect temperature unit
 		newCfg.WindSpeedUnit = getWindUnit()            // collect wind speed unit
 		newCfg.IconTheme = config.NormalizeIconTheme(config.IconTheme(iconThemeCombo.GetActiveID()))
+		newCfg.ViewMode = config.NormalizeViewMode(getViewMode()) // collect selected view mode
 
 		fs := getFontSizes()
 		newCfg.FontSizeCityTime = fs.cityTime
@@ -352,11 +353,37 @@ func buildProviderTab(m *manager, parent *gtk.Dialog) *gtk.Box {
 }
 
 // buildAppearanceTab creates the Appearance settings tab.
-func buildAppearanceTab(m *manager) (*gtk.Box, *gtk.Scale, *gtk.CheckButton, *gtk.ComboBoxText) {
+func buildAppearanceTab(m *manager) (*gtk.Box, *gtk.Scale, *gtk.CheckButton, *gtk.ComboBoxText, func() config.ViewMode) {
 	vbox, _ := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 8)
 	vbox.SetMarginTop(8)
 	vbox.SetMarginStart(4)
 	vbox.SetMarginEnd(4)
+
+	// ── View Mode ─────────────────────────────────────────────────────────
+	viewModeTitle, _ := gtk.LabelNew("")
+	viewModeTitle.SetMarkup("<b>" + glib.MarkupEscapeText(m.t("settings.viewMode.title")) + "</b>")
+	viewModeTitle.SetHAlign(gtk.ALIGN_START)
+	vbox.PackStart(viewModeTitle, false, false, 0)
+
+	viewModeSub, _ := gtk.LabelNew(m.t("settings.viewMode.subtitle"))
+	viewModeSub.SetHAlign(gtk.ALIGN_START)
+	viewModeSub.SetLineWrap(true)
+	vbox.PackStart(viewModeSub, false, false, 0)
+
+	viewModeRow, _ := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 12)
+	enhancedRadio, _ := gtk.RadioButtonNewWithLabelFromWidget(nil, m.t("settings.viewMode.enhanced"))
+	simpleRadio, _ := gtk.RadioButtonNewWithLabelFromWidget(enhancedRadio, m.t("settings.viewMode.simple"))
+	if config.NormalizeViewMode(m.viewMode) == config.ViewModeSimple {
+		simpleRadio.SetActive(true)
+	} else {
+		enhancedRadio.SetActive(true)
+	}
+	viewModeRow.PackStart(enhancedRadio, false, false, 0)
+	viewModeRow.PackStart(simpleRadio, false, false, 0)
+	vbox.PackStart(viewModeRow, false, false, 0)
+
+	viewModeSep, _ := gtk.SeparatorNew(gtk.ORIENTATION_HORIZONTAL)
+	vbox.PackStart(viewModeSep, false, false, 4)
 
 	// Opacity slider.
 	opacityLabel, _ := gtk.LabelNew(m.t("settings.transparency.title") + ":")
@@ -546,7 +573,14 @@ func buildAppearanceTab(m *manager) (*gtk.Box, *gtk.Scale, *gtk.CheckButton, *gt
 		moveAndSave(x, y+nudge)
 	})
 
-	return vbox, opacityScale, noBgCheck, iconCombo
+	getViewMode := func() config.ViewMode {
+		if simpleRadio.GetActive() {
+			return config.ViewModeSimple
+		}
+		return config.ViewModeEnhanced
+	}
+
+	return vbox, opacityScale, noBgCheck, iconCombo, getViewMode
 }
 
 // showErrorDialog shows a simple error message dialog.

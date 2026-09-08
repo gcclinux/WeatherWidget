@@ -16,6 +16,30 @@ import (
 	"weatherwidget/internal/weather"
 )
 
+// panelView is the common interface implemented by both the enhanced
+// (*cityPanel) and simple (*simpleCityPanel) city panels. The manager holds a
+// slice of panelView so it can drive updates and layout regardless of the
+// active view mode.
+type panelView interface {
+	// rootBox returns the top-level GTK box for this panel, packed into the
+	// window container.
+	rootBox() *gtk.Box
+	update(d *weather.WeatherData, tempUnit config.TemperatureUnit, windUnit config.WindSpeedUnit, iconTheme ...config.IconTheme)
+	showError(isStale bool)
+	setNoBackground(enable bool)
+	setTintAlpha(alpha float64)
+	applyDisplayFields(df *config.DisplayFields)
+	applyPollutionRows(pf *config.PollutionFields)
+	setIconSize(size int)
+	stopClock()
+}
+
+// rootBox returns the enhanced panel's top-level card box.
+func (p *cityPanel) rootBox() *gtk.Box { return p.root }
+
+// setIconSize sets the weather icon pixel size for the enhanced panel.
+func (p *cityPanel) setIconSize(size int) { p.iconSize = size }
+
 // pollutionRowWidgets holds the reusable widgets for one pollution metric
 // tile: a vertical box containing the metric icon, its full name, and its
 // value label.

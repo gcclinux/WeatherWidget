@@ -213,8 +213,48 @@ window {
     color: #ff8888;
     font-style: italic;
 }
+/* ── Simple / classic view ──────────────────────────────────────────────
+   A narrow vertical column per city, laid out side-by-side. The card fill is
+   painted manually in manager.paintCards (same rounded, tinted background as
+   the enhanced card), so these classes only style text. */
+.simple-city-panel {
+    background-color: transparent;
+    border-radius: 16px;
+    padding: 12px 10px;
+    margin: 2px;
+    color: white;
+}
+.simple-city-label {
+    font-size: %dpx;
+    font-weight: bold;
+    color: white;
+}
+.simple-time-label {
+    font-size: %dpx;
+    font-weight: bold;
+    color: white;
+}
+.simple-date-label {
+    font-size: %dpx;
+    color: #cccccc;
+}
+.simple-temp-label {
+    font-size: %dpx;
+    font-weight: bold;
+    color: white;
+}
+.simple-desc-label {
+    font-size: %dpx;
+    font-style: italic;
+    color: #dddddd;
+}
+.simple-info-label {
+    font-size: %dpx;
+    color: #eeeeee;
+}
 `, fsCityTime, fsTempIcon, fsConditions, fsTime, fsConditions, fsConditions,
-		fsConditions+2, fsConditions, fsConditions+2, fsConditions-1, fsConditions)
+		fsConditions+2, fsConditions, fsConditions+2, fsConditions-1, fsConditions,
+		fsCityTime, fsTime, fsConditions, fsTempIcon, fsConditions, fsConditions)
 }
 
 // applyCSSToScreen loads the given CSS string into the default screen's
