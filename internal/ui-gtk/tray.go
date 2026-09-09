@@ -72,7 +72,6 @@ import (
 	"weatherwidget/assets"
 
 	dbus "github.com/godbus/dbus/v5"
-	"github.com/gotk3/gotk3/glib"
 	"github.com/gotk3/gotk3/gtk"
 )
 
@@ -222,7 +221,7 @@ func (m *manager) buildTrayMenu() *gtk.Menu {
 
 	showItem, _ := gtk.MenuItemNewWithLabel(m.t("tray.showWidget"))
 	showItem.Connect("activate", func() {
-		glib.IdleAdd(func() {
+		runOnUI(func() {
 			m.win.ShowAll()
 			m.win.SetKeepBelow(true)
 			m.applyPosition()
@@ -232,7 +231,7 @@ func (m *manager) buildTrayMenu() *gtk.Menu {
 
 	hideItem, _ := gtk.MenuItemNewWithLabel(m.t("tray.hideWidget"))
 	hideItem.Connect("activate", func() {
-		glib.IdleAdd(func() { m.win.Hide() })
+		runOnUI(func() { m.win.Hide() })
 	})
 	menu.Append(hideItem)
 
@@ -241,7 +240,7 @@ func (m *manager) buildTrayMenu() *gtk.Menu {
 
 	settingsItem, _ := gtk.MenuItemNewWithLabel(m.t("tray.settings"))
 	settingsItem.Connect("activate", func() {
-		glib.IdleAdd(func() { m.openSettings() })
+		runOnUI(func() { m.openSettings() })
 	})
 	menu.Append(settingsItem)
 
@@ -250,7 +249,7 @@ func (m *manager) buildTrayMenu() *gtk.Menu {
 
 	quitItem, _ := gtk.MenuItemNewWithLabel(m.t("tray.quit"))
 	quitItem.Connect("activate", func() {
-		glib.IdleAdd(func() {
+		runOnUI(func() {
 			if m.sched != nil {
 				m.sched.Stop()
 			}

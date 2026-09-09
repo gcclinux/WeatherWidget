@@ -128,12 +128,12 @@ func showSettingsDialog(m *manager) {
 		newCfg.NoBackground = noBackground
 		// Window decorations are always hidden; persist the flag for consistency.
 		newCfg.NoBorder = true
-		newCfg.Cities = getCities()                     // collect current city list from the locations tab
-		newCfg.Locale = getLocale()                     // collect selected language
-		newCfg.DisplayFields = getDisplayFields()       // collect panel visibility
-		newCfg.PollutionFields = getPollutionFields()   // collect pollution metrics
-		newCfg.TemperatureUnit = getTempUnit()          // collect temperature unit
-		newCfg.WindSpeedUnit = getWindUnit()            // collect wind speed unit
+		newCfg.Cities = getCities()                   // collect current city list from the locations tab
+		newCfg.Locale = getLocale()                   // collect selected language
+		newCfg.DisplayFields = getDisplayFields()     // collect panel visibility
+		newCfg.PollutionFields = getPollutionFields() // collect pollution metrics
+		newCfg.TemperatureUnit = getTempUnit()        // collect temperature unit
+		newCfg.WindSpeedUnit = getWindUnit()          // collect wind speed unit
 		newCfg.IconTheme = config.NormalizeIconTheme(config.IconTheme(iconThemeCombo.GetActiveID()))
 		newCfg.ViewMode = config.NormalizeViewMode(getViewMode()) // collect selected view mode
 
@@ -1239,8 +1239,7 @@ func buildLocationsTab(m *manager, dlg *gtk.Dialog, initialCities []config.CityC
 		region = strings.TrimSpace(region)
 
 		go func() {
-			reenable := func() { glib.IdleAdd(func() { searchBtn.SetSensitive(true) }) }
-			defer reenable()
+			defer runOnUI(func() { searchBtn.SetSensitive(true) })
 
 			var foundName, foundRegion, foundTZ string
 			var foundLat, foundLon float64
@@ -1249,7 +1248,7 @@ func buildLocationsTab(m *manager, dlg *gtk.Dialog, initialCities []config.CityC
 			switch provider {
 			case "easyweatherwidget":
 				if region == "" {
-					glib.IdleAdd(func() {
+					runOnUI(func() {
 						statusLbl.SetText(m.t("error.settings.regionRequiredEww"))
 					})
 					return
@@ -1274,9 +1273,8 @@ func buildLocationsTab(m *manager, dlg *gtk.Dialog, initialCities []config.CityC
 					Lon          float64 `json:"Lon"`
 				}
 				if err := json.Unmarshal(body, &result); err != nil || result.Neighborhood == "" {
-					func(n string) {
-						glib.IdleAdd(func() { statusLbl.SetText(fmt.Sprintf(m.t("error.settings.noCityFound"), n)) })
-					}(name)
+					n := name
+					runOnUI(func() { statusLbl.SetText(fmt.Sprintf(m.t("error.settings.noCityFound"), n)) })
 					return
 				}
 				foundName = result.Neighborhood
@@ -1306,9 +1304,8 @@ func buildLocationsTab(m *manager, dlg *gtk.Dialog, initialCities []config.CityC
 					State   string  `json:"state"`
 				}
 				if err := json.Unmarshal(body, &results); err != nil || len(results) == 0 {
-					func(n string) {
-						glib.IdleAdd(func() { statusLbl.SetText(fmt.Sprintf(m.t("error.settings.noCityFound"), n)) })
-					}(name)
+					n := name
+					runOnUI(func() { statusLbl.SetText(fmt.Sprintf(m.t("error.settings.noCityFound"), n)) })
 					return
 				}
 				r := results[0]
@@ -1323,22 +1320,21 @@ func buildLocationsTab(m *manager, dlg *gtk.Dialog, initialCities []config.CityC
 			}
 
 			if searchErr != nil {
-				func(err error) {
-					glib.IdleAdd(func() { statusLbl.SetText(fmt.Sprintf(m.t("error.settings.searchFailed"), err)) })
-				}(searchErr)
+				err := searchErr
+				runOnUI(func() { statusLbl.SetText(fmt.Sprintf(m.t("error.settings.searchFailed"), err)) })
 				return
 			}
 
-			func(fName, fRegion, fTZ string, fLat, fLon float64) {
-				glib.IdleAdd(func() {
-					nameEntry.SetText(fName)
-					regionEntry.SetText(fRegion)
-					latEntry.SetText(fmt.Sprintf("%f", fLat))
-					lonEntry.SetText(fmt.Sprintf("%f", fLon))
-					tzEntry.SetText(fTZ)
-					statusLbl.SetText("✓ " + fName + ", " + fRegion)
-				})
-			}(foundName, foundRegion, foundTZ, foundLat, foundLon)
+			fName, fRegion, fTZ := foundName, foundRegion, foundTZ
+			fLat, fLon := foundLat, foundLon
+			runOnUI(func() {
+				nameEntry.SetText(fName)
+				regionEntry.SetText(fRegion)
+				latEntry.SetText(fmt.Sprintf("%f", fLat))
+				lonEntry.SetText(fmt.Sprintf("%f", fLon))
+				tzEntry.SetText(fTZ)
+				statusLbl.SetText("✓ " + fName + ", " + fRegion)
+			})
 		}()
 	})
 

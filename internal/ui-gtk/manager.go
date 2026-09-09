@@ -87,6 +87,12 @@ func Run(appDataDir string, openSettings bool) {
 
 	gtk.Init(nil)
 
+	// Install the centralized UI dispatcher on the main thread before any
+	// worker goroutines start scheduling work. All cross-thread UI updates go
+	// through runOnUI, which avoids the cgoCheckPointer stack-adjustment crash
+	// that repeated glib.IdleAdd calls from worker goroutines triggered.
+	InitUIDispatcher()
+
 	m := newManager(appDataDir)
 	if err := m.start(openSettings); err != nil {
 		log.Fatalf("weatherwidget-gtk: %v", err)
@@ -192,12 +198,10 @@ func (m *manager) start(openSettings bool) error {
 	m.sched = scheduler.NewRefreshScheduler(interval, m.weather)
 	m.sched.SetCities(cfg.Cities)
 	m.sched.SetOnUpdate(func(results []weather.WeatherResult) {
-		// IIFE pattern: pass results by value to ensure it escapes to heap,
-		// preventing "invalid pointer found on stack" crashes when Go runtime
-		// performs stack management while the callback is pending in cgo.
-		func(r []weather.WeatherResult) {
-			glib.IdleAdd(func() { m.handleWeatherUpdate(r) })
-		}(results)
+		// Dispatch through the centralized main-thread queue instead of calling
+		// glib.IdleAdd from the scheduler goroutine (see uidispatch.go).
+		r := results
+		runOnUI(func() { m.handleWeatherUpdate(r) })
 	})
 	m.sched.SetOnError(func(city string, err error) {
 		log.Printf("weather error for %s: %v", city, err)
@@ -393,7 +397,7 @@ func (m *manager) buildWindow() error {
 		}
 		settingsItem, _ := gtk.MenuItemNewWithLabel(m.t("tray.settings"))
 		settingsItem.Connect("activate", func() {
-			glib.IdleAdd(func() { m.openSettings() })
+			runOnUI(func() { m.openSettings() })
 		})
 		menu.Append(settingsItem)
 
@@ -402,7 +406,7 @@ func (m *manager) buildWindow() error {
 
 		quitItem, _ := gtk.MenuItemNewWithLabel(m.t("tray.quit"))
 		quitItem.Connect("activate", func() {
-			glib.IdleAdd(func() {
+			runOnUI(func() {
 				if m.sched != nil {
 					m.sched.Stop()
 				}

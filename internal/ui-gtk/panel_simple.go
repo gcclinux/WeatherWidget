@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/gotk3/gotk3/gdk"
-	"github.com/gotk3/gotk3/glib"
 	"github.com/gotk3/gotk3/gtk"
 
 	"weatherwidget/assets"
@@ -35,8 +34,8 @@ type simplePollutionRowWidgets struct {
 // none of the enhanced panel's tile/grid machinery so the two views stay
 // independent.
 type simpleCityPanel struct {
-	root        *gtk.Box      // top-level card box (vertical), packed side-by-side
-	nameBox     *gtk.Box      // vertical: city name + icon
+	root        *gtk.Box // top-level card box (vertical), packed side-by-side
+	nameBox     *gtk.Box // vertical: city name + icon
 	icon        *gtk.Image
 	iconBg      *gtk.EventBox // tinted background wrapper behind the weather icon
 	cityLbl     *gtk.Label
@@ -673,9 +672,12 @@ func (p *simpleCityPanel) startClock() {
 				localT := t.In(loc)
 				timeStr := weather.FormatTime(localT, tz, p.lm)
 				dateStr := weather.FormatDate(localT, tz, p.lm)
-				glib.IdleAdd(func() {
-					p.timeLbl.SetText(timeStr)
-					p.dateLbl.SetText(dateStr)
+				// Dispatch through the centralized main-thread queue instead of
+				// calling glib.IdleAdd from this worker goroutine (see uidispatch.go).
+				ts, ds := timeStr, dateStr
+				runOnUI(func() {
+					p.timeLbl.SetText(ts)
+					p.dateLbl.SetText(ds)
 				})
 			}
 		}

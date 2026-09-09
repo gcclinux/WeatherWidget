@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/gotk3/gotk3/gdk"
-	"github.com/gotk3/gotk3/glib"
 	"github.com/gotk3/gotk3/gtk"
 
 	"weatherwidget/assets"
@@ -83,8 +82,8 @@ type cityPanel struct {
 
 	// Weather metric tiles (right-hand grid). Each tile shows an emoji, the
 	// metric name, and its value. The value labels are updated in update().
-	humidTile, windTile, windGustTile   *metricTile
-	dewPointTile, pressureTile, uvTile  *metricTile
+	humidTile, windTile, windGustTile  *metricTile
+	dewPointTile, pressureTile, uvTile *metricTile
 
 	errorLbl *gtk.Label
 
@@ -909,19 +908,17 @@ func (p *cityPanel) startClock() {
 				localT := t.In(loc)
 				timeStr := weather.FormatTime(localT, tz, p.lm)
 				dateStr := weather.FormatDate(localT, tz, p.lm)
-				// IIFE pattern: pass strings as parameters to force heap allocation.
-				// The inner closure captures the IIFE parameters (ts, ds) instead of
-				// the original local variables. When the IIFE is invoked, the values
-				// are copied into the new scope and the inner closure escapes to the
-				// heap (passed to glib.IdleAdd), taking its captured values with it.
-				// This prevents crashes from Go runtime stack shrinking invalidating
-				// stack-allocated string headers in cgo frames.
-				func(ts, ds string) {
-					glib.IdleAdd(func() {
-						p.timeLbl.SetText(ts)
-						p.dateLbl.SetText(ds)
-					})
-				}(timeStr, dateStr)
+				// Dispatch UI updates through the centralized main-thread queue
+				// instead of calling glib.IdleAdd from this worker goroutine.
+				// Calling glib.IdleAdd here crossed cgo on a goroutine whose
+				// stack is grown/shrunk by the GC, which corrupted the idleAdd
+				// frame and crashed with "invalid pointer found on stack".
+				// runOnUI hands a plain heap closure to the main thread instead.
+				ts, ds := timeStr, dateStr
+				runOnUI(func() {
+					p.timeLbl.SetText(ts)
+					p.dateLbl.SetText(ds)
+				})
 			}
 		}
 	}()
