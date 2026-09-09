@@ -46,16 +46,34 @@ var uiWorkQueue = make(chan func(), 1024)
 // installDispatcherOnce guards installation of the persistent idle source.
 var installDispatcherOnce sync.Once
 
-// InitUIDispatcher installs the persistent GTK idle source that drains the UI
-// work queue. It MUST be called exactly once from the GTK main thread, after
+// InitUIDispatcher installs the persistent GTK sources that drain the UI work
+// queue. It MUST be called exactly once from the GTK main thread, after
 // gtk.Init and before entering gtk.Main. Subsequent calls are no-ops.
+//
+// Two sources are installed:
+//
+//  1. An idle source (glib.IdleAdd). This drains the queue promptly whenever
+//     the main loop is otherwise idle, giving low-latency UI updates in the
+//     normal top-level gtk.Main() loop.
+//
+//  2. A periodic timeout source (glib.TimeoutAdd, ~50ms). This is the critical
+//     one for correctness inside nested main loops such as the one spun up by
+//     gtk_dialog_run() (used by the Settings dialog). A plain idle source is
+//     not reliably serviced while such a nested loop is running, which is why
+//     an async result enqueued from a worker goroutine (e.g. the "Search API"
+//     result in the Settings > Locations tab) could sit undrained and leave
+//     the UI stuck on "Searching..." until the dialog was dismissed. Timeout
+//     sources ARE dispatched by nested loops, so this guarantees the queue is
+//     drained regardless of which main loop is currently running.
+//
+// Both sources call the same package-level drain function and are registered
+// once, on the main thread, so neither is subject to the concurrent
+// stack-adjustment cgo crash that repeated worker-goroutine IdleAdd calls
+// caused.
 func InitUIDispatcher() {
 	installDispatcherOnce.Do(func() {
-		// glib.IdleAdd is called here with a package-level function value
-		// (drainUIWorkQueue). This registration happens once, on the main
-		// thread, so it is not subject to the concurrent-stack-adjustment
-		// crash that repeated calls from worker goroutines caused.
 		glib.IdleAdd(drainUIWorkQueue)
+		glib.TimeoutAdd(uint(50), drainUIWorkQueue)
 	})
 }
 
