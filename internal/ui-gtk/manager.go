@@ -358,31 +358,13 @@ func (m *manager) buildWindow() error {
 		return false
 	})
 
-	// Drag-to-reposition: left-click drag moves the window and saves position.
+	// Drag-to-reposition: left-click drag moves the window.
 	moveFunc := func(x, y int) {
 		win.Move(x, y)
 		x11MoveWindow(win, x, y)
 	}
 
-	var saveTimer *time.Timer
-	enableDrag(win, moveFunc, func(x, y int) {
-		if !m.positioned {
-			return
-		}
-		cx, cy := x, y
-		m.cfg.CustomX = &cx
-		m.cfg.CustomY = &cy
-		if saveTimer != nil {
-			saveTimer.Stop()
-		}
-		saveTimer = time.AfterFunc(300*time.Millisecond, func() {
-			if err := m.cfgSvc.Save(m.cfg); err != nil {
-				log.Printf("failed to save position (%d,%d): %v", cx, cy, err)
-			} else {
-				log.Printf("position auto-saved: (%d,%d)", cx, cy)
-			}
-		})
-	})
+	enableDrag(win, moveFunc, nil)
 
 	// Right-click context menu: provides access to Settings and Quit without
 	// requiring a system tray icon (which needs an SNI host / GNOME extension).

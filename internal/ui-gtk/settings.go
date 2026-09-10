@@ -117,43 +117,83 @@ func showSettingsDialog(m *manager) {
 	origTempIcon := m.fontSizeTempIcon
 	origConditions := m.fontSizeConditions
 
-	resp := dlg.Run()
-	if resp == gtk.RESPONSE_OK {
-		opacity := int(opacityScale.GetValue())
-		opacity = snapOpacity(opacity)
-		noBackground := noBgCheck.GetActive()
+	// saving is set to true while onSettingsSave (and any rebuildPanels it
+	// triggers) is running. This prevents a WM delete-event that can fire as a
+	// side-effect of the main window being destroyed/recreated from being
+	// misinterpreted as the user closing the settings dialog.
+	saving := false
 
-		newCfg := *m.cfg
-		newCfg.Opacity = opacity
-		newCfg.NoBackground = noBackground
-		// Window decorations are always hidden; persist the flag for consistency.
-		newCfg.NoBorder = true
-		newCfg.Cities = getCities()                   // collect current city list from the locations tab
-		newCfg.Locale = getLocale()                   // collect selected language
-		newCfg.DisplayFields = getDisplayFields()     // collect panel visibility
-		newCfg.PollutionFields = getPollutionFields() // collect pollution metrics
-		newCfg.TemperatureUnit = getTempUnit()        // collect temperature unit
-		newCfg.WindSpeedUnit = getWindUnit()          // collect wind speed unit
-		newCfg.IconTheme = config.NormalizeIconTheme(config.IconTheme(iconThemeCombo.GetActiveID()))
-		newCfg.ViewMode = config.NormalizeViewMode(getViewMode()) // collect selected view mode
-
-		fs := getFontSizes()
-		newCfg.FontSizeCityTime = fs.cityTime
-		newCfg.FontSizeTempIcon = fs.tempIcon
-		newCfg.FontSizeConditions = fs.conditions
-
-		// Apply live before saving so the user sees the change immediately.
-		m.SetOpacity(opacity)
-		m.SetNoBackground(noBackground)
-
-		_ = m.onSettingsSave(&newCfg)
-	} else {
-		// User cancelled — revert any live font-size preview back to what was
-		// saved in config before the dialog was opened.
+	// closeDialog performs a clean close: reverts font-size previews and
+	// destroys the dialog. Only called when the user explicitly cancels.
+	closeDialog := func() {
 		m.SetFontSizes(origCityTime, origTempIcon, origConditions)
+		dlg.Destroy()
 	}
 
-	dlg.Destroy()
+	// Use a signal-based response handler so Save keeps the dialog open.
+	// Only Cancel (or the window X button) dismisses it.
+	dlg.Connect("response", func(_ *gtk.Dialog, resp gtk.ResponseType) {
+		if resp == gtk.ResponseType(gtk.RESPONSE_OK) {
+			// Save: apply settings and keep the dialog open.
+			opacity := int(opacityScale.GetValue())
+			opacity = snapOpacity(opacity)
+			noBackground := noBgCheck.GetActive()
+
+			newCfg := *m.cfg
+			newCfg.Opacity = opacity
+			newCfg.NoBackground = noBackground
+			// Window decorations are always hidden; persist the flag for consistency.
+			newCfg.NoBorder = true
+			newCfg.Cities = getCities()                   // collect current city list from the locations tab
+			newCfg.Locale = getLocale()                   // collect selected language
+			newCfg.DisplayFields = getDisplayFields()     // collect panel visibility
+			newCfg.PollutionFields = getPollutionFields() // collect pollution metrics
+			newCfg.TemperatureUnit = getTempUnit()        // collect temperature unit
+			newCfg.WindSpeedUnit = getWindUnit()          // collect wind speed unit
+			newCfg.IconTheme = config.NormalizeIconTheme(config.IconTheme(iconThemeCombo.GetActiveID()))
+			newCfg.ViewMode = config.NormalizeViewMode(getViewMode()) // collect selected view mode
+
+			fs := getFontSizes()
+			newCfg.FontSizeCityTime = fs.cityTime
+			newCfg.FontSizeTempIcon = fs.tempIcon
+			newCfg.FontSizeConditions = fs.conditions
+
+			// Apply live before saving so the user sees the change immediately.
+			m.SetOpacity(opacity)
+			m.SetNoBackground(noBackground)
+
+			// Guard against spurious delete-events that can fire while the
+			// main window is being destroyed and recreated by rebuildPanels.
+			saving = true
+			_ = m.onSettingsSave(&newCfg)
+			saving = false
+
+			// After a successful save the font sizes are now committed; update
+			// the snapshot so Cancel can only revert post-save live changes.
+			origCityTime = m.fontSizeCityTime
+			origTempIcon = m.fontSizeTempIcon
+			origConditions = m.fontSizeConditions
+
+			// Dialog stays open — do NOT call dlg.Destroy() here.
+			return
+		}
+
+		// Cancel or window X button: revert previews and close.
+		closeDialog()
+	})
+
+	// Intercept the WM delete-event (window X button / Alt+F4).
+	// Return true to suppress the default destroy so we handle it ourselves.
+	// Ignore the event entirely if it fires while a save is in progress —
+	// rebuildPanels destroys/recreates the main window which can generate
+	// spurious delete-events on unrelated windows.
+	dlg.Connect("delete-event", func(_ *gtk.Dialog) bool {
+		if saving {
+			return true // suppress — this is a side-effect, not a user action
+		}
+		closeDialog()
+		return true // we called Destroy() ourselves above
+	})
 }
 
 // snapOpacity rounds to the nearest supported value: 25, 50, 75, or 100.
