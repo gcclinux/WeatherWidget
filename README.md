@@ -1,6 +1,37 @@
 # EasyWeatherWidget
 
-A compact weather widget for your desktop.
+WeatherWidget puts live weather and world clocks on your desktop — a compact, transparent overlay that stays on top of your windows so you never lose sight of conditions in the places that matter.
+
+Monitor up to 5 cities at a glance. See temperature, humidity, wind speed and direction, weather conditions, and local time — all updating in real time. The widget is border-less, always-on-top, and adjustable in transparency so it blends naturally with your workflow.
+
+Features:
+
+- Live weather for up to 5 cities displayed side by side
+- Real-time clocks showing each city's local time and date
+- Settings selectable  elements
+-- Enhanced and Simple View
+- - City Name
+- - Weather Icon
+- - Temperature
+- - Description
+- - Humidity 
+-- Wind Speed (km/h, mph, knots)
+- - Global Time settings
+- - Date
+- - Wind direction
+- - Wind Gust
+- - Dew Point
+- - Pressure
+- - UV Index
+-- Pollution
+-- Air Quality Index
+- Adjustable background transparency (25% / 50% / 75% / 100%)
+- Snap to any screen corner or drag to a custom position
+- Multi-monitor support
+- Celsius or Fahrenheit display
+- Customizable panel — choose exactly which data fields to show
+- 12 languages supported
+- Launches at start-up and stays out of your way
 
 ## Screenshots
 
@@ -8,21 +39,25 @@ A compact weather widget for your desktop.
 
 ![Win32 Task Manager Menu](images/win32-taskmanager-menu.png)
 
-**Opacity / background transparency** - (Up to 3 Cities on Free, Up to 5 Cities on Pro)
+**Opacity / background** - (Up to 3 Cities on Free, Up to 5 Cities on Pro)
 
-![Win32 Transparent Background](images/win32-transparent-background.png)
+![Win32 Background](images/weather-windows.png)
 
-**Weather Widget Location Settings**  
+**Weather Widget Simple View**  
 
-![Weather Widget Settings](images/weather-widget-sesstings.png)
+![Weather Widget Settings](images/weather-linux-simple.png)
 
-**Weather Widget Appearance Settings**  
+**Weather Widget Ehanced View**  
 
-![Weather Widget Settings](images/weather-widget-sesstings-apperance.png)
+![Weather Widget Settings](images/weather-linux-enhanced.png)
+
+**Weather Widget MacOS**  
+
+![Weather Widget Settings](images/weather-macos.png)
 
 **Weather Widget Languages Settings**
 
-![Weather Widget Settings](images/weather-widget-sesstings-languages.png)
+![Weather Widget Settings](images/weather-languages.png)
 
 ## Download
 
@@ -69,46 +104,6 @@ You can download the latest pre-compiled binaries for Windows and Linux from the
 
 > **Note**: The first build may take several minutes as it compiles graphical dependencies (CGO). My updated Makefile includes the `-v` flag so you can monitor progress.
 
-## Config example
-
-```json
-{
-  "dataSource": "remote_api",
-  "cities": [
-    {
-      "name": "Holambra",
-      "region": "BR",
-      "latitude": -22.6332,
-      "longitude": -47.0545,
-      "timezone": "America/Sao_Paulo"
-    },
-    {
-      "name": "Edinburgh",
-      "region": "UK",
-      "latitude": 55.95,
-      "longitude": -3.19,
-      "timezone": "Europe/London"
-    },
-    {
-      "name": "Warsaw",
-      "region": "PL",
-      "latitude": 52.231958,
-      "longitude": 21.006725,
-      "timezone": "Europe/Warsaw"
-    }
-  ],
-  "refreshInterval": 10,
-  "cornerPosition": "top-right",
-  "monitorIndex": 0,
-  "opacity": 25,
-  "locale": "en-GB",
-  "apiConfig": {
-    "provider": "openweathermap",
-    "apiKey": "YOUR_API_KEY"
-  }
-}
-```
-
 ### Windows Config location
 
 #### Windows
@@ -152,6 +147,13 @@ There are two ways to fix this:
 *Note: A `-software` flag is also available (`.\weatherwidget.exe -software`) which instructs the Fyne framework to prefer software rendering, but this still requires basic OpenGL driver availability at the OS level.*
 
 ## Changelog
+
+### v2.0.0 — 2026-09-11
+- **MultiView desktop WeatherWidnget**:
+  - Enhanced view 
+  - Simple view
+  - Air Quality Index
+  - Pollution index
 
 ### v1.1.2 — 2026-08-31
 
