@@ -178,12 +178,12 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 		winW = float32(screenW) * 0.9
 	}
 	winH := float32(screenH) * 0.605
-	// macOS: Add 20% extra height to the settings panel for better layout
+	// macOS: Add extra height to the settings panel so all sections are visible.
 	if runtime.GOOS == "darwin" {
-		winH = float32(screenH) * 0.726 // 0.605 * 1.20 = ~0.726
+		winH = float32(screenH) * 0.85
 	}
-	if winH < 616 {
-		winH = 616
+	if winH < 700 {
+		winH = 700
 	}
 	if winH > float32(screenH)*0.9 {
 		winH = float32(screenH) * 0.9
@@ -687,7 +687,12 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 				c := state.cities[i]
 
 				// City name styled as bold text.
-				cityName := widget.NewRichTextFromMarkdown(fmt.Sprintf("**%s, %s**", c.Name, c.Region))
+				// Use canvas.NewText with an explicit dark color so the name is
+				// always visible regardless of the global app theme foreground
+				// (which is white on macOS for the transparent widget window).
+				cityNameText := canvas.NewText(fmt.Sprintf("%s, %s", c.Name, c.Region), color.NRGBA{R: 15, G: 23, B: 42, A: 255})
+				cityNameText.TextStyle = fyne.TextStyle{Bold: true}
+				cityNameText.TextSize = 13
 
 				// Small weather icon instead of position number.
 				iconCodes := []string{"clear", "partly_cloudy", "cloudy", "rain", "snow"}
@@ -745,7 +750,7 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 				}
 
 				// Build a card-like row for each city.
-				leftContent := container.NewHBox(cityIcon, cityName)
+				leftContent := container.NewHBox(cityIcon, cityNameText)
 				buttons := container.NewHBox(upBtn, downBtn, removeBtn)
 				row := container.NewBorder(nil, nil, leftContent, buttons)
 				cityListBox.Add(row)

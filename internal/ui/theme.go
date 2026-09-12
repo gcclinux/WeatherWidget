@@ -409,7 +409,12 @@ func (s *settingsTheme) Color(name fyne.ThemeColorName, _ fyne.ThemeVariant) col
 	case theme.ColorNamePrimary:
 		return color.NRGBA{R: 37, G: 99, B: 235, A: 255} // Blue-600 (vibrant accent)
 	case theme.ColorNameHover:
-		return color.NRGBA{R: 239, G: 246, B: 255, A: 255} // Blue-50
+		// Use a very low-alpha hover so Fyne's internal BaseWidget hover overlay
+		// is nearly invisible. Custom widgets (navButton) draw their own explicit
+		// hover background in their renderer, so the theme overlay must not
+		// overwrite it. Standard widgets (entries, checkboxes, buttons) use a
+		// subtle tint at this alpha which is still perceptible on white.
+		return color.NRGBA{R: 239, G: 246, B: 255, A: 40} // Blue-50 at ~16% opacity
 	case theme.ColorNameFocus:
 		return color.NRGBA{R: 147, G: 197, B: 253, A: 255} // Blue-300
 	case theme.ColorNameSelection:

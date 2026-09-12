@@ -8,6 +8,7 @@ import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
+	"fyne.io/fyne/v2/driver/desktop"
 	"fyne.io/fyne/v2/widget"
 )
 
@@ -17,6 +18,7 @@ type navButton struct {
 	icon     fyne.Resource
 	text     string
 	selected bool
+	hovered  bool
 	onTap    func()
 }
 
@@ -34,6 +36,23 @@ func (b *navButton) Tapped(_ *fyne.PointEvent) {
 	if b.onTap != nil {
 		b.onTap()
 	}
+}
+
+// MouseIn is called when the pointer enters the button area.
+// We manage the hover state ourselves so Fyne's default hover overlay
+// (which can wash out or hide text on macOS) never fires.
+func (b *navButton) MouseIn(_ *desktop.MouseEvent) {
+	b.hovered = true
+	b.Refresh()
+}
+
+// MouseMoved satisfies the desktop.Hoverable interface.
+func (b *navButton) MouseMoved(_ *desktop.MouseEvent) {}
+
+// MouseOut is called when the pointer leaves the button area.
+func (b *navButton) MouseOut() {
+	b.hovered = false
+	b.Refresh()
 }
 
 func (b *navButton) SetSelected(selected bool) {
@@ -115,6 +134,14 @@ func (r *navButtonRenderer) Refresh() {
 		r.label.Color = color.NRGBA{R: 37, G: 99, B: 235, A: 255}
 		r.label.TextStyle.Bold = true
 		r.indicator.Show()
+	} else if r.button.hovered {
+		// Explicit hover state: slightly tinted background, label stays
+		// dark and fully readable — prevents Fyne's default opaque hover
+		// overlay from washing out text on macOS.
+		r.bg.FillColor = color.NRGBA{R: 219, G: 234, B: 254, A: 180}
+		r.label.Color = color.NRGBA{R: 30, G: 64, B: 175, A: 255}
+		r.label.TextStyle.Bold = false
+		r.indicator.Hide()
 	} else {
 		r.bg.FillColor = color.Transparent
 		r.label.Color = color.NRGBA{R: 100, G: 116, B: 139, A: 255}
