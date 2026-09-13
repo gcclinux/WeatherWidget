@@ -113,9 +113,9 @@ func (u *UIManager) showSettingsError(err error, win fyne.Window, th fyne.Theme)
 // minimum width of 340 dp so text never wraps into a narrow column.
 func (u *UIManager) showSettingsPopup(title, msg string, isError bool, win fyne.Window, th fyne.Theme) {
 	// Title label — bold, slightly larger.
-	titleCol := color.NRGBA{R: 34, G: 34, B: 34, A: 255}
+	titleCol := color.NRGBA{R: 22, G: 163, B: 74, A: 255}
 	if isError {
-		titleCol = color.NRGBA{R: 192, G: 32, B: 32, A: 255}
+		titleCol = color.NRGBA{R: 220, G: 38, B: 38, A: 255}
 	}
 	titleLbl := canvas.NewText(title, titleCol)
 	titleLbl.TextStyle = fyne.TextStyle{Bold: true}
@@ -137,19 +137,26 @@ func (u *UIManager) showSettingsPopup(title, msg string, isError bool, win fyne.
 	})
 	okBtn.Importance = widget.HighImportance
 
-	content := container.NewThemeOverride(
-		container.NewVBox(
-			titleLbl,
-			widget.NewSeparator(),
-			msgLbl,
-			minWidthSpacer,
-			container.NewPadded(container.NewCenter(okBtn)),
-		),
-		th,
+	cardBg := canvas.NewRectangle(color.White)
+	cardBg.CornerRadius = 8
+
+	innerContent := container.NewVBox(
+		titleLbl,
+		widget.NewSeparator(),
+		msgLbl,
+		minWidthSpacer,
+		container.NewPadded(container.NewCenter(okBtn)),
 	)
 
+	popupCard := container.NewStack(
+		cardBg,
+		container.NewPadded(innerContent),
+	)
+
+	themedContent := container.NewThemeOverride(popupCard, th)
+
 	pop = widget.NewModalPopUp(
-		container.NewPadded(content),
+		themedContent,
 		win.Canvas(),
 	)
 	pop.Show()
@@ -170,6 +177,9 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 	settingsTh := NewSettingsTheme(theme.DefaultTheme())
 	showError := func(err error) {
 		u.showSettingsError(err, win, settingsTh)
+	}
+	showInfo := func(title, msg string) {
+		u.showSettingsInfo(title, msg, win, settingsTh)
 	}
 
 	screenW, screenH := getScreenSize()
@@ -726,7 +736,7 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 				removeBtn := widget.NewButtonWithIcon("", theme.DeleteIcon(), func() {
 					result, err := config.RemoveCity(state.cities, idx, nil)
 					if err != nil {
-						dialog.ShowError(err, win)
+						showError(err)
 						return
 					}
 					state.cities = result
@@ -1717,7 +1727,7 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 				return
 			}
 			state.saved = true
-			// Confirmation popup suppressed — save is silent.
+			showInfo(u.t("settings.dialog.saved"), u.t("settings.dialog.savedMsg"))
 		})
 		saveBtn.Importance = widget.HighImportance
 
@@ -1741,9 +1751,10 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 		saveBarTopLine := container.NewMax(saveBarBorderSizer, saveBarBorder)
 
 		saveBarContent := container.NewPadded(container.NewHBox(layout.NewSpacer(), saveBtnContainer, cancelBtnContainer))
+		saveBarThemed := container.NewThemeOverride(saveBarContent, settingsTh)
 		saveBar := container.NewStack(
 			saveBarBg,
-			container.NewBorder(saveBarTopLine, nil, nil, nil, saveBarContent),
+			container.NewBorder(saveBarTopLine, nil, nil, nil, saveBarThemed),
 		)
 
 		bg := canvas.NewRectangle(color.NRGBA{R: 245, G: 247, B: 250, A: 255})

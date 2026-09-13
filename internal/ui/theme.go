@@ -308,12 +308,22 @@ func (t *widgetTheme) Color(name fyne.ThemeColorName, variant fyne.ThemeVariant)
 	// Foreground is dark text so that all settings windows, dialogs, checkboxes,
 	// and tabs remain crisp and readable on light backgrounds, while weather cards
 	// use explicit white text on dark cards.
+	// OverlayBackground is pure white so error popups, modal dialogs, and menus
+	// are always clean white cards and never black transparencyKey boxes.
 	if runtime.GOOS == "windows" {
 		switch name {
-		case theme.ColorNameBackground, theme.ColorNameOverlayBackground:
+		case theme.ColorNameBackground:
 			return transparencyKey
+		case theme.ColorNameOverlayBackground:
+			return color.NRGBA{R: 255, G: 255, B: 255, A: 255}
 		case theme.ColorNameForeground:
 			return color.NRGBA{R: 34, G: 34, B: 34, A: 255}
+		case theme.ColorNameForegroundOnPrimary:
+			return color.NRGBA{R: 255, G: 255, B: 255, A: 255}
+		case theme.ColorNameHover:
+			return color.NRGBA{R: 0, G: 0, B: 0, A: 20}
+		case theme.ColorNameFocus:
+			return color.NRGBA{R: 0, G: 0, B: 0, A: 25}
 		case theme.ColorNameDisabled:
 			return color.NRGBA{R: 140, G: 140, B: 140, A: 255}
 		case theme.ColorNameSeparator:
@@ -327,11 +337,19 @@ func (t *widgetTheme) Color(name fyne.ThemeColorName, variant fyne.ThemeVariant)
 	// controlled by the opacity setting.
 	if runtime.GOOS == "linux" {
 		switch name {
-		case theme.ColorNameBackground, theme.ColorNameOverlayBackground:
+		case theme.ColorNameBackground:
 			shade := uint8(linuxBgShade.Load())
 			return color.NRGBA{R: shade, G: shade, B: shade, A: 255}
+		case theme.ColorNameOverlayBackground:
+			return color.NRGBA{R: 255, G: 255, B: 255, A: 255}
 		case theme.ColorNameForeground:
 			return color.NRGBA{R: 255, G: 255, B: 255, A: 255}
+		case theme.ColorNameForegroundOnPrimary:
+			return color.NRGBA{R: 255, G: 255, B: 255, A: 255}
+		case theme.ColorNameHover:
+			return color.NRGBA{R: 0, G: 0, B: 0, A: 20}
+		case theme.ColorNameFocus:
+			return color.NRGBA{R: 0, G: 0, B: 0, A: 25}
 		case theme.ColorNameDisabled:
 			return color.NRGBA{R: 180, G: 180, B: 180, A: 255}
 		case theme.ColorNameSeparator:
@@ -398,6 +416,10 @@ func (s *settingsTheme) Color(name fyne.ThemeColorName, _ fyne.ThemeVariant) col
 		return color.NRGBA{R: 255, G: 255, B: 255, A: 255}
 	case theme.ColorNameForeground:
 		return color.NRGBA{R: 15, G: 23, B: 42, A: 255} // Slate-900 (deep, crisp, premium)
+	case theme.ColorNameForegroundOnPrimary:
+		return color.NRGBA{R: 255, G: 255, B: 255, A: 255} // Pure white text on primary buttons
+	case theme.ColorNameForegroundOnError, theme.ColorNameForegroundOnSuccess, theme.ColorNameForegroundOnWarning:
+		return color.NRGBA{R: 255, G: 255, B: 255, A: 255}
 	case theme.ColorNameInputBackground:
 		return color.NRGBA{R: 248, G: 250, B: 252, A: 255} // Slate-50
 	case theme.ColorNameSeparator:
@@ -409,14 +431,14 @@ func (s *settingsTheme) Color(name fyne.ThemeColorName, _ fyne.ThemeVariant) col
 	case theme.ColorNamePrimary:
 		return color.NRGBA{R: 37, G: 99, B: 235, A: 255} // Blue-600 (vibrant accent)
 	case theme.ColorNameHover:
-		// Use a very low-alpha hover so Fyne's internal BaseWidget hover overlay
-		// is nearly invisible. Custom widgets (navButton) draw their own explicit
-		// hover background in their renderer, so the theme overlay must not
-		// overwrite it. Standard widgets (entries, checkboxes, buttons) use a
-		// subtle tint at this alpha which is still perceptible on white.
-		return color.NRGBA{R: 239, G: 246, B: 255, A: 40} // Blue-50 at ~16% opacity
+		// A subtle dark tint overlay so:
+		// 1. Primary buttons (Blue-600) darken to rich Blue-700 (#225BD9) with crisp white text.
+		// 2. Secondary/low-importance buttons (Slate-100) darken to Slate-200 with crisp dark text.
+		// 3. Text and icons NEVER wash out or disappear against light backgrounds.
+		return color.NRGBA{R: 0, G: 0, B: 0, A: 20}
 	case theme.ColorNameFocus:
-		return color.NRGBA{R: 147, G: 197, B: 253, A: 255} // Blue-300
+		// Subtle focus tint that preserves contrast and does not overwrite the button's background.
+		return color.NRGBA{R: 0, G: 0, B: 0, A: 25}
 	case theme.ColorNameSelection:
 		return color.NRGBA{R: 191, G: 219, B: 254, A: 255} // Blue-200
 	case theme.ColorNameButton:

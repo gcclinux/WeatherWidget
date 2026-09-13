@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"fyne.io/fyne/v2/test"
+	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 
 	"weatherwidget/internal/config"
@@ -336,4 +337,33 @@ func TestBuildConfigFromUI_WindSpeedUnit_Knots(t *testing.T) {
 		t.Errorf("WindSpeedUnit = %q, want %q", cfg.WindSpeedUnit, config.WindSpeedUnitKnots)
 	}
 }
+
+func TestShowSettingsInfo(t *testing.T) {
+	testApp := test.NewApp()
+	win := testApp.NewWindow("Test")
+
+	um := &UIManager{}
+	th := NewSettingsTheme(theme.DefaultTheme())
+
+	um.showSettingsInfo("Saved", "Settings saved successfully!", win, th)
+
+	overlays := win.Canvas().Overlays().List()
+	if len(overlays) == 0 {
+		t.Error("expected popup in overlays, got none")
+	}
+}
+
+func TestShowSettingsError(t *testing.T) {
+	testApp := test.NewApp()
+	win := testApp.NewWindow("Test")
+
+	um := &UIManager{}
+	th := NewSettingsTheme(theme.DefaultTheme())
+
+	um.showSettingsError(nil, win, th)
+	if len(win.Canvas().Overlays().List()) != 0 {
+		t.Error("expected no overlay when error is nil")
+	}
+}
+
 

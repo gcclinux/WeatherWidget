@@ -110,6 +110,9 @@ You can download the latest pre-compiled binaries for Windows and Linux from the
 ```powershell
 type $env:APPDATA\WeatherWidget\WeatherWidget\config.json
 ```
+```cmd
+type %APPDATA%\WeatherWidget\WeatherWidget\config.json
+```
 #### Linux
 ```bash
 cat $HOME/.config/WeatherWidget/WeatherWidget/config.json
