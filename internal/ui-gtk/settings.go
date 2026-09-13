@@ -1200,7 +1200,7 @@ func buildLocationsTab(m *manager, dlg *gtk.Dialog, initialCities []config.CityC
 	grid.Attach(nameLabel, 0, 0, 1, 1)
 	grid.Attach(nameRow, 1, 0, 1, 1)
 
-	// Region row.
+	// Region, Country row.
 	regionLabel := makeLabel(m.t("settings.locations.regionLabel"))
 	regionEntry, _ := gtk.EntryNew()
 	regionEntry.SetPlaceholderText(m.t("settings.locations.regionPlaceholder"))
