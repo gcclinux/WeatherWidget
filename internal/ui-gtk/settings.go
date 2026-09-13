@@ -53,7 +53,7 @@ func showSettingsDialog(m *manager) {
 	// Don't set transient-for — the main window is a positioned desktop widget
 	// and making the dialog transient causes them to move together.
 	dlg.SetModal(false)
-	dlg.SetDefaultSize(600, 748)
+	dlg.SetDefaultSize(600, 660)
 	dlg.SetPosition(gtk.WIN_POS_CENTER)
 
 	box, _ := dlg.GetContentArea()
@@ -1084,10 +1084,14 @@ func buildLocationsTab(m *manager, dlg *gtk.Dialog, initialCities []config.CityC
 	subTitle.SetHAlign(gtk.ALIGN_START)
 	outer.PackStart(subTitle, false, false, 0)
 
-	// Scrollable city list.
+	// Scrollable city list. Height is fixed at 290px so all 5 cities (each row
+	// is ~56px tall including its separator) are visible at once without the
+	// last one being clipped, while keeping the overall dialog compact enough
+	// to fit on screen. The scrollbar appears automatically if the list ever
+	// exceeds this height.
 	scroll, _ := gtk.ScrolledWindowNew(nil, nil)
 	scroll.SetPolicy(gtk.POLICY_NEVER, gtk.POLICY_AUTOMATIC)
-	scroll.SetSizeRequest(-1, 200)
+	scroll.SetSizeRequest(-1, 290)
 
 	listBox, _ := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 4)
 	scroll.Add(listBox)
@@ -1168,13 +1172,27 @@ func buildLocationsTab(m *manager, dlg *gtk.Dialog, initialCities []config.CityC
 	refreshList()
 
 	// ── Add New City section ──────────────────────────────────────────────
-	sep, _ := gtk.SeparatorNew(gtk.ORIENTATION_HORIZONTAL)
-	outer.PackStart(sep, false, false, 4)
+	// Expanding spacer: pushes the "Add New City" frame to the bottom of the
+	// tab so all the space freed up sits above it, giving the Saved Cities
+	// list room to show every selected city clearly.
+	spacer, _ := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 0)
+	outer.PackStart(spacer, true, true, 0)
 
-	addTitle, _ := gtk.LabelNew("")
-	addTitle.SetMarkup("<b>" + glib.MarkupEscapeText(m.t("settings.locations.addTitle")) + "</b>")
-	addTitle.SetHAlign(gtk.ALIGN_START)
-	outer.PackStart(addTitle, false, false, 0)
+	// Frame wrapping the Add New City controls for a nicer, bordered look.
+	// The frame's label acts as the section title, so no separate bold title
+	// label is needed inside.
+	addFrame, _ := gtk.FrameNew(m.t("settings.locations.addTitle"))
+	addFrame.SetLabelAlign(0.02, 0.5)
+
+	// Inner vertical box holds the grid, status label and button. Margins give
+	// the contents breathing room inside the frame border.
+	addBox, _ := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 8)
+	addBox.SetMarginTop(8)
+	addBox.SetMarginBottom(8)
+	addBox.SetMarginStart(8)
+	addBox.SetMarginEnd(8)
+	addFrame.Add(addBox)
+	outer.PackStart(addFrame, false, false, 0)
 
 	grid, _ := gtk.GridNew()
 	grid.SetRowSpacing(6)
@@ -1230,7 +1248,7 @@ func buildLocationsTab(m *manager, dlg *gtk.Dialog, initialCities []config.CityC
 	grid.Attach(tzLabel, 0, 3, 1, 1)
 	grid.Attach(tzEntry, 1, 3, 1, 1)
 
-	outer.PackStart(grid, false, false, 0)
+	addBox.PackStart(grid, false, false, 0)
 
 	if !hasLicense {
 		nameEntry.SetSensitive(false)
@@ -1244,7 +1262,7 @@ func buildLocationsTab(m *manager, dlg *gtk.Dialog, initialCities []config.CityC
 	// Status label for search feedback.
 	statusLbl, _ := gtk.LabelNew("")
 	statusLbl.SetHAlign(gtk.ALIGN_START)
-	outer.PackStart(statusLbl, false, false, 0)
+	addBox.PackStart(statusLbl, false, false, 0)
 
 	// Search API button handler.
 	searchBtn.Connect("clicked", func() {
@@ -1386,7 +1404,7 @@ func buildLocationsTab(m *manager, dlg *gtk.Dialog, initialCities []config.CityC
 		addBtn.SetSensitive(false)
 	}
 	btnBox.PackEnd(addBtn, false, false, 0)
-	outer.PackStart(btnBox, false, false, 0)
+	addBox.PackStart(btnBox, false, false, 0)
 
 	addBtn.Connect("clicked", func() {
 		if !hasLicense {

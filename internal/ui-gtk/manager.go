@@ -190,7 +190,18 @@ func (m *manager) start(openSettings bool) error {
 	// Position is applied via "map-event" after the window is shown by the WM.
 
 	// Setup system tray (best-effort).
-	setupTray(m)
+	// Deferred via TimeoutAdd so the tray menu is created after gtk.Main()
+	// is running. Building and attaching the AppIndicator menu before the
+	// main loop starts means the menu widgets are never realized; when the
+	// GNOME Shell SNI extension opens the menu it sees unrealized widgets
+	// and renders a blank box. Running inside a timeout source guarantees the
+	// main loop is active and GTK has processed at least one iteration, so
+	// all menu item label widgets are properly realized before the indicator
+	// is shown to the host.
+	glib.TimeoutAdd(uint(500), func() bool {
+		setupTray(m)
+		return false // run once
+	})
 
 	// Scheduler — must be initialised before openSettings so that saving
 	// from the settings dialog can call m.sched.SetInterval() safely.
