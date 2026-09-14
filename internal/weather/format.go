@@ -17,6 +17,9 @@ func FormatTemperature(temp int, unit config.TemperatureUnit) string {
 	case config.TemperatureUnitFahrenheit:
 		f := convertToFahrenheit(temp)
 		return fmt.Sprintf("%d°F", f)
+	case config.TemperatureUnitKelvin:
+		k := convertToKelvin(temp)
+		return fmt.Sprintf("%dK", k)
 	default: // celsius and any invalid value
 		return fmt.Sprintf("%d°C", temp)
 	}
@@ -31,6 +34,18 @@ func convertToFahrenheit(celsius int) int {
 // ConvertToFahrenheit is the exported wrapper for property-based testing.
 func ConvertToFahrenheit(celsius int) int {
 	return convertToFahrenheit(celsius)
+}
+
+// convertToKelvin converts an integer Celsius value to Kelvin using the
+// formula K = round(C + 273.15). The server provides temperatures in Celsius,
+// so this mirrors how Fahrenheit is derived from the same source value.
+func convertToKelvin(celsius int) int {
+	return int(math.Round(float64(celsius) + 273.15))
+}
+
+// ConvertToKelvin is the exported wrapper for property-based testing.
+func ConvertToKelvin(celsius int) int {
+	return convertToKelvin(celsius)
 }
 
 // FormatCityRegion returns a location string in the pattern "{name}, {region}".

@@ -184,6 +184,8 @@ func (m *manager) settingsStrings() map[string]string {
 		"settings.pollution.nh3", "settings.pollution.pm2_5", "settings.pollution.pm10",
 		// Widget tab: units
 		"settings.temperature.title", "settings.windspeed.title",
+		"settings.temperature.celsius", "settings.temperature.fahrenheit",
+		"settings.temperature.kelvin",
 		// Language tab
 		"settings.language.title", "settings.language.subtitle",
 		// Appearance tab

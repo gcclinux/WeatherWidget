@@ -6,13 +6,14 @@ type TemperatureUnit string
 const (
 	TemperatureUnitCelsius    TemperatureUnit = "celsius"
 	TemperatureUnitFahrenheit TemperatureUnit = "fahrenheit"
+	TemperatureUnitKelvin     TemperatureUnit = "kelvin"
 )
 
 // NormalizeTemperatureUnit returns the unit unchanged if it is a known value,
 // otherwise returns TemperatureUnitCelsius as the safe default.
 func NormalizeTemperatureUnit(u TemperatureUnit) TemperatureUnit {
 	switch u {
-	case TemperatureUnitCelsius, TemperatureUnitFahrenheit:
+	case TemperatureUnitCelsius, TemperatureUnitFahrenheit, TemperatureUnitKelvin:
 		return u
 	default:
 		return TemperatureUnitCelsius

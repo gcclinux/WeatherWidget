@@ -179,6 +179,7 @@ static inline NSNumber *jbool(BOOL v) { return v ? @YES : @NO; }
 // Widget tab — units
 @property (nonatomic, strong) NSButton *tempCelsius;
 @property (nonatomic, strong) NSButton *tempFahrenheit;
+@property (nonatomic, strong) NSButton *tempKelvin;
 @property (nonatomic, strong) NSButton *windKmh;
 @property (nonatomic, strong) NSButton *windMph;
 @property (nonatomic, strong) NSButton *windKnots;
@@ -752,14 +753,18 @@ static WWSettingsController *g_settingsController = nil;
         // Temperature unit.
         [doc addSubview:[s label:[s L:@"settings.temperature.title" fallback:@"Temperature Unit"] frame:NSMakeRect(16, y, 300, 20) bold:YES]];
         y -= 26;
-        s.tempCelsius = [NSButton radioButtonWithTitle:@"°C (Celsius)"
+        s.tempCelsius = [NSButton radioButtonWithTitle:[s L:@"settings.temperature.celsius" fallback:@"°C (Celsius)"]
             target:s action:@selector(onTempUnitRadio:)];
         s.tempCelsius.frame = NSMakeRect(16, y, 160, 20);
         [doc addSubview:s.tempCelsius];
-        s.tempFahrenheit = [NSButton radioButtonWithTitle:@"°F (Fahrenheit)"
+        s.tempFahrenheit = [NSButton radioButtonWithTitle:[s L:@"settings.temperature.fahrenheit" fallback:@"°F (Fahrenheit)"]
             target:s action:@selector(onTempUnitRadio:)];
-        s.tempFahrenheit.frame = NSMakeRect(190, y, 180, 20);
+        s.tempFahrenheit.frame = NSMakeRect(190, y, 170, 20);
         [doc addSubview:s.tempFahrenheit];
+        s.tempKelvin = [NSButton radioButtonWithTitle:[s L:@"settings.temperature.kelvin" fallback:@"K (Kelvin)"]
+            target:s action:@selector(onTempUnitRadio:)];
+        s.tempKelvin.frame = NSMakeRect(374, y, 160, 20);
+        [doc addSubview:s.tempKelvin];
         y -= 40;
 
         // Wind speed unit.
@@ -1120,6 +1125,8 @@ static WWSettingsController *g_settingsController = nil;
     NSString *tempUnit = cfg[@"temperatureUnit"] ?: @"celsius";
     if ([tempUnit isEqualToString:@"fahrenheit"]) {
         _tempFahrenheit.state = NSControlStateValueOn;
+    } else if ([tempUnit isEqualToString:@"kelvin"]) {
+        _tempKelvin.state = NSControlStateValueOn;
     } else {
         _tempCelsius.state = NSControlStateValueOn;
     }
@@ -1241,8 +1248,13 @@ static WWSettingsController *g_settingsController = nil;
     };
 
     // ── Units ──
-    cfg[@"temperatureUnit"] = _tempFahrenheit.state == NSControlStateValueOn ?
-        @"fahrenheit" : @"celsius";
+    if (_tempFahrenheit.state == NSControlStateValueOn) {
+        cfg[@"temperatureUnit"] = @"fahrenheit";
+    } else if (_tempKelvin.state == NSControlStateValueOn) {
+        cfg[@"temperatureUnit"] = @"kelvin";
+    } else {
+        cfg[@"temperatureUnit"] = @"celsius";
+    }
     if (_windMph.state == NSControlStateValueOn) {
         cfg[@"windSpeedUnit"] = @"mph";
     } else if (_windKnots.state == NSControlStateValueOn) {

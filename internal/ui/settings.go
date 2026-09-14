@@ -612,20 +612,23 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 		}
 
 		// ── Temperature unit ─────────────────────────────────────────────────
-		unitCelsiusLabel := "°C (Celsius)"
-		unitFahrenheitLabel := "°F (Fahrenheit)"
+		unitCelsiusLabel := u.t("settings.temperature.celsius")
+		unitFahrenheitLabel := u.t("settings.temperature.fahrenheit")
+		unitKelvinLabel := u.t("settings.temperature.kelvin")
 
 		unitValueMap := map[string]config.TemperatureUnit{
 			unitCelsiusLabel:    config.TemperatureUnitCelsius,
 			unitFahrenheitLabel: config.TemperatureUnitFahrenheit,
+			unitKelvinLabel:     config.TemperatureUnitKelvin,
 		}
 		unitLabelMap := map[config.TemperatureUnit]string{
 			config.TemperatureUnitCelsius:    unitCelsiusLabel,
 			config.TemperatureUnitFahrenheit: unitFahrenheitLabel,
+			config.TemperatureUnitKelvin:     unitKelvinLabel,
 		}
 
 		unitRadio := widget.NewRadioGroup(
-			[]string{unitCelsiusLabel, unitFahrenheitLabel},
+			[]string{unitCelsiusLabel, unitFahrenheitLabel, unitKelvinLabel},
 			func(selected string) {
 				state.selectedUnit = unitValueMap[selected]
 				// Live preview: re-render main widget panels with the new unit immediately.

@@ -999,15 +999,20 @@ func buildWidgetTab(m *manager) (*gtk.Box, func() *config.DisplayFields, func() 
 	vbox.PackStart(tempSubtitle, false, false, 0)
 
 	hbox, _ := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 16)
-	celsiusBtn, _ := gtk.RadioButtonNewWithLabel(nil, "°C (Celsius)")
-	fahBtn, _ := gtk.RadioButtonNewWithLabelFromWidget(celsiusBtn, "°F (Fahrenheit)")
-	if m.cfg.TemperatureUnit == config.TemperatureUnitFahrenheit {
+	celsiusBtn, _ := gtk.RadioButtonNewWithLabel(nil, m.t("settings.temperature.celsius"))
+	fahBtn, _ := gtk.RadioButtonNewWithLabelFromWidget(celsiusBtn, m.t("settings.temperature.fahrenheit"))
+	kelvinBtn, _ := gtk.RadioButtonNewWithLabelFromWidget(celsiusBtn, m.t("settings.temperature.kelvin"))
+	switch m.cfg.TemperatureUnit {
+	case config.TemperatureUnitFahrenheit:
 		fahBtn.SetActive(true)
-	} else {
+	case config.TemperatureUnitKelvin:
+		kelvinBtn.SetActive(true)
+	default:
 		celsiusBtn.SetActive(true)
 	}
 	hbox.PackStart(celsiusBtn, false, false, 0)
 	hbox.PackStart(fahBtn, false, false, 0)
+	hbox.PackStart(kelvinBtn, false, false, 0)
 	vbox.PackStart(hbox, false, false, 0)
 
 	// ── Wind Speed Unit ──────────────────────────────────────────────────
@@ -1043,6 +1048,9 @@ func buildWidgetTab(m *manager) (*gtk.Box, func() *config.DisplayFields, func() 
 	getTempUnit := func() config.TemperatureUnit {
 		if fahBtn.GetActive() {
 			return config.TemperatureUnitFahrenheit
+		}
+		if kelvinBtn.GetActive() {
+			return config.TemperatureUnitKelvin
 		}
 		return config.TemperatureUnitCelsius
 	}
