@@ -12,7 +12,10 @@ package uidarwin
 */
 import "C"
 
-import "sync"
+import (
+	"log"
+	"sync"
+)
 
 var (
 	settingsSaveMu sync.Mutex
@@ -35,11 +38,14 @@ func settingsSaveCB(newCfgJSON *C.char) {
 		return
 	}
 	s := C.GoString(newCfgJSON)
+	log.Printf("uidarwin: settingsSaveCB: received %d bytes", len(s))
 	settingsSaveMu.Lock()
 	fn := settingsSaveFn
 	settingsSaveMu.Unlock()
 	if fn != nil {
 		go fn(s) // run save on a goroutine so the main thread is freed immediately
+	} else {
+		log.Printf("uidarwin: settingsSaveCB: no save callback registered!")
 	}
 }
 

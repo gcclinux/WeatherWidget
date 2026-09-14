@@ -108,8 +108,8 @@ extern void updateCardData(
     double opacity
 );
 
-// updateCardAQI sets the AQI label (pass "" to hide).
-extern void updateCardAQI(uintptr_t card, const char *label);
+// updateCardAQI sets the AQI label with an inline icon (pass "" label to hide).
+extern void updateCardAQI(uintptr_t card, const char *iconPath, const char *label);
 
 // updateCardPollutant updates one of the eight individual pollutant labels.
 // slot: 0=CO 1=NO 2=NO2 3=O3 4=SO2 5=NH3 6=PM2.5 7=PM10.  "" to hide.
@@ -125,6 +125,11 @@ extern void setContainerLayout(uintptr_t container, int mode, int cardCount);
 
 // resizeWindowToContainer resizes the window to fit the container's content.
 extern void resizeWindowToContainer(uintptr_t win, uintptr_t container, int mode, int cardCount);
+
+// relayoutContainerAsync re-measures and re-lays-out the cards + window
+// asynchronously on the main thread, so it runs after already-queued card
+// content updates. Used to fit cards to their final populated height.
+extern void relayoutContainerAsync(uintptr_t win, uintptr_t container, int mode, int cardCount);
 
 // showCardError shows/hides the error overlay on a card (stale=1 shows "stale data").
 extern void showCardError(uintptr_t card, int visible, int stale);
@@ -283,10 +288,12 @@ func nativeUpdateCardData(card uintptr,
 		night, C.double(opacity))
 }
 
-func nativeUpdateCardAQI(card uintptr, label string) {
+func nativeUpdateCardAQI(card uintptr, iconPath, label string) {
+	ci := C.CString(iconPath)
 	cs := C.CString(label)
+	defer C.free(unsafe.Pointer(ci))
 	defer C.free(unsafe.Pointer(cs))
-	C.updateCardAQI(C.uintptr_t(card), cs)
+	C.updateCardAQI(C.uintptr_t(card), ci, cs)
 }
 
 func nativeUpdateCardPollutant(card uintptr, slot int, iconPath, value string) {
@@ -331,6 +338,16 @@ func nativeResizeWindowToContainer(win, container uintptr, simpleMode bool, card
 		mode = 1
 	}
 	C.resizeWindowToContainer(C.uintptr_t(win), C.uintptr_t(container), mode, C.int(cardCount))
+}
+
+// nativeRelayoutContainerAsync re-lays-out the cards + window asynchronously so
+// it runs after already-queued card content updates have been applied.
+func nativeRelayoutContainerAsync(win, container uintptr, simpleMode bool, cardCount int) {
+	mode := C.int(0)
+	if simpleMode {
+		mode = 1
+	}
+	C.relayoutContainerAsync(C.uintptr_t(win), C.uintptr_t(container), mode, C.int(cardCount))
 }
 
 func nativeShowCardError(card uintptr, visible, stale bool) {

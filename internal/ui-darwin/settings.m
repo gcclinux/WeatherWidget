@@ -24,22 +24,119 @@ extern int  settingsAutostartGetCB(void);
 extern int  settingsAutostartSetCB(int enabled);
 
 // ── Supported languages ───────────────────────────────────────────────────────
-// Mirrors gtkLocaleData in ui-gtk/settings.go (code + native name).
-static NSString *const kLangCodes[] = {
-    @"en-GB", @"es-ES", @"fr-FR", @"de-DE", @"it-IT", @"pt-BR", @"nl-NL",
-    @"pl-PL", @"tr-TR", @"ta-IN", @"ja-JP", @"zh-CN"
-};
-static NSString *const kLangNames[] = {
-    @"English", @"Español", @"Français", @"Deutsch", @"Italiano", @"Português (BR)",
-    @"Nederlands", @"Polski", @"Türkçe", @"தமிழ்", @"日本語", @"中文"
-};
-static const int kLangCount = 12;
+// The language list (code / native name / English name / flag path) is now
+// supplied from Go via openSettingsNative's langsJSON argument and rendered as
+// flag cards in the Language tab — see WWLangCard and -buildLanguageTab.
+
+// jbool returns a boolean NSNumber (__NSCFBoolean) that NSJSONSerialization
+// encodes as JSON true/false. Use this for every boolean written into the
+// config dictionary — @(BOOL expr) boxes as a char-backed NSNumber that
+// serializes as 0/1, which Go's json.Unmarshal rejects for bool fields.
+static inline NSNumber *jbool(BOOL v) { return v ? @YES : @NO; }
+
+// ── WWLangCard ────────────────────────────────────────────────────────────────
+// A clickable language card matching the GTK language grid: a flag image on the
+// left, the native name in bold, and the English name beneath it. Highlights
+// when selected. Reports clicks to a target/action.
+@interface WWLangCard : NSView
+@property (nonatomic, copy)   NSString   *code;
+@property (nonatomic, assign) BOOL        selected;
+@property (nonatomic, strong) NSTextField *checkLbl; // ✓ shown when selected
+@property (nonatomic, assign) id          target;    // weak-ish (controller outlives cards)
+@property (nonatomic, assign) SEL         action;
+@end
+
+@implementation WWLangCard
+
+- (instancetype)initWithCode:(NSString *)code
+                      native:(NSString *)native
+                     english:(NSString *)english
+                    flagPath:(NSString *)flagPath {
+    self = [super initWithFrame:NSZeroRect];
+    if (!self) return nil;
+    _code = [code copy];
+    self.wantsLayer = YES;
+    self.layer.cornerRadius = 10;
+    self.layer.borderWidth = 1.0;
+
+    // Flag image.
+    NSImageView *flag = [[NSImageView alloc] initWithFrame:NSMakeRect(12, 14, 44, 30)];
+    flag.imageScaling = NSImageScaleProportionallyUpOrDown;
+    if (flagPath.length > 0) {
+        NSImage *img = [[[NSImage alloc] initWithContentsOfFile:flagPath] autorelease];
+        if (img) flag.image = img;
+    }
+    [self addSubview:flag];
+
+    // Native name (bold, white).
+    NSTextField *nativeLbl = [NSTextField labelWithString:native ?: @""];
+    nativeLbl.font = [NSFont boldSystemFontOfSize:14];
+    nativeLbl.textColor = [NSColor whiteColor];
+    nativeLbl.frame = NSMakeRect(68, 30, 170, 20);
+    [self addSubview:nativeLbl];
+
+    // English name (secondary).
+    NSTextField *engLbl = [NSTextField labelWithString:english ?: @""];
+    engLbl.font = [NSFont systemFontOfSize:11];
+    engLbl.textColor = [NSColor colorWithWhite:0.72 alpha:1.0];
+    engLbl.frame = NSMakeRect(68, 12, 170, 16);
+    [self addSubview:engLbl];
+
+    // Selection check mark (top-right).
+    _checkLbl = [[NSTextField labelWithString:@"✓"] retain];
+    _checkLbl.font = [NSFont boldSystemFontOfSize:14];
+    _checkLbl.textColor = [NSColor colorWithRed:0.22 green:0.60 blue:1.0 alpha:1.0];
+    _checkLbl.frame = NSMakeRect(238, 30, 20, 20);
+    _checkLbl.hidden = YES;
+    [self addSubview:_checkLbl];
+
+    [self applySelectionStyle];
+    return self;
+}
+
+- (void)dealloc {
+    [_code release];
+    [_checkLbl release];
+    [super dealloc];
+}
+
+- (void)setSelected:(BOOL)selected {
+    _selected = selected;
+    [self applySelectionStyle];
+}
+
+- (void)applySelectionStyle {
+    if (_selected) {
+        self.layer.backgroundColor = [NSColor colorWithRed:0.15 green:0.32 blue:0.55 alpha:0.55].CGColor;
+        self.layer.borderColor = [NSColor colorWithRed:0.22 green:0.60 blue:1.0 alpha:1.0].CGColor;
+        self.checkLbl.hidden = NO;
+    } else {
+        self.layer.backgroundColor = [NSColor colorWithWhite:1.0 alpha:0.06].CGColor;
+        self.layer.borderColor = [NSColor colorWithWhite:1.0 alpha:0.14].CGColor;
+        self.checkLbl.hidden = YES;
+    }
+}
+
+- (void)mouseDown:(NSEvent *)event {
+    if (self.target && self.action) {
+        // -performSelector: with the card as argument; controller updates state.
+        IMP imp = [self.target methodForSelector:self.action];
+        void (*fn)(id, SEL, id) = (void (*)(id, SEL, id))imp;
+        fn(self.target, self.action, self);
+    }
+}
+
+@end
 
 // ── WWSettingsController ──────────────────────────────────────────────────────
 
 @interface WWSettingsController : NSWindowController <NSWindowDelegate>
 @property (nonatomic, strong) NSString  *cfgJSON;   // current config JSON
 @property (nonatomic, strong) NSMutableDictionary *cfg; // mutable parsed config
+@property (nonatomic, strong) NSDictionary *strings;    // localized UI strings (key → text)
+@property (nonatomic, strong) NSArray *languages;       // [{code,native,english,flag}] for the Language tab
+@property (nonatomic, strong) NSMutableArray *langCards; // WWLangCard views (for selection redraw)
+@property (nonatomic, strong) NSString *selectedLangCode; // currently selected locale code
 @property (nonatomic, strong) NSTabView *tabView;
 
 // Provider tab
@@ -88,7 +185,6 @@ static const int kLangCount = 12;
 
 // Language tab
 @property (nonatomic, assign) NSInteger selectedLangIndex;
-@property (nonatomic, strong) NSMutableArray<NSButton *> *langButtons;
 
 // Appearance tab
 @property (nonatomic, strong) NSButton      *viewEnhanced;
@@ -122,7 +218,7 @@ static WWSettingsController *g_settingsController = nil;
     return g_settingsController;
 }
 
-- (instancetype)initWithJSON:(NSString *)json {
+- (instancetype)initWithJSON:(NSString *)json strings:(NSString *)stringsJSON languages:(NSString *)langsJSON {
     NSRect frame = NSMakeRect(0, 0, 620, 720);
     NSWindowStyleMask style =
         NSWindowStyleMaskTitled |
@@ -143,9 +239,16 @@ static WWSettingsController *g_settingsController = nil;
     if (!self) return nil;
 
     panel.delegate = self;
-    _cfgJSON = json;
-    _cities = [NSMutableArray array];
-    _langButtons = [NSMutableArray array];
+    // MANUAL reference counting (no ARC): assigning an autoreleased object
+    // DIRECTLY to a `strong` ivar does NOT retain it — the synthesized setter
+    // is what retains. So `_cities = [NSMutableArray array]` left a dangling
+    // pointer once the autorelease pool drained, and later reads (buildUpdatedJSON)
+    // saw reused heap memory — which is why the saved `cities` came out as a
+    // garbage number array and the app crashed intermittently. Assign through
+    // the setters (self.x = ...) so the retain runs. `parsed` is a +1 owned
+    // mutableCopy, so use the ivar directly for it and balance in -dealloc.
+    self.cfgJSON = json;
+    self.cities = [NSMutableArray array];
     _selectedLangIndex = 0;
     _fontCityTime = 14;
     _fontTempIcon = 32;
@@ -155,13 +258,47 @@ static WWSettingsController *g_settingsController = nil;
     NSData *data = [json dataUsingEncoding:NSUTF8StringEncoding];
     NSMutableDictionary *parsed = [[NSJSONSerialization JSONObjectWithData:data
         options:NSJSONReadingMutableContainers error:nil] mutableCopy];
-    _cfg = parsed ?: [NSMutableDictionary dictionary];
+    self.cfg = parsed ?: [NSMutableDictionary dictionary];
+    [parsed release]; // setter retained it (or the fallback); drop our +1 from mutableCopy
+
+    // Parse the localized-strings table (key → text). Used by -L: below so
+    // every label/placeholder follows the user's chosen language.
+    NSDictionary *parsedStrings = nil;
+    if (stringsJSON.length > 0) {
+        NSData *sdata = [stringsJSON dataUsingEncoding:NSUTF8StringEncoding];
+        parsedStrings = [NSJSONSerialization JSONObjectWithData:sdata options:0 error:nil];
+    }
+    self.strings = parsedStrings ?: @{};
+
+    // Parse the language list (code/native/english/flag) for the Language tab.
+    NSArray *parsedLangs = nil;
+    if (langsJSON.length > 0) {
+        NSData *ldata = [langsJSON dataUsingEncoding:NSUTF8StringEncoding];
+        parsedLangs = [NSJSONSerialization JSONObjectWithData:ldata options:0 error:nil];
+    }
+    self.languages = parsedLangs ?: @[];
+    self.langCards = [NSMutableArray array];
+
+    // Seed the selected locale from the config BEFORE buildUI so the Language
+    // tab's cards render with the correct one already highlighted.
+    NSString *loc0 = self.cfg[@"locale"];
+    self.selectedLangCode = (loc0.length > 0) ? loc0 : @"en-GB";
 
     [self buildUI];
     [self loadFromJSON:json];
     [self.window center];
 
     return self;
+}
+
+// L returns the localized string for key, falling back to the provided English
+// default when the key is missing or the translation resolved to the key
+// itself (which is how the Go i18n layer signals "no translation"). This keeps
+// the native settings window fully localized and in sync with the Fyne/GTK UIs.
+- (NSString *)L:(NSString *)key fallback:(NSString *)fallback {
+    NSString *v = self.strings[key];
+    if (v.length > 0 && ![v isEqualToString:key]) return v;
+    return fallback;
 }
 
 // ── Small UI helpers ────────────────────────────────────────────────────────
@@ -210,6 +347,9 @@ static WWSettingsController *g_settingsController = nil;
 - (void)buildUI {
     NSView *content = self.window.contentView;
 
+    // Localized window title (strings are available now, unlike in init).
+    self.window.title = [self L:@"settings.title" fallback:@"WeatherWidget Settings"];
+
     _tabView = [[NSTabView alloc] initWithFrame:NSMakeRect(12, 52, 596, 656)];
     _tabView.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
     [content addSubview:_tabView];
@@ -222,14 +362,14 @@ static WWSettingsController *g_settingsController = nil;
     [_tabView addTabViewItem:[self buildAboutTab]];
 
     // Save / Cancel buttons at the bottom.
-    NSButton *saveBtn = [NSButton buttonWithTitle:@"Save"
+    NSButton *saveBtn = [NSButton buttonWithTitle:[self L:@"settings.save" fallback:@"Save"]
         target:self action:@selector(onSave:)];
     saveBtn.keyEquivalent = @"\r";
     saveBtn.frame = NSMakeRect(520, 14, 88, 28);
     saveBtn.autoresizingMask = NSViewMinXMargin;
     [content addSubview:saveBtn];
 
-    NSButton *cancelBtn = [NSButton buttonWithTitle:@"Cancel"
+    NSButton *cancelBtn = [NSButton buttonWithTitle:[self L:@"settings.cancel" fallback:@"Cancel"]
         target:self action:@selector(onCancel:)];
     cancelBtn.keyEquivalent = @"\033";
     cancelBtn.frame = NSMakeRect(424, 14, 88, 28);
@@ -241,33 +381,34 @@ static WWSettingsController *g_settingsController = nil;
 
 - (NSTabViewItem *)buildProviderTab {
     NSTabViewItem *item = [[NSTabViewItem alloc] initWithIdentifier:@"provider"];
-    item.label = @"Provider";
+    item.label = [self L:@"settings.tab.provider" fallback:@"Provider"];
     NSView *v = [[NSView alloc] initWithFrame:NSZeroRect];
 
     CGFloat y = 560;
 
-    [v addSubview:[self label:@"Provider:" frame:NSMakeRect(16, y, 200, 20) bold:NO]];
+    [v addSubview:[self label:[self L:@"settings.provider.label" fallback:@"Provider"] frame:NSMakeRect(16, y, 200, 20) bold:NO]];
     _providerPop = [[NSPopUpButton alloc] initWithFrame:NSMakeRect(220, y - 2, 320, 26) pullsDown:NO];
     [_providerPop addItemsWithTitles:@[@"EasyWeatherWidget (Pro)", @"OpenWeatherMap (Free)"]];
     [v addSubview:_providerPop];
     y -= 40;
 
-    [v addSubview:[self label:@"API Key:" frame:NSMakeRect(16, y, 200, 20) bold:NO]];
+    [v addSubview:[self label:[self L:@"settings.provider.apiKeyLabel" fallback:@"API Key"] frame:NSMakeRect(16, y, 200, 20) bold:NO]];
     _apiKeyField = [[NSTextField alloc] initWithFrame:NSMakeRect(220, y - 2, 320, 24)];
-    _apiKeyField.placeholderString = @"Paste your API key here";
+    _apiKeyField.placeholderString = [self L:@"settings.provider.apiKeyPlaceholder" fallback:@"API Key"];
     [v addSubview:_apiKeyField];
     y -= 40;
 
-    [v addSubview:[self label:@"Refresh Interval (min):" frame:NSMakeRect(16, y, 200, 20) bold:NO]];
+    [v addSubview:[self label:[self L:@"settings.interval.title" fallback:@"Refresh Interval"] frame:NSMakeRect(16, y, 200, 20) bold:NO]];
     _intervalField = [[NSTextField alloc] initWithFrame:NSMakeRect(220, y - 2, 100, 24)];
     _intervalField.placeholderString = @"e.g. 30";
     [v addSubview:_intervalField];
     y -= 60;
 
     NSTextField *note = [self sublabel:
-        @"EasyWeatherWidget Pro provides air-quality data, more cities, faster updates, "
-         "and priority support.\nOpenWeatherMap Free works with a free API key from "
-         "openweathermap.org and is limited to the built-in default cities."
+        [self L:@"settings.provider.note"
+          fallback:@"EasyWeatherWidget Pro provides air-quality data, more cities, faster updates, "
+                    "and priority support.\nOpenWeatherMap Free works with a free API key from "
+                    "openweathermap.org and is limited to the built-in default cities."]
         frame:NSMakeRect(16, y - 20, 520, 56)];
     [v addSubview:note];
 
@@ -279,16 +420,16 @@ static WWSettingsController *g_settingsController = nil;
 
 - (NSTabViewItem *)buildLocationsTab {
     NSTabViewItem *item = [[NSTabViewItem alloc] initWithIdentifier:@"locations"];
-    item.label = @"Locations";
+    item.label = [self L:@"settings.tab.locations" fallback:@"Locations"];
 
     WWSettingsController *weakSelf = self;
     NSScrollView *scroll = [self scrollableWithDocumentHeight:520 buildBlock:^(NSView *doc) {
         WWSettingsController *s = weakSelf;
         CGFloat y = 486;
 
-        [doc addSubview:[s label:@"Saved Cities" frame:NSMakeRect(16, y, 300, 20) bold:YES]];
+        [doc addSubview:[s label:[s L:@"settings.locations.savedTitle" fallback:@"Saved Cities"] frame:NSMakeRect(16, y, 300, 20) bold:YES]];
         y -= 22;
-        [doc addSubview:[s sublabel:@"Reorder or remove cities. Free tier is limited to the default cities."
+        [doc addSubview:[s sublabel:[s L:@"settings.locations.savedSubtitle" fallback:@"Reorder or remove cities. Free tier is limited to the default cities."]
             frame:NSMakeRect(16, y, 520, 18)]];
         y -= 8;
 
@@ -308,38 +449,38 @@ static WWSettingsController *g_settingsController = nil;
         y -= 200;
 
         // Add-city form.
-        [doc addSubview:[s label:@"Add New City" frame:NSMakeRect(16, y, 300, 20) bold:YES]];
+        [doc addSubview:[s label:[s L:@"settings.locations.addTitle" fallback:@"Add New City"] frame:NSMakeRect(16, y, 300, 20) bold:YES]];
         y -= 30;
 
-        [doc addSubview:[s label:@"Name:" frame:NSMakeRect(16, y, 90, 20) bold:NO]];
+        [doc addSubview:[s label:[s L:@"settings.locations.nameLabel" fallback:@"Name"] frame:NSMakeRect(16, y, 90, 20) bold:NO]];
         s.addNameField = [[NSTextField alloc] initWithFrame:NSMakeRect(110, y - 2, 430, 24)];
-        s.addNameField.placeholderString = @"City name";
+        s.addNameField.placeholderString = [s L:@"settings.locations.namePlaceholder" fallback:@"City name"];
         [doc addSubview:s.addNameField];
         y -= 32;
 
-        [doc addSubview:[s label:@"Region:" frame:NSMakeRect(16, y, 90, 20) bold:NO]];
+        [doc addSubview:[s label:[s L:@"settings.locations.regionLabel" fallback:@"Region"] frame:NSMakeRect(16, y, 90, 20) bold:NO]];
         s.addRegionField = [[NSTextField alloc] initWithFrame:NSMakeRect(110, y - 2, 430, 24)];
-        s.addRegionField.placeholderString = @"Country / state code (e.g. GB)";
+        s.addRegionField.placeholderString = [s L:@"settings.locations.regionPlaceholder" fallback:@"Country / state code (e.g. GB)"];
         [doc addSubview:s.addRegionField];
         y -= 32;
 
-        [doc addSubview:[s label:@"Latitude:" frame:NSMakeRect(16, y, 90, 20) bold:NO]];
+        [doc addSubview:[s label:[s L:@"settings.locations.latLabel" fallback:@"Latitude"] frame:NSMakeRect(16, y, 90, 20) bold:NO]];
         s.addLatField = [[NSTextField alloc] initWithFrame:NSMakeRect(110, y - 2, 200, 24)];
-        s.addLatField.placeholderString = @"e.g. 55.9344";
+        s.addLatField.placeholderString = [s L:@"settings.locations.latPlaceholder" fallback:@"e.g. 55.9344"];
         [doc addSubview:s.addLatField];
-        [doc addSubview:[s label:@"Longitude:" frame:NSMakeRect(320, y, 80, 20) bold:NO]];
+        [doc addSubview:[s label:[s L:@"settings.locations.lonLabel" fallback:@"Longitude"] frame:NSMakeRect(320, y, 80, 20) bold:NO]];
         s.addLonField = [[NSTextField alloc] initWithFrame:NSMakeRect(400, y - 2, 140, 24)];
-        s.addLonField.placeholderString = @"e.g. -3.4693";
+        s.addLonField.placeholderString = [s L:@"settings.locations.lonPlaceholder" fallback:@"e.g. -3.4693"];
         [doc addSubview:s.addLonField];
         y -= 32;
 
-        [doc addSubview:[s label:@"Timezone:" frame:NSMakeRect(16, y, 90, 20) bold:NO]];
+        [doc addSubview:[s label:[s L:@"settings.locations.tzLabel" fallback:@"Timezone"] frame:NSMakeRect(16, y, 90, 20) bold:NO]];
         s.addTZField = [[NSTextField alloc] initWithFrame:NSMakeRect(110, y - 2, 430, 24)];
-        s.addTZField.placeholderString = @"IANA zone (e.g. Europe/London)";
+        s.addTZField.placeholderString = [s L:@"settings.locations.tzPlaceholder" fallback:@"IANA zone (e.g. Europe/London)"];
         [doc addSubview:s.addTZField];
         y -= 40;
 
-        NSButton *addBtn = [NSButton buttonWithTitle:@"＋ Add City"
+        NSButton *addBtn = [NSButton buttonWithTitle:[NSString stringWithFormat:@"＋ %@", [s L:@"settings.locations.addBtn" fallback:@"Add City"]]
             target:s action:@selector(onAddCity:)];
         addBtn.frame = NSMakeRect(440, y, 100, 28);
         [doc addSubview:addBtn];
@@ -441,14 +582,16 @@ static WWSettingsController *g_settingsController = nil;
 
 - (void)onAddCity:(id)sender {
     if (![self hasLicense]) {
-        [self showAlert:@"License required"
-                   info:@"Adding cities requires a Pro API key. Configure one in the Provider tab."];
+        [self showAlert:[self L:@"settings.locations.addTitle" fallback:@"Add New City"]
+                   info:[self L:@"error.settings.licenseRequired"
+                            fallback:@"Adding cities requires a Pro API key. Configure one in the Provider tab."]];
         return;
     }
     NSString *name = [self.addNameField.stringValue
         stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
     if (name.length == 0) {
-        [self showAlert:@"City name required" info:@"Enter a city name before adding."];
+        [self showAlert:[self L:@"settings.locations.addTitle" fallback:@"Add New City"]
+                   info:[self L:@"error.settings.cityNameRequired" fallback:@"Enter a city name before adding."]];
         return;
     }
     NSInteger maxCities = [self isPro] ? 5 : 3;
@@ -494,7 +637,7 @@ static WWSettingsController *g_settingsController = nil;
 
 - (NSTabViewItem *)buildWidgetTab {
     NSTabViewItem *item = [[NSTabViewItem alloc] initWithIdentifier:@"widget"];
-    item.label = @"Widget";
+    item.label = [self L:@"settings.tab.widget" fallback:@"Widget"];
 
     WWSettingsController *weakSelf = self;
     NSScrollView *scroll = [self scrollableWithDocumentHeight:560 buildBlock:^(NSView *doc) {
@@ -502,39 +645,40 @@ static WWSettingsController *g_settingsController = nil;
         CGFloat y = 526;
 
         // Panel display fields.
-        [doc addSubview:[s label:@"Panel Display" frame:NSMakeRect(16, y, 300, 20) bold:YES]];
+        [doc addSubview:[s label:[s L:@"settings.display.title" fallback:@"Panel Display"] frame:NSMakeRect(16, y, 300, 20) bold:YES]];
         y -= 20;
-        [doc addSubview:[s sublabel:@"Choose which elements appear on each city panel."
+        [doc addSubview:[s sublabel:[s L:@"settings.display.subtitle" fallback:@"Choose which elements appear on each city panel."]
             frame:NSMakeRect(16, y, 520, 18)]];
         y -= 26;
 
         // 4-column grid of checkboxes.
         CGFloat colW = 130, rowH = 26;
         CGFloat cx0 = 16;
-        s.dfCity     = [s checkbox:@"City"       frame:NSMakeRect(cx0 + 0*colW, y, colW, 20)];
-        s.dfIcon     = [s checkbox:@"Icon"       frame:NSMakeRect(cx0 + 1*colW, y, colW, 20)];
-        s.dfTemp     = [s checkbox:@"Temperature" frame:NSMakeRect(cx0 + 2*colW, y, colW, 20)];
-        s.dfDesc     = [s checkbox:@"Description" frame:NSMakeRect(cx0 + 3*colW, y, colW, 20)];
+        s.dfCity     = [s checkbox:[s L:@"settings.display.city" fallback:@"City"]        frame:NSMakeRect(cx0 + 0*colW, y, colW, 20)];
+        s.dfIcon     = [s checkbox:[s L:@"settings.display.icon" fallback:@"Icon"]        frame:NSMakeRect(cx0 + 1*colW, y, colW, 20)];
+        s.dfTemp     = [s checkbox:[s L:@"settings.display.temp" fallback:@"Temperature"] frame:NSMakeRect(cx0 + 2*colW, y, colW, 20)];
+        s.dfDesc     = [s checkbox:[s L:@"settings.display.desc" fallback:@"Description"] frame:NSMakeRect(cx0 + 3*colW, y, colW, 20)];
         y -= rowH;
-        s.dfHumidity = [s checkbox:@"Humidity"   frame:NSMakeRect(cx0 + 0*colW, y, colW, 20)];
-        s.dfWind     = [s checkbox:@"Wind"       frame:NSMakeRect(cx0 + 1*colW, y, colW, 20)];
-        s.dfTime     = [s checkbox:@"Time"       frame:NSMakeRect(cx0 + 2*colW, y, colW, 20)];
-        s.dfDate     = [s checkbox:@"Date"       frame:NSMakeRect(cx0 + 3*colW, y, colW, 20)];
+        s.dfHumidity = [s checkbox:[s L:@"settings.display.humidity" fallback:@"Humidity"] frame:NSMakeRect(cx0 + 0*colW, y, colW, 20)];
+        s.dfWind     = [s checkbox:[s L:@"settings.display.wind" fallback:@"Wind"]         frame:NSMakeRect(cx0 + 1*colW, y, colW, 20)];
+        s.dfTime     = [s checkbox:[s L:@"settings.display.time" fallback:@"Time"]         frame:NSMakeRect(cx0 + 2*colW, y, colW, 20)];
+        s.dfDate     = [s checkbox:[s L:@"settings.display.date" fallback:@"Date"]         frame:NSMakeRect(cx0 + 3*colW, y, colW, 20)];
         y -= rowH;
-        s.dfWindGust = [s checkbox:@"Wind Gust"  frame:NSMakeRect(cx0 + 0*colW, y, colW, 20)];
-        s.dfDewPoint = [s checkbox:@"Dew Point"  frame:NSMakeRect(cx0 + 1*colW, y, colW, 20)];
-        s.dfPressure = [s checkbox:@"Pressure"   frame:NSMakeRect(cx0 + 2*colW, y, colW, 20)];
-        s.dfUVIndex  = [s checkbox:@"UV Index"   frame:NSMakeRect(cx0 + 3*colW, y, colW, 20)];
+        s.dfWindGust = [s checkbox:[s L:@"settings.display.windGust" fallback:@"Wind Gust"] frame:NSMakeRect(cx0 + 0*colW, y, colW, 20)];
+        s.dfDewPoint = [s checkbox:[s L:@"settings.display.dewPoint" fallback:@"Dew Point"] frame:NSMakeRect(cx0 + 1*colW, y, colW, 20)];
+        s.dfPressure = [s checkbox:[s L:@"settings.display.pressure" fallback:@"Pressure"]  frame:NSMakeRect(cx0 + 2*colW, y, colW, 20)];
+        s.dfUVIndex  = [s checkbox:[s L:@"settings.display.uvIndex" fallback:@"UV Index"]   frame:NSMakeRect(cx0 + 3*colW, y, colW, 20)];
         for (NSButton *b in @[s.dfCity, s.dfIcon, s.dfTemp, s.dfDesc, s.dfHumidity, s.dfWind,
                               s.dfTime, s.dfDate, s.dfWindGust, s.dfDewPoint, s.dfPressure, s.dfUVIndex]) {
             [doc addSubview:b];
         }
         y -= 36;
 
-        // Pollution fields.
-        [doc addSubview:[s label:@"Air Quality" frame:NSMakeRect(16, y, 300, 20) bold:YES]];
+        // Pollution fields. Chemical symbols (CO, NO₂, …) are universal notation
+        // and intentionally not translated; only the section header is localized.
+        [doc addSubview:[s label:[s L:@"settings.pollution.title" fallback:@"Air Quality"] frame:NSMakeRect(16, y, 300, 20) bold:YES]];
         y -= 20;
-        [doc addSubview:[s sublabel:@"Air-quality metrics (Pro only)."
+        [doc addSubview:[s sublabel:[s L:@"settings.pollution.subtitle" fallback:@"Air-quality metrics (Pro only)."]
             frame:NSMakeRect(16, y, 520, 18)]];
         y -= 26;
 
@@ -558,7 +702,7 @@ static WWSettingsController *g_settingsController = nil;
         y -= 40;
 
         // Temperature unit.
-        [doc addSubview:[s label:@"Temperature Unit" frame:NSMakeRect(16, y, 300, 20) bold:YES]];
+        [doc addSubview:[s label:[s L:@"settings.temperature.title" fallback:@"Temperature Unit"] frame:NSMakeRect(16, y, 300, 20) bold:YES]];
         y -= 26;
         s.tempCelsius = [NSButton radioButtonWithTitle:@"°C (Celsius)"
             target:s action:@selector(onTempUnitRadio:)];
@@ -571,7 +715,7 @@ static WWSettingsController *g_settingsController = nil;
         y -= 40;
 
         // Wind speed unit.
-        [doc addSubview:[s label:@"Wind Speed Unit" frame:NSMakeRect(16, y, 300, 20) bold:YES]];
+        [doc addSubview:[s label:[s L:@"settings.windspeed.title" fallback:@"Wind Speed Unit"] frame:NSMakeRect(16, y, 300, 20) bold:YES]];
         y -= 26;
         s.windKmh = [NSButton radioButtonWithTitle:@"km/h"
             target:s action:@selector(onWindUnitRadio:)];
@@ -595,30 +739,56 @@ static WWSettingsController *g_settingsController = nil;
 
 - (NSTabViewItem *)buildLanguageTab {
     NSTabViewItem *item = [[NSTabViewItem alloc] initWithIdentifier:@"language"];
-    item.label = @"Language";
+    item.label = [self L:@"settings.tab.language" fallback:@"Language"];
+
+    // Card grid geometry (2 columns), matching the GTK language grid.
+    const CGFloat cardW = 268, cardH = 58, gapX = 16, gapY = 12;
+    const CGFloat leftX = 16;
+    NSInteger count = self.languages.count;
+    NSInteger rows = (count + 1) / 2;
+    CGFloat headerH = 60;
+    CGFloat docH = headerH + rows * (cardH + gapY) + 24;
+    if (docH < 400) docH = 400;
 
     WWSettingsController *weakSelf = self;
-    NSScrollView *scroll = [self scrollableWithDocumentHeight:400 buildBlock:^(NSView *doc) {
+    NSScrollView *scroll = [self scrollableWithDocumentHeight:docH buildBlock:^(NSView *doc) {
         WWSettingsController *s = weakSelf;
-        CGFloat y = 366;
+        CGFloat top = docH - 20;
 
-        [doc addSubview:[s label:@"🌐 Display Language" frame:NSMakeRect(16, y, 300, 20) bold:YES]];
-        y -= 22;
-        [doc addSubview:[s sublabel:@"Select the interface and weather-description language."
+        // Header: 🌐 title + a "N LANGUAGES" badge on the right (like GTK).
+        [doc addSubview:[s label:[NSString stringWithFormat:@"🌐 %@", [s L:@"settings.language.title" fallback:@"Language"]]
+                            frame:NSMakeRect(16, top, 300, 20) bold:YES]];
+        NSTextField *badge = [NSTextField labelWithString:
+            [NSString stringWithFormat:@"%ld LANGUAGES", (long)count]];
+        badge.font = [NSFont boldSystemFontOfSize:10];
+        badge.textColor = [NSColor colorWithRed:0.22 green:0.60 blue:1.0 alpha:1.0];
+        badge.alignment = NSTextAlignmentRight;
+        badge.frame = NSMakeRect(360, top, 176, 18);
+        [doc addSubview:badge];
+        CGFloat y = top - 22;
+        [doc addSubview:[s sublabel:[s L:@"settings.language.subtitle" fallback:@"Choose your preferred language."]
             frame:NSMakeRect(16, y, 520, 18)]];
-        y -= 30;
+        y -= 24;
 
-        // 2-column grid of radio buttons.
-        CGFloat colW = 262, rowH = 30;
-        for (int i = 0; i < kLangCount; i++) {
-            int col = i % 2;
-            int row = i / 2;
-            NSButton *b = [NSButton radioButtonWithTitle:kLangNames[i]
-                target:s action:@selector(onLangSelected:)];
-            b.tag = i;
-            b.frame = NSMakeRect(16 + col * colW, y - row * rowH, colW - 10, 24);
-            [doc addSubview:b];
-            [s.langButtons addObject:b];
+        // Flag cards.
+        [s.langCards removeAllObjects];
+        CGFloat gridTop = y;
+        for (NSInteger i = 0; i < count; i++) {
+            NSDictionary *L = s.languages[i];
+            NSInteger col = i % 2;
+            NSInteger row = i / 2;
+            CGFloat cx = leftX + col * (cardW + gapX);
+            CGFloat cy = gridTop - cardH - row * (cardH + gapY);
+
+            WWLangCard *card = [[[WWLangCard alloc]
+                initWithCode:L[@"code"] native:L[@"native"]
+                     english:L[@"english"] flagPath:L[@"flag"]] autorelease];
+            card.frame = NSMakeRect(cx, cy, cardW, cardH);
+            card.target = s;
+            card.action = @selector(onLangCardClicked:);
+            card.selected = [L[@"code"] isEqualToString:s.selectedLangCode];
+            [doc addSubview:card];
+            [s.langCards addObject:card];
         }
     }];
     scroll.frame = NSMakeRect(0, 0, 572, 600);
@@ -626,10 +796,18 @@ static WWSettingsController *g_settingsController = nil;
     return item;
 }
 
-- (void)onLangSelected:(NSButton *)sender {
-    self.selectedLangIndex = sender.tag;
-    for (NSButton *b in self.langButtons) {
-        b.state = (b.tag == sender.tag) ? NSControlStateValueOn : NSControlStateValueOff;
+// onLangCardClicked selects the clicked language card and deselects the others.
+- (void)onLangCardClicked:(WWLangCard *)card {
+    self.selectedLangCode = card.code;
+    // Keep selectedLangIndex in sync for buildUpdatedJSON.
+    for (NSInteger i = 0; i < (NSInteger)self.languages.count; i++) {
+        if ([self.languages[i][@"code"] isEqualToString:card.code]) {
+            self.selectedLangIndex = i;
+            break;
+        }
+    }
+    for (WWLangCard *c in self.langCards) {
+        c.selected = [c.code isEqualToString:card.code];
     }
 }
 
@@ -647,7 +825,7 @@ static WWSettingsController *g_settingsController = nil;
 
 - (NSTabViewItem *)buildAppearanceTab {
     NSTabViewItem *item = [[NSTabViewItem alloc] initWithIdentifier:@"appearance"];
-    item.label = @"Appearance";
+    item.label = [self L:@"settings.tab.appearance" fallback:@"Appearance"];
 
     WWSettingsController *weakSelf = self;
     NSScrollView *scroll = [self scrollableWithDocumentHeight:600 buildBlock:^(NSView *doc) {
@@ -655,53 +833,56 @@ static WWSettingsController *g_settingsController = nil;
         CGFloat y = 566;
 
         // View mode.
-        [doc addSubview:[s label:@"View Mode" frame:NSMakeRect(16, y, 300, 20) bold:YES]];
+        [doc addSubview:[s label:[s L:@"settings.viewMode.title" fallback:@"View Mode"] frame:NSMakeRect(16, y, 300, 20) bold:YES]];
         y -= 26;
-        s.viewEnhanced = [NSButton radioButtonWithTitle:@"Enhanced (modern)"
+        s.viewEnhanced = [NSButton radioButtonWithTitle:[s L:@"settings.viewMode.enhanced" fallback:@"Enhanced (modern)"]
             target:s action:@selector(onViewModeRadio:)];
         s.viewEnhanced.frame = NSMakeRect(16, y, 200, 20);
         [doc addSubview:s.viewEnhanced];
-        s.viewSimple = [NSButton radioButtonWithTitle:@"Simple (classic)"
+        s.viewSimple = [NSButton radioButtonWithTitle:[s L:@"settings.viewMode.simple" fallback:@"Simple (classic)"]
             target:s action:@selector(onViewModeRadio:)];
         s.viewSimple.frame = NSMakeRect(230, y, 200, 20);
         [doc addSubview:s.viewSimple];
         y -= 44;
 
-        // Opacity.
-        [doc addSubview:[s label:@"Opacity:" frame:NSMakeRect(16, y, 120, 20) bold:NO]];
-        s.opacityLabel = [NSTextField labelWithString:@"100%"];
-        s.opacityLabel.frame = NSMakeRect(490, y, 50, 20);
-        [doc addSubview:s.opacityLabel];
-        s.opacitySlider = [[NSSlider alloc] initWithFrame:NSMakeRect(120, y, 360, 20)];
+        // Opacity — title on its own row, then the slider + % value on the row
+        // below it (the wider localized title "Background Transparency" would
+        // otherwise overlap the slider).
+        [doc addSubview:[s label:[s L:@"settings.transparency.title" fallback:@"Opacity"] frame:NSMakeRect(16, y, 400, 20) bold:NO]];
+        y -= 26;
+        s.opacitySlider = [[NSSlider alloc] initWithFrame:NSMakeRect(16, y, 460, 20)];
         s.opacitySlider.minValue = 25; s.opacitySlider.maxValue = 100;
         s.opacitySlider.numberOfTickMarks = 4;
         s.opacitySlider.allowsTickMarkValuesOnly = YES;
         s.opacitySlider.target = s; s.opacitySlider.action = @selector(onOpacityChanged:);
         [doc addSubview:s.opacitySlider];
+        s.opacityLabel = [NSTextField labelWithString:@"100%"];
+        s.opacityLabel.frame = NSMakeRect(486, y, 54, 20);
+        [doc addSubview:s.opacityLabel];
         y -= 40;
 
         // Autostart.
-        s.autostartCheck = [NSButton checkboxWithTitle:@"Launch at login"
+        s.autostartCheck = [NSButton checkboxWithTitle:[s L:@"settings.startup.autostart" fallback:@"Launch at login"]
             target:s action:@selector(onAutostartToggled:)];
-        s.autostartCheck.frame = NSMakeRect(16, y, 300, 20);
+        s.autostartCheck.frame = NSMakeRect(16, y, 460, 20);
         [doc addSubview:s.autostartCheck];
         y -= 44;
 
         // Weather icons.
-        [doc addSubview:[s label:@"Weather Icons" frame:NSMakeRect(16, y, 300, 20) bold:YES]];
+        [doc addSubview:[s label:[s L:@"settings.icons.title" fallback:@"Weather Icons"] frame:NSMakeRect(16, y, 300, 20) bold:YES]];
         y -= 26;
-        s.iconThemeNew = [NSButton radioButtonWithTitle:@"New (day/night)"
+        s.iconThemeNew = [NSButton radioButtonWithTitle:[s L:@"settings.icons.new" fallback:@"New (day/night)"]
             target:s action:@selector(onIconThemeRadio:)];
-        s.iconThemeNew.frame = NSMakeRect(16, y, 200, 20);
+        s.iconThemeNew.frame = NSMakeRect(16, y, 220, 20);
         [doc addSubview:s.iconThemeNew];
-        s.iconThemeOriginal = [NSButton radioButtonWithTitle:@"Original"
+        s.iconThemeOriginal = [NSButton radioButtonWithTitle:[s L:@"settings.icons.original" fallback:@"Original"]
             target:s action:@selector(onIconThemeRadio:)];
-        s.iconThemeOriginal.frame = NSMakeRect(230, y, 200, 20);
+        s.iconThemeOriginal.frame = NSMakeRect(250, y, 200, 20);
         [doc addSubview:s.iconThemeOriginal];
         y -= 44;
 
         // Position.
-        [doc addSubview:[s label:@"Widget Position" frame:NSMakeRect(16, y, 300, 20) bold:YES]];
+        [doc addSubview:[s label:[s L:@"settings.position.title" fallback:@"Widget Position"] frame:NSMakeRect(16, y, 300, 20) bold:YES]];
         y -= 22;
         [doc addSubview:[s sublabel:@"Set exact coordinates, or just drag the widget on screen."
             frame:NSMakeRect(16, y, 520, 18)]];
@@ -720,12 +901,12 @@ static WWSettingsController *g_settingsController = nil;
         y -= 48;
 
         // Font sizes.
-        [doc addSubview:[s label:@"Font Sizes" frame:NSMakeRect(16, y, 300, 20) bold:YES]];
+        [doc addSubview:[s label:[s L:@"settings.fontSize.title" fallback:@"Font Sizes"] frame:NSMakeRect(16, y, 300, 20) bold:YES]];
         y -= 30;
 
-        y = [s addFontRow:doc y:y label:@"City & Time" tag:0 valueLabelOut:&s->_fontCityTimeLabel];
-        y = [s addFontRow:doc y:y label:@"Temperature" tag:1 valueLabelOut:&s->_fontTempIconLabel];
-        y = [s addFontRow:doc y:y label:@"Conditions" tag:2 valueLabelOut:&s->_fontConditionsLabel];
+        y = [s addFontRow:doc y:y label:[s L:@"settings.fontSize.cityTime" fallback:@"City & Time"] tag:0 valueLabelOut:&s->_fontCityTimeLabel];
+        y = [s addFontRow:doc y:y label:[s L:@"settings.fontSize.tempIcon" fallback:@"Temperature"] tag:1 valueLabelOut:&s->_fontTempIconLabel];
+        y = [s addFontRow:doc y:y label:[s L:@"settings.fontSize.conditions" fallback:@"Conditions"] tag:2 valueLabelOut:&s->_fontConditionsLabel];
     }];
     scroll.frame = NSMakeRect(0, 0, 572, 600);
     item.view = scroll;
@@ -735,22 +916,24 @@ static WWSettingsController *g_settingsController = nil;
 // Adds one "Label  [-]  Npx  [+]" row and returns the new y.
 - (CGFloat)addFontRow:(NSView *)doc y:(CGFloat)y label:(NSString *)label tag:(NSInteger)tag
         valueLabelOut:(NSTextField * __strong *)outLabel {
-    [doc addSubview:[self label:label frame:NSMakeRect(16, y, 140, 22) bold:NO]];
+    // Wider label column so longer localized names (e.g. "Temperature & Icon")
+    // aren't clipped; controls shifted right to match.
+    [doc addSubview:[self label:label frame:NSMakeRect(16, y, 210, 22) bold:NO]];
 
     NSButton *dec = [NSButton buttonWithTitle:@"−" target:self action:@selector(onFontDec:)];
     dec.tag = tag;
-    dec.frame = NSMakeRect(170, y - 1, 34, 24);
+    dec.frame = NSMakeRect(236, y - 1, 34, 24);
     [doc addSubview:dec];
 
     NSTextField *val = [NSTextField labelWithString:@"0px"];
-    val.frame = NSMakeRect(210, y, 60, 20);
+    val.frame = NSMakeRect(276, y, 60, 20);
     val.alignment = NSTextAlignmentCenter;
     [doc addSubview:val];
     *outLabel = val;
 
     NSButton *inc = [NSButton buttonWithTitle:@"＋" target:self action:@selector(onFontInc:)];
     inc.tag = tag;
-    inc.frame = NSMakeRect(272, y - 1, 34, 24);
+    inc.frame = NSMakeRect(338, y - 1, 34, 24);
     [doc addSubview:inc];
 
     return y - 32;
@@ -792,31 +975,37 @@ static WWSettingsController *g_settingsController = nil;
 
 - (NSTabViewItem *)buildAboutTab {
     NSTabViewItem *item = [[NSTabViewItem alloc] initWithIdentifier:@"about"];
-    item.label = @"About";
+    item.label = [self L:@"settings.tab.about" fallback:@"About"];
     NSView *v = [[NSView alloc] initWithFrame:NSZeroRect];
 
-    NSTextField *title = [NSTextField labelWithString:@"WeatherWidget"];
+    NSTextField *title = [NSTextField labelWithString:[self L:@"settings.about.appName" fallback:@"WeatherWidget"]];
     title.font = [NSFont boldSystemFontOfSize:20];
-    title.frame = NSMakeRect(16, 560, 500, 28);
+    title.frame = NSMakeRect(16, 560, 560, 28);
     [v addSubview:title];
 
-    NSTextField *sub = [NSTextField labelWithString:@"Desktop weather overlay for macOS"];
-    sub.frame = NSMakeRect(16, 532, 500, 20);
+    NSTextField *sub = [NSTextField wrappingLabelWithString:[self L:@"settings.about.description" fallback:@"Desktop weather overlay for macOS"]];
+    sub.frame = NSMakeRect(16, 500, 560, 48);
     sub.textColor = [NSColor secondaryLabelColor];
     [v addSubview:sub];
 
-    NSTextField *website = [NSTextField labelWithString:@"easysmartapps.co.uk/weatherwidget"];
-    website.frame = NSMakeRect(16, 496, 500, 20);
+    NSTextField *website = [NSTextField labelWithString:
+        [NSString stringWithFormat:@"%@ easysmartapps.co.uk/weatherwidget",
+         [self L:@"settings.about.websiteLabel" fallback:@"Website:"]]];
+    website.frame = NSMakeRect(16, 470, 560, 20);
     website.textColor = [NSColor linkColor];
     [v addSubview:website];
 
-    NSTextField *manual = [NSTextField labelWithString:@"easysmartapps.co.uk/weatherwidget-manual"];
-    manual.frame = NSMakeRect(16, 470, 500, 20);
+    NSTextField *manual = [NSTextField labelWithString:
+        [NSString stringWithFormat:@"%@ easysmartapps.co.uk/weatherwidget-manual",
+         [self L:@"settings.about.manualLabel" fallback:@"Manual:"]]];
+    manual.frame = NSMakeRect(16, 444, 560, 20);
     manual.textColor = [NSColor linkColor];
     [v addSubview:manual];
 
-    NSTextField *air = [NSTextField labelWithString:@"easysmartapps.co.uk/weatherwidget-environmental"];
-    air.frame = NSMakeRect(16, 444, 500, 20);
+    NSTextField *air = [NSTextField labelWithString:
+        [NSString stringWithFormat:@"%@ easysmartapps.co.uk/weatherwidget-environmental",
+         [self L:@"settings.about.airIndexLabel" fallback:@"Air Index:"]]];
+    air.frame = NSMakeRect(16, 418, 560, 20);
     air.textColor = [NSColor linkColor];
     [v addSubview:air];
 
@@ -897,12 +1086,13 @@ static WWSettingsController *g_settingsController = nil;
 
     // ── Language ──
     NSString *locale = cfg[@"locale"] ?: @"en-GB";
+    self.selectedLangCode = locale;
     _selectedLangIndex = 0;
-    for (int i = 0; i < kLangCount; i++) {
-        if ([kLangCodes[i] isEqualToString:locale]) { _selectedLangIndex = i; break; }
+    for (NSInteger i = 0; i < (NSInteger)self.languages.count; i++) {
+        if ([self.languages[i][@"code"] isEqualToString:locale]) { _selectedLangIndex = i; break; }
     }
-    for (NSButton *b in _langButtons) {
-        b.state = (b.tag == _selectedLangIndex) ? NSControlStateValueOn : NSControlStateValueOff;
+    for (WWLangCard *c in self.langCards) {
+        c.selected = [c.code isEqualToString:locale];
     }
 
     // ── Appearance: view mode ──
@@ -969,32 +1159,37 @@ static WWSettingsController *g_settingsController = nil;
     cfg[@"cities"] = [_cities copy];
 
     // ── Display fields ──
+    // NOTE: use jbool() (@YES/@NO), NOT @(expr). Boxing a BOOL expression with
+    // @(...) produces a char-backed NSNumber that NSJSONSerialization emits as
+    // a JSON number (0/1), which Go then refuses to unmarshal into a Go bool
+    // ("cannot unmarshal number into ... of type bool") — silently discarding
+    // the entire save. @YES/@NO box as __NSCFBoolean → JSON true/false.
     cfg[@"displayFields"] = @{
-        @"showCity":     @(_dfCity.state == NSControlStateValueOn),
-        @"showIcon":     @(_dfIcon.state == NSControlStateValueOn),
-        @"showTemp":     @(_dfTemp.state == NSControlStateValueOn),
-        @"showDesc":     @(_dfDesc.state == NSControlStateValueOn),
-        @"showHumidity": @(_dfHumidity.state == NSControlStateValueOn),
-        @"showWind":     @(_dfWind.state == NSControlStateValueOn),
-        @"showTime":     @(_dfTime.state == NSControlStateValueOn),
-        @"showDate":     @(_dfDate.state == NSControlStateValueOn),
-        @"showWindGust": @(_dfWindGust.state == NSControlStateValueOn),
-        @"showDewPoint": @(_dfDewPoint.state == NSControlStateValueOn),
-        @"showPressure": @(_dfPressure.state == NSControlStateValueOn),
-        @"showUVIndex":  @(_dfUVIndex.state == NSControlStateValueOn),
+        @"showCity":     jbool(_dfCity.state     == NSControlStateValueOn),
+        @"showIcon":     jbool(_dfIcon.state     == NSControlStateValueOn),
+        @"showTemp":     jbool(_dfTemp.state     == NSControlStateValueOn),
+        @"showDesc":     jbool(_dfDesc.state     == NSControlStateValueOn),
+        @"showHumidity": jbool(_dfHumidity.state == NSControlStateValueOn),
+        @"showWind":     jbool(_dfWind.state     == NSControlStateValueOn),
+        @"showTime":     jbool(_dfTime.state     == NSControlStateValueOn),
+        @"showDate":     jbool(_dfDate.state     == NSControlStateValueOn),
+        @"showWindGust": jbool(_dfWindGust.state == NSControlStateValueOn),
+        @"showDewPoint": jbool(_dfDewPoint.state == NSControlStateValueOn),
+        @"showPressure": jbool(_dfPressure.state == NSControlStateValueOn),
+        @"showUVIndex":  jbool(_dfUVIndex.state  == NSControlStateValueOn),
     };
 
     // ── Pollution fields ──
     cfg[@"pollutionFields"] = @{
-        @"showAQI":  @(_pfAQI.state == NSControlStateValueOn),
-        @"showCO":   @(_pfCO.state == NSControlStateValueOn),
-        @"showNO":   @(_pfNO.state == NSControlStateValueOn),
-        @"showNO2":  @(_pfNO2.state == NSControlStateValueOn),
-        @"showO3":   @(_pfO3.state == NSControlStateValueOn),
-        @"showSO2":  @(_pfSO2.state == NSControlStateValueOn),
-        @"showNH3":  @(_pfNH3.state == NSControlStateValueOn),
-        @"showPM25": @(_pfPM25.state == NSControlStateValueOn),
-        @"showPM10": @(_pfPM10.state == NSControlStateValueOn),
+        @"showAQI":  jbool(_pfAQI.state  == NSControlStateValueOn),
+        @"showCO":   jbool(_pfCO.state   == NSControlStateValueOn),
+        @"showNO":   jbool(_pfNO.state   == NSControlStateValueOn),
+        @"showNO2":  jbool(_pfNO2.state  == NSControlStateValueOn),
+        @"showO3":   jbool(_pfO3.state   == NSControlStateValueOn),
+        @"showSO2":  jbool(_pfSO2.state  == NSControlStateValueOn),
+        @"showNH3":  jbool(_pfNH3.state  == NSControlStateValueOn),
+        @"showPM25": jbool(_pfPM25.state == NSControlStateValueOn),
+        @"showPM10": jbool(_pfPM10.state == NSControlStateValueOn),
     };
 
     // ── Units ──
@@ -1009,8 +1204,11 @@ static WWSettingsController *g_settingsController = nil;
     }
 
     // ── Language ──
-    if (_selectedLangIndex >= 0 && _selectedLangIndex < kLangCount)
-        cfg[@"locale"] = kLangCodes[_selectedLangIndex];
+    if (self.selectedLangCode.length > 0) {
+        cfg[@"locale"] = self.selectedLangCode;
+    } else if (_selectedLangIndex >= 0 && _selectedLangIndex < (NSInteger)self.languages.count) {
+        cfg[@"locale"] = self.languages[_selectedLangIndex][@"code"];
+    }
 
     // ── View mode ──
     cfg[@"viewMode"] = _viewSimple.state == NSControlStateValueOn ? @"simple" : @"enhanced";
@@ -1075,6 +1273,18 @@ static WWSettingsController *g_settingsController = nil;
     settingsClosedCB();
 }
 
+// MRC: balance the retains taken in -initWithJSON: (via the strong setters).
+- (void)dealloc {
+    [_cfgJSON release];
+    [_cities release];
+    [_cfg release];
+    [_strings release];
+    [_languages release];
+    [_langCards release];
+    [_selectedLangCode release];
+    [super dealloc];
+}
+
 @end
 
 
@@ -1082,15 +1292,18 @@ static WWSettingsController *g_settingsController = nil;
 
 void openSettingsNative(
     const char *cfgJSON,
-    void *unusedOnSave
+    const char *stringsJSON,
+    const char *langsJSON
 ) {
-    (void)unusedOnSave;
-
-    // Copy the JSON to an NSString NOW, synchronously. Go frees cfgJSON via
+    // Copy the JSON to NSStrings NOW, synchronously. Go frees the C strings via
     // defer C.free the moment openSettingsWindow returns — before the async
-    // block runs. Reading cfgJSON inside the block would hit freed memory.
+    // block runs. Reading them inside the block would hit freed memory.
     NSString *json = (cfgJSON && *cfgJSON) ?
         [NSString stringWithUTF8String:cfgJSON] : @"{}";
+    NSString *strings = (stringsJSON && *stringsJSON) ?
+        [NSString stringWithUTF8String:stringsJSON] : @"{}";
+    NSString *langs = (langsJSON && *langsJSON) ?
+        [NSString stringWithUTF8String:langsJSON] : @"[]";
 
     dispatch_async(dispatch_get_main_queue(), ^{
         if (g_settingsController) {
@@ -1099,7 +1312,7 @@ void openSettingsNative(
             return;
         }
 
-        g_settingsController = [[WWSettingsController alloc] initWithJSON:json];
+        g_settingsController = [[WWSettingsController alloc] initWithJSON:json strings:strings languages:langs];
         [g_settingsController showWindow:nil];
         [NSApp activateIgnoringOtherApps:YES];
         [g_settingsController.window makeKeyAndOrderFront:nil];

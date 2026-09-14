@@ -27,6 +27,26 @@ import (
 // It is drained on the Cocoa main thread inside pumpMainQueue().
 var mainQueue = make(chan func(), 1024)
 
+// postToMain enqueues fn for execution on the Cocoa main thread WITHOUT ever
+// blocking the caller. If the queue is momentarily full it returns false and
+// the closure is dropped.
+//
+// This is the correct behaviour for periodic, self-healing producers (clock
+// ticks, drag-position polling, weather refreshes): dropping one update is
+// harmless because the next tick posts a fresh one. A blocking send here is
+// dangerous — the queue's only consumer is pumpMainQueue running on the main
+// thread, so if that consumer is busy inside a long closure the buffer can
+// saturate and every blocking producer (including the clock goroutines that a
+// settings-save is trying to stop) wedges permanently, freezing the whole app.
+func postToMain(fn func()) bool {
+	select {
+	case mainQueue <- fn:
+		return true
+	default:
+		return false
+	}
+}
+
 // installOnce guards the pump goroutine installation.
 var installOnce sync.Once
 

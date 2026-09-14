@@ -27,8 +27,10 @@ static const CGFloat kCardRadius = 16.0;
 static const int kPollSlots = 8;    // CO NO NO2 O3 SO2 NH3 PM2.5 PM10
 
 // Card layout widths (shared by the card view and the container helpers).
+// kSimpleCardW was reduced 15% (210 → 178) to make the simple-view widget
+// narrower per request.
 static const CGFloat kEnhancedCardW = 600;
-static const CGFloat kSimpleCardW   = 210;
+static const CGFloat kSimpleCardW   = 178;
 static const CGFloat kCardGap       = 8;
 static const CGFloat kCardPad       = 10;
 
@@ -65,6 +67,62 @@ static NSTextField *subLbl(NSString *text, CGFloat size) {
     NSTextField *f = lbl(text, size, NO);
     f.textColor = [NSColor colorWithWhite:0.80 alpha:1.0];
     return f;
+}
+
+// simpleIconLineImage caches loaded air-quality icons by path so repeated
+// updates don't re-decode PNGs from disk each second.
+static NSImage *simpleIconLineImage(NSString *iconPath) {
+    if (iconPath.length == 0) return nil;
+    // NOTE: this file compiles under MANUAL reference counting (no ARC). A
+    // static that holds an autoreleased object becomes a DANGLING pointer once
+    // the autorelease pool drains — the next access crashes (previously:
+    // "objectForKeyedSubscript: sent to NSConcreteAttributedString" as the freed
+    // dictionary slot got reused). So the cache must be explicitly retained, and
+    // images stored in it are owned by the dictionary's retain.
+    static NSMutableDictionary<NSString *, NSImage *> *cache = nil;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{ cache = [[NSMutableDictionary alloc] init]; });
+    NSImage *img = [cache objectForKey:iconPath];
+    if (!img) {
+        img = [[[NSImage alloc] initWithContentsOfFile:iconPath] autorelease];
+        if (img) [cache setObject:img forKey:iconPath]; // dict retains img
+    }
+    return img;
+}
+
+// simpleLineAttr builds an attributed string that renders an inline icon
+// (from iconPath) followed by text, so the simple-view pollution lines match
+// the GTK simple view (icon + value) instead of plain text. When iconPath is
+// empty it returns a plain-text attributed string. lineSize sets the icon box
+// so it scales with the conditions font size.
+static NSAttributedString *simpleLineAttr(NSString *iconPath, NSString *text, CGFloat lineSize) {
+    NSFont *font = [NSFont systemFontOfSize:lineSize > 0 ? lineSize : 10];
+    NSColor *color = [NSColor colorWithWhite:0.80 alpha:1.0];
+    NSDictionary *textAttrs = @{ NSFontAttributeName: font,
+                                 NSForegroundColorAttributeName: color };
+
+    NSImage *icon = simpleIconLineImage(iconPath);
+    if (!icon) {
+        // Autoreleased (MRC): the caller assigns into attributedStringValue,
+        // which takes its own retain.
+        return [[[NSAttributedString alloc] initWithString:text
+                                                attributes:textAttrs] autorelease];
+    }
+
+    // Icon box a little taller than the text so it reads as an inline glyph.
+    CGFloat box = (lineSize > 0 ? lineSize : 10) + 6;
+    NSTextAttachment *att = [[[NSTextAttachment alloc] init] autorelease];
+    att.image = icon;
+    // Center the icon vertically against the text baseline.
+    att.bounds = CGRectMake(0, (font.capHeight - box) / 2.0, box, box);
+
+    NSMutableAttributedString *out = [[[NSMutableAttributedString alloc] init] autorelease];
+    [out appendAttributedString:[NSAttributedString attributedStringWithAttachment:att]];
+    NSAttributedString *tail = [[[NSAttributedString alloc]
+        initWithString:[NSString stringWithFormat:@" %@", text]
+            attributes:textAttrs] autorelease];
+    [out appendAttributedString:tail];
+    return out;
 }
 
 // ── Metric tile ───────────────────────────────────────────────────────────────
@@ -249,7 +307,9 @@ static NSTextField *subLbl(NSString *text, CGFloat size) {
     [self.layer addSublayer:_bgOverlayLayer];
 
     // ── City label ────────────────────────────────────────────────────────────
-    _cityLbl = lbl([NSString stringWithFormat:@"📍 %@, %@", city, region], 14, YES);
+    // Plain "City, Region" to match the GTK/Fyne simple + enhanced views. The
+    // weather update overwrites this with the same format once data arrives.
+    _cityLbl = lbl([NSString stringWithFormat:@"%@, %@", city, region], 14, YES);
 
     // ── Weather icon ──────────────────────────────────────────────────────────
     _iconView = [[NSImageView alloc] init];
@@ -446,19 +506,22 @@ static NSTextField *subLbl(NSString *text, CGFloat size) {
         _rootStack.spacing = 8;
         [_rootStack setEdgeInsets:NSEdgeInsetsMake(12, 14, 12, 14)];
     } else {
-        // Simple: single centered column (classic widget). City → icon → temp →
-        // description → compact plain-text metric lines → AQI + pollutant lines
-        // → time → date. Uses the dedicated simple-mode text labels (no boxes).
+        // Simple: single centered column (classic widget), matching the GTK
+        // simple view field order exactly:
+        //   city → icon → time → date → temp → description →
+        //   humidity / wind / wind-gust / dew-point / pressure / UV →
+        //   AQI → pollutant lines → error.
+        // Uses the dedicated simple-mode text labels (no boxes).
         NSMutableArray *views = [NSMutableArray array];
         [views addObject:_cityLbl];
         [views addObject:_iconView];
+        [views addObject:_timeLbl];
+        [views addObject:_dateLbl];
         [views addObject:_tempLbl];
         [views addObject:_descLbl];
         [views addObjectsFromArray:_simpleMetricLines];
         [views addObject:_simpleAQILine];
         [views addObjectsFromArray:_simplePollLines];
-        [views addObject:_timeLbl];
-        [views addObject:_dateLbl];
         [views addObject:_errorLbl];
 
         _cityLbl.alignment = NSTextAlignmentCenter;
@@ -564,12 +627,19 @@ static NSTextField *subLbl(NSString *text, CGFloat size) {
     [self applyIconNS:iconPath];
 }
 
-- (void)setAQINS:(NSString *)label {
+- (void)setAQINS:(NSString *)label iconPath:(NSString *)iconPath {
     NSString *s = label.length > 0 ? label : nil;
     if (s) {
         _aqiTile.valueLbl.stringValue = s;
+        if (iconPath.length > 0) {
+            NSImage *img = simpleIconLineImage(iconPath);
+            if (img) _aqiTile.iconView.image = img;
+        }
         _aqiTile.hidden = NO;
-        _simpleAQILine.stringValue = [NSString stringWithFormat:@"AQI: %@", s];
+        // Simple-view line: inline icon + "AQI: value" (matches GTK simple view).
+        CGFloat sz = _simpleAQILine.font ? _simpleAQILine.font.pointSize : 10;
+        _simpleAQILine.attributedStringValue =
+            simpleLineAttr(iconPath, [NSString stringWithFormat:@"AQI: %@", s], sz);
         // Visibility in simple mode is governed by applyFieldMask/data; show it
         // here since AQI data just arrived.
         if (_simpleMode) _simpleAQILine.hidden = NO;
@@ -597,11 +667,14 @@ static NSString *pollSlotName(int slot) {
     if (value.length > 0) {
         tile.valueLbl.stringValue = value;
         if (iconPath.length > 0) {
-            NSImage *img = [[NSImage alloc] initWithContentsOfFile:iconPath];
+            NSImage *img = simpleIconLineImage(iconPath); // cached, autoreleased
             if (img) tile.iconView.image = img;
         }
         tile.hidden = NO;
-        line.stringValue = [NSString stringWithFormat:@"%@: %@", pollSlotName(slot), value];
+        // Simple-view line: inline icon + "NAME: value" (matches GTK simple view).
+        CGFloat sz = line.font ? line.font.pointSize : 10;
+        line.attributedStringValue =
+            simpleLineAttr(iconPath, [NSString stringWithFormat:@"%@: %@", pollSlotName(slot), value], sz);
         if (_simpleMode) line.hidden = NO;
     } else {
         tile.hidden = YES;
@@ -810,10 +883,11 @@ void updateCardData(
     });
 }
 
-void updateCardAQI(uintptr_t cardHandle, const char *label) {
+void updateCardAQI(uintptr_t cardHandle, const char *iconPath, const char *label) {
     NSString *nLabel = nsFromC(label);
+    NSString *nIcon  = nsFromC(iconPath);
     dispatch_async(dispatch_get_main_queue(), ^{
-        [(__bridge WWCityCardView *)(void *)cardHandle setAQINS:nLabel];
+        [(__bridge WWCityCardView *)(void *)cardHandle setAQINS:nLabel iconPath:nIcon];
     });
 }
 
@@ -876,5 +950,29 @@ void setCardFontSizes(uintptr_t cardHandle, int cityTime, int temp, int cond) {
     dispatch_async(dispatch_get_main_queue(), ^{
         [(__bridge WWCityCardView *)(void *)cardHandle
             applyFontSizes:(CGFloat)cityTime temp:(CGFloat)temp cond:(CGFloat)cond];
+    });
+}
+
+// relayoutContainerAsync re-runs the card layout and window resize on the main
+// thread ASYNCHRONOUSLY, so it executes AFTER any card-content updates that
+// were already queued via dispatch_async (updateCardData / updateCardAQI /
+// updateCardPollutant). This guarantees heights are measured against the final
+// populated content — otherwise the relayout would run before the pollutant /
+// AQI lines become visible and cards would clip their top content or overlap.
+void relayoutContainerAsync(uintptr_t winHandle, uintptr_t containerHandle,
+                            int mode, int cardCount) {
+    dispatch_async(dispatch_get_main_queue(), ^{
+        NSWindow *w = (__bridge NSWindow *)(void *)winHandle;
+        NSView *c   = (__bridge NSView *)(void *)containerHandle;
+
+        NSSize sz = containerFitSize(c, (BOOL)mode);
+        NSRect f = w.frame;
+        CGFloat top = f.origin.y + f.size.height;
+        f.size = sz;
+        f.origin.y = top - sz.height;
+        [w setFrame:f display:YES];
+        c.frame = w.contentView.bounds;
+
+        relayoutCards(c, (BOOL)mode, cardCount);
     });
 }

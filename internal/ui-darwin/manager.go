@@ -69,6 +69,12 @@ type manager struct {
 
 	// stopClock is closed to stop all per-card clock goroutines.
 	stopClock chan struct{}
+
+	// lastResults caches the most recent weather results so a settings change
+	// (units, display fields, pollution rows) can re-render the cards
+	// immediately from cached data instead of waiting for the next network
+	// fetch. Guarded by cardsMu.
+	lastResults []weather.WeatherResult
 }
 
 // ── Run ──────────────────────────────────────────────────────────────────────
@@ -208,7 +214,11 @@ func (m *manager) start(openSettings bool) error {
 	m.sched = scheduler.NewRefreshScheduler(interval, m.weatherSvc)
 	m.sched.SetCities(cfg.Cities)
 	m.sched.SetOnUpdate(func(results []weather.WeatherResult) {
-		mainQueue <- func() { m.handleWeatherUpdate(results) }
+		// Non-blocking: a weather refresh is periodic and self-healing, so if
+		// the main queue is momentarily saturated we drop this update rather
+		// than parking a worker goroutine on a full channel (which could wedge
+		// the single-consumer pump). The next scheduler tick re-posts.
+		postToMain(func() { m.handleWeatherUpdate(results) })
 	})
 	m.sched.SetOnError(func(city string, err error) {
 		log.Printf("uidarwin: weather error for %s: %v", city, err)
@@ -292,6 +302,45 @@ func (m *manager) runClock(cardIdx int, timezone string, stop <-chan struct{}) {
 	if err != nil {
 		loc = time.UTC
 	}
+
+	// postTick renders the current time/date onto this card. Sending is
+	// stop-aware so a stopping clock never parks on a full queue (the classic
+	// wedge that froze the app); when the queue is momentarily full but we're
+	// not stopping we drop the tick — the next second re-posts.
+	postTick := func(now time.Time) {
+		timeStr := weather.FormatTime(now, timezone, m.lm)
+		dateStr := weather.FormatDate(now, timezone, m.lm)
+		idx := cardIdx
+		tick := func() {
+			m.cardsMu.Lock()
+			if idx >= len(m.cards) {
+				m.cardsMu.Unlock()
+				return
+			}
+			card := m.cards[idx]
+			m.cardsMu.Unlock()
+			// Update only time/date labels via a lightweight card update.
+			// We pass empty strings for all other fields so the ObjC side
+			// skips them (only non-empty strings are applied).
+			nativeUpdateCardData(card,
+				"", "", timeStr, dateStr,
+				"", "", "", "", "", "", "", "",
+				false, opacityToAlpha(m.opacity),
+			)
+		}
+		select {
+		case <-stop:
+		case mainQueue <- tick:
+		default:
+		}
+	}
+
+	// Render immediately so both time AND date appear at once, rather than the
+	// card sitting on its "--:--:--" / blank-date placeholders for up to a
+	// second (and indefinitely for the date, since the empty-string skip in the
+	// ObjC layer would otherwise leave an un-ticked date blank).
+	postTick(time.Now().In(loc))
+
 	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
 	for {
@@ -299,27 +348,7 @@ func (m *manager) runClock(cardIdx int, timezone string, stop <-chan struct{}) {
 		case <-stop:
 			return
 		case t := <-ticker.C:
-			now := t.In(loc)
-			timeStr := weather.FormatTime(now, timezone, m.lm)
-			dateStr := weather.FormatDate(now, timezone, m.lm)
-			cardIdx := cardIdx
-			mainQueue <- func() {
-				m.cardsMu.Lock()
-				if cardIdx >= len(m.cards) {
-					m.cardsMu.Unlock()
-					return
-				}
-				card := m.cards[cardIdx]
-				m.cardsMu.Unlock()
-				// Update only time/date labels via a lightweight card update.
-				// We pass empty strings for all other fields so the ObjC side
-				// skips them (only non-empty strings are applied).
-				nativeUpdateCardData(card,
-					"", "", timeStr, dateStr,
-					"", "", "", "", "", "", "", "",
-					false, opacityToAlpha(m.opacity),
-				)
-			}
+			postTick(t.In(loc))
 		}
 	}
 }
@@ -332,6 +361,7 @@ func (m *manager) handleWeatherUpdate(results []weather.WeatherResult) {
 	m.cardsMu.Lock()
 	cards := make([]uintptr, len(m.cards))
 	copy(cards, m.cards)
+	m.lastResults = results // cache for immediate re-render on settings change
 	m.cardsMu.Unlock()
 
 	for i, r := range results {
@@ -353,6 +383,19 @@ func (m *manager) handleWeatherUpdate(results []weather.WeatherResult) {
 		}
 		m.updateCard(card, r.Data)
 	}
+
+	// Cards were first laid out in buildCards with placeholder/empty labels,
+	// before any weather data existed. Now that real values (description,
+	// pollutant rows, etc.) have filled in — which changes each card's content
+	// height — re-measure and re-lay-out so cards don't clip their top content
+	// or overlap their neighbours. This mirrors the GTK view auto-resizing to
+	// fit content after an update.
+	//
+	// Async so it runs AFTER the card-content updates above (which are queued
+	// via dispatch_async in the ObjC layer); otherwise it would measure heights
+	// before the pollutant/AQI lines become visible and clip again.
+	simple := m.viewMode == config.ViewModeSimple
+	nativeRelayoutContainerAsync(m.win, m.container, simple, len(cards))
 }
 
 // updateCard pushes fresh WeatherData into one native card view.
@@ -366,8 +409,6 @@ func (m *manager) updateCard(card uintptr, d *weather.WeatherData) {
 	iconTheme := m.cfg.IconTheme
 
 	cityStr := fmt.Sprintf("%s, %s", d.CityName, d.Region)
-	timeStr := weather.FormatTime(d.LocalTime, "", m.lm)
-	dateStr := weather.FormatDate(d.LocalTime, "", m.lm)
 	tempStr := weather.FormatTemperature(d.Temperature, tempUnit)
 	descStr := weather.FormatDescription(d.Description, m.lm)
 
@@ -382,8 +423,13 @@ func (m *manager) updateCard(card uintptr, d *weather.WeatherData) {
 	iconCode := weather.MapConditionToIconWithTheme(d.IconCode, d.LocalTime, iconTheme)
 	iconPath := resolveIconPath(iconCode)
 
+	// Time and date are owned exclusively by the per-card, per-timezone clock
+	// goroutine (runClock), mirroring the GTK simple/enhanced views where the
+	// clock ticker is the sole writer of those labels. Passing them here would
+	// clobber the correct local time with a UTC-fallback value on every refresh
+	// (FormatTime with an empty timezone falls back to UTC), so we send "".
 	nativeUpdateCardData(card,
-		iconPath, cityStr, timeStr, dateStr, tempStr, descStr,
+		iconPath, cityStr, "", "", tempStr, descStr,
 		humidDisp.Value, windDisp.Value, gustDisp.Value,
 		dewDisp.Value, pressDisp.Value, uvDisp.Value,
 		isNight, opacityToAlpha(m.opacity),
@@ -396,13 +442,15 @@ func (m *manager) updateCard(card uintptr, d *weather.WeatherData) {
 
 	// AQI.
 	aqiLabel := ""
+	aqiIconPath := ""
 	for _, row := range rows {
 		if row.Metric == weather.MetricAQI {
 			aqiLabel = row.ValueText
+			aqiIconPath = resolveAirIconPath(row.IconFile)
 			break
 		}
 	}
-	nativeUpdateCardAQI(card, aqiLabel)
+	nativeUpdateCardAQI(card, aqiIconPath, aqiLabel)
 
 	// Pollutant slots: CO=0 NO=1 NO2=2 O3=3 SO2=4 NH3=5 PM25=6 PM10=7
 	slotMap := map[weather.PollutionMetric]int{
@@ -465,7 +513,9 @@ func (m *manager) cornerToXY(corner string, monitorIndex int) (int, int) {
 	)
 	var winW, winH int
 	if m.viewMode == config.ViewModeSimple {
-		const simpleW = 186 // kSimpleCardWidth + 2*kCardPaddingH
+		// kSimpleCardW (178, panel.m) + 2*kCardPad(10). Kept in sync with the
+		// 15%-narrower simple card width.
+		const simpleW = 198
 		winW = simpleW*count + gap*(count-1)
 		winH = 444
 	} else {
@@ -518,7 +568,9 @@ func (m *manager) pollDragPosition() {
 		if !movedByUs && m.positioned && (x != dragLastX || y != dragLastY) {
 			// User dragged the window.
 			cx, cy := x, y
-			mainQueue <- func() {
+			// Non-blocking: this poller fires every 500ms, so a dropped update
+			// is re-detected on the next tick. Never park here on a full queue.
+			posted := postToMain(func() {
 				m.cfg.CustomX = &cx
 				m.cfg.CustomY = &cy
 				go func() {
@@ -528,6 +580,11 @@ func (m *manager) pollDragPosition() {
 						log.Printf("uidarwin: drag position saved (%d, %d)", cx, cy)
 					}
 				}()
+			})
+			if !posted {
+				// Retry on the next poll rather than committing lastX/lastY,
+				// so the drag isn't silently lost.
+				continue
 			}
 		}
 		dragLastX, dragLastY = x, y
@@ -543,6 +600,10 @@ func (m *manager) openSettings() {
 // onSettingsSave persists a new config and rebuilds the UI as needed.
 // It mirrors ui-gtk/manager.go onSettingsSave exactly.
 func (m *manager) onSettingsSave(newCfg *config.Config) error {
+	pf0 := newCfg.GetPollutionFields()
+	log.Printf("uidarwin: onSettingsSave: ENTER tempUnit=%s pressure=%v viewMode=%s AQI=%v CO=%v O3=%v NH3=%v PM25=%v PM10=%v",
+		newCfg.TemperatureUnit, newCfg.GetDisplayFields().ShowPressure, newCfg.ViewMode,
+		pf0.ShowAQI, pf0.ShowCO, pf0.ShowO3, pf0.ShowNH3, pf0.ShowPM25, pf0.ShowPM10)
 	if !newCfg.HasLicense() {
 		newCfg.Cities = config.DefaultCities()
 	}
@@ -551,16 +612,24 @@ func (m *manager) onSettingsSave(newCfg *config.Config) error {
 	providerChanged := oldCfg.DataSource != newCfg.DataSource ||
 		providerConfigChanged(oldCfg, newCfg)
 
-	if providerChanged && newCfg.HasLicense() {
+	// Switch the weather provider when its credentials changed. A failed
+	// connection test must NOT abort the whole save — the user's other changes
+	// (units, display fields, view mode, etc.) still need to persist and take
+	// effect immediately. So on a test failure we keep the existing provider
+	// and log it, but continue saving everything else.
+	if providerChanged {
 		p := m.buildProvider(newCfg)
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
-		if err := p.TestConnection(ctx); err != nil {
-			return fmt.Errorf("connection test failed: %w", err)
+		if newCfg.HasLicense() {
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			if err := p.TestConnection(ctx); err != nil {
+				log.Printf("uidarwin: settings save: provider connection test failed, keeping previous provider: %v", err)
+			} else {
+				m.weatherSvc.SwitchProvider(p)
+			}
+			cancel()
+		} else {
+			m.weatherSvc.SwitchProvider(p)
 		}
-		m.weatherSvc.SwitchProvider(p)
-	} else if providerChanged {
-		m.weatherSvc.SwitchProvider(m.buildProvider(newCfg))
 	}
 
 	if err := m.cfgSvc.Save(newCfg); err != nil {
@@ -584,8 +653,13 @@ func (m *manager) onSettingsSave(newCfg *config.Config) error {
 		opacity = 100
 	}
 
+	log.Printf("uidarwin: onSettingsSave: saved OK; localeChanged=%v viewModeChanged=%v citiesChanged=%v — queuing UI update",
+		localeChanged, viewModeChanged, citiesChanged)
+
 	// Apply all shared-state changes and the UI rebuild on the main thread.
 	mainQueue <- func() {
+		log.Printf("uidarwin: settings UI closure: START (path=%s)",
+			map[bool]string{true: "rebuild", false: "soft"}[citiesChanged || viewModeChanged || localeChanged])
 		m.cfg = newCfg
 		m.opacity = opacity
 		m.noBackground = newCfg.NoBackground
@@ -609,13 +683,24 @@ func (m *manager) onSettingsSave(newCfg *config.Config) error {
 			m.cardsMu.Lock()
 			cards := make([]uintptr, len(m.cards))
 			copy(cards, m.cards)
+			results := m.lastResults
 			m.cardsMu.Unlock()
 			for _, card := range cards {
 				nativeSetCardFieldVisibility(card, displayFieldMask(newCfg.GetDisplayFields()))
 				nativeSetCardFontSizes(card, m.fontSizeCityTime, m.fontSizeTempIcon, m.fontSizeConditions)
 			}
+			// Re-render each card's data from the cached last results so unit
+			// changes (°C/°F, km/h→mph) and pollution-row selection take effect
+			// immediately on Save, instead of waiting for the next network
+			// fetch. Pollution rows that were deselected get cleared here.
+			for i, card := range cards {
+				if i < len(results) && results[i].Data != nil {
+					m.updateCard(card, results[i].Data)
+				}
+			}
 		}
 		m.applyPosition()
+		log.Printf("uidarwin: settings UI closure: DONE")
 	}
 
 	m.sched.SetInterval(time.Duration(newCfg.RefreshInterval) * time.Minute)
