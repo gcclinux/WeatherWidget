@@ -42,27 +42,19 @@ else
     GO_CMD="go"
 fi
 
-BIN_OUTPUT="$BUILD_DIR/${APP_NAME}_${APP_VERSION}_${DEB_ARCH}.bin"
 GTK_BIN_OUTPUT="$BUILD_DIR/${APP_NAME}-gtk_${APP_VERSION}_${DEB_ARCH}.bin"
-
-build_bin() {
-    echo "==> Building standalone binary (Fyne): $(basename "$BIN_OUTPUT")..."
-    $GO_CMD build -ldflags="-s -w -X main.version=$APP_VERSION" -o "$BIN_OUTPUT" "$PROJECT_ROOT/cmd/weatherwidget/"
-    chmod +x "$BIN_OUTPUT"
-    echo "    Created: $BIN_OUTPUT"
-}
 
 build_gtk_bin() {
     echo "==> Building standalone binary (GTK3 native): $(basename "$GTK_BIN_OUTPUT")..."
     if ! pkg-config --exists gtk+-3.0 2>/dev/null; then
-        echo "    WARNING: GTK3 development headers not found (install libgtk-3-dev)."
-        echo "    Skipping GTK binary build — Fyne binary still available."
-        return 0
+        echo "    ERROR: GTK3 development headers not found (install libgtk-3-dev)."
+        echo "    The Linux build requires the native GTK3 UI."
+        exit 1
     fi
     if ! pkg-config --exists ayatana-appindicator3-0.1 2>/dev/null; then
-        echo "    WARNING: AppIndicator headers not found (install libayatana-appindicator3-dev)."
-        echo "    Skipping GTK binary build — Fyne binary still available."
-        return 0
+        echo "    ERROR: AppIndicator headers not found (install libayatana-appindicator3-dev)."
+        echo "    The Linux build requires the native GTK3 UI."
+        exit 1
     fi
     # Suppress deprecation warnings from gotk3 and appindicator C headers.
     CGO_CFLAGS="${CGO_CFLAGS:-} -Wno-deprecated-declarations" \
@@ -87,14 +79,9 @@ prepare_staging() {
     mkdir -p "$staging/usr/share/icons/hicolor/512x512/apps"
     mkdir -p "$staging/usr/share/icons/hicolor/scalable/apps"
 
-    # Prefer the native GTK binary; fall back to Fyne if it wasn't built.
-    if [ -f "$GTK_BIN_OUTPUT" ]; then
-        cp "$GTK_BIN_OUTPUT" "$staging/usr/bin/$APP_NAME"
-        echo "    Packaging: GTK3 native binary"
-    else
-        cp "$BIN_OUTPUT" "$staging/usr/bin/$APP_NAME"
-        echo "    Packaging: Fyne binary (GTK build unavailable)"
-    fi
+    # Package the native GTK3 binary.
+    cp "$GTK_BIN_OUTPUT" "$staging/usr/bin/$APP_NAME"
+    echo "    Packaging: GTK3 native binary"
 
     # Desktop file
     cat > "$staging/usr/share/applications/$APP_NAME.desktop" <<EOF
@@ -187,10 +174,7 @@ EOF
     find "$staging/usr" -type f -exec chmod 644 {} \;
     chmod 755 "$staging/usr/bin/$APP_NAME"
 
-    local pkg_name="$APP_NAME"
-    if [ -f "$GTK_BIN_OUTPUT" ]; then
-        pkg_name="${APP_NAME}-gtk"
-    fi
+    local pkg_name="${APP_NAME}-gtk"
     local output="$BUILD_DIR/${pkg_name}_${APP_VERSION}_${DEB_ARCH}.deb"
     dpkg-deb --build --root-owner-group "$staging" "$output"
     rm -rf "$staging"
@@ -258,10 +242,7 @@ EOF
     local rpm_generated
     rpm_generated=$(find "$rpmbuild_dir/RPMS" -name "*.rpm" | head -1)
     if [ -n "$rpm_generated" ]; then
-        local pkg_name="$APP_NAME"
-        if [ -f "$GTK_BIN_OUTPUT" ]; then
-            pkg_name="${APP_NAME}-gtk"
-        fi
+        local pkg_name="${APP_NAME}-gtk"
         local output="$BUILD_DIR/${pkg_name}_${APP_VERSION}_${DEB_ARCH}.rpm"
         cp "$rpm_generated" "$output"
         rm -rf "$rpmbuild_dir"
@@ -278,14 +259,9 @@ build_appimage() {
     rm -rf "$appdir"
     mkdir -p "$appdir/usr/bin"
 
-    # Prefer GTK binary; fall back to Fyne if GTK wasn't built.
-    if [ -f "$GTK_BIN_OUTPUT" ]; then
-        cp "$GTK_BIN_OUTPUT" "$appdir/usr/bin/$APP_NAME"
-        echo "    Packaging: GTK3 native binary"
-    else
-        cp "$BIN_OUTPUT" "$appdir/usr/bin/$APP_NAME"
-        echo "    Packaging: Fyne binary (GTK build unavailable)"
-    fi
+    # Package the native GTK3 binary.
+    cp "$GTK_BIN_OUTPUT" "$appdir/usr/bin/$APP_NAME"
+    echo "    Packaging: GTK3 native binary"
 
     # Desktop file
     cat > "$appdir/$APP_NAME.desktop" <<EOF
@@ -343,10 +319,7 @@ APPRUN
         chmod +x "$appimagetool"
     fi
 
-    local pkg_name="$APP_NAME"
-    if [ -f "$GTK_BIN_OUTPUT" ]; then
-        pkg_name="${APP_NAME}-gtk"
-    fi
+    local pkg_name="${APP_NAME}-gtk"
     local output="$BUILD_DIR/${pkg_name}_${APP_VERSION}_${DEB_ARCH}.AppImage"
     rm -f "$output"
     ARCH="$ARCH" "$appimagetool" --appimage-extract-and-run "$appdir" "$output" || \
@@ -357,8 +330,6 @@ APPRUN
 
 main() {
     local target="${1:-all}"
-
-    build_bin
 
     case "$target" in
         bin)

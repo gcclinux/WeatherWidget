@@ -1,8 +1,9 @@
 // Package main is the entry point for the WeatherWidget application.
-// This file handles non-Darwin platforms (Windows, Linux).
-// See main_darwin.go for the macOS entry point.
+// This file handles Windows, using the Fyne UI layer.
+// See main_darwin.go for the macOS (native AppKit) entry point and
+// cmd/weatherwidget-gtk for the Linux (native GTK3) entry point.
 
-//go:build !darwin
+//go:build windows
 
 package main
 
@@ -62,4 +63,17 @@ func main() {
 	}
 
 	fyneApp.Run()
+}
+
+// appDataDirectory returns the base directory for application data.
+// On Windows os.UserConfigDir resolves to %AppData%, falling back to the
+// user home directory (then the current directory) if unavailable.
+func appDataDirectory() string {
+	if dir, err := os.UserConfigDir(); err == nil {
+		return dir
+	}
+	if home, err := os.UserHomeDir(); err == nil {
+		return home
+	}
+	return "."
 }

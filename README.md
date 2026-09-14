@@ -120,6 +120,20 @@ cat $HOME/.config/WeatherWidget/WeatherWidget/config.json
 
 ## Troubleshooting
 
+### Linux: System tray icon missing on Fedora (and other vanilla GNOME setups)
+WeatherWidget draws its Linux tray icon using the AppIndicator / StatusNotifierItem (SNI) protocol. For the icon to appear, the desktop needs an **SNI host** running on the session D-Bus. Ubuntu GNOME, KDE Plasma, and most other desktops ship one by default, which is why the tray works there — but **Fedora's stock GNOME does not**, so the icon is registered but never rendered.
+
+This is not caused by the icon image; nothing is listening to draw any tray icon at all. The fix is to install and enable the GNOME AppIndicator extension:
+
+```bash
+sudo dnf install gnome-shell-extension-appindicator
+gnome-extensions enable appindicatorsupport@rgcjonas.gmail.com
+```
+
+After installing, **log out and back in** (or restart GNOME Shell) so the extension loads. The tray icon should then appear.
+
+**In the meantime**, you don't need the tray to control the widget: **right-click the widget** directly to open its menu (Settings, Quit), or launch with `--settings` to open Settings straight away.
+
 ### "Nothing happens" when clicking Settings or Weather Panel
 If the app appears in your system tray (or is running in the background) but clicking **Settings** or **Show Weather** does nothing, it usually means the application failed to create the UI window.
 
