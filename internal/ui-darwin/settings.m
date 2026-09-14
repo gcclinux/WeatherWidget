@@ -402,15 +402,63 @@ static WWSettingsController *g_settingsController = nil;
     _intervalField = [[NSTextField alloc] initWithFrame:NSMakeRect(220, y - 2, 100, 24)];
     _intervalField.placeholderString = @"e.g. 30";
     [v addSubview:_intervalField];
-    y -= 60;
+    y -= 52;
 
+    // Refresh-rate note box (Free vs Pro), matching the Fyne/GTK UI.
     NSTextField *note = [self sublabel:
         [self L:@"settings.provider.note"
-          fallback:@"EasyWeatherWidget Pro provides air-quality data, more cities, faster updates, "
-                    "and priority support.\nOpenWeatherMap Free works with a free API key from "
-                    "openweathermap.org and is limited to the built-in default cities."]
-        frame:NSMakeRect(16, y - 20, 520, 56)];
+          fallback:@"Note:\nFree = 120 minutes refresh rate (limited).\nPro = 10 minutes refresh rate (unlimited)."]
+        frame:NSMakeRect(16, y - 44, 524, 56)];
     [v addSubview:note];
+    y -= 64;
+
+    // ── "Your Pro API Key" activation card ────────────────────────────────────
+    // Shown only when the configured provider is EasyWeatherWidget (Pro) with a
+    // full-length (UUID, 36-char) key — mirrors GTK's showActivationCard.
+    NSDictionary *api = self.cfg[@"apiConfig"];
+    NSString *provider = api[@"provider"] ?: @"";
+    NSString *apiKey = api[@"apiKey"] ?: @"";
+    BOOL isProKey = [provider isEqualToString:@"easyweatherwidget"] && apiKey.length == 36;
+
+    if (isProKey) {
+        // Bordered card containing the title, the key, and the "keep safe" note.
+        NSView *card = [[NSView alloc] initWithFrame:NSMakeRect(16, y - 96, 524, 96)];
+        card.wantsLayer = YES;
+        card.layer.cornerRadius = 8;
+        card.layer.borderWidth = 1.0;
+        card.layer.borderColor = [NSColor colorWithWhite:1.0 alpha:0.16].CGColor;
+        card.layer.backgroundColor = [NSColor colorWithWhite:1.0 alpha:0.05].CGColor;
+
+        NSTextField *cardTitle = [self label:
+            [self L:@"settings.provider.apiKeyActivation.title" fallback:@"Your Pro API Key"]
+            frame:NSMakeRect(12, 68, 500, 20) bold:YES];
+        [card addSubview:cardTitle];
+
+        NSTextField *keyLbl = [NSTextField labelWithString:apiKey];
+        keyLbl.font = [NSFont fontWithName:@"Menlo" size:12] ?: [NSFont systemFontOfSize:12];
+        keyLbl.textColor = [NSColor whiteColor];
+        keyLbl.selectable = YES;
+        keyLbl.frame = NSMakeRect(12, 46, 500, 18);
+        [card addSubview:keyLbl];
+
+        NSTextField *msg = [self sublabel:
+            [self L:@"settings.provider.apiKeyActivation.message"
+              fallback:@"Keep this key safe. It is, or will be, activated once your subscription is "
+                        "confirmed and will be disabled if the subscription is cancelled."]
+            frame:NSMakeRect(12, 6, 500, 36)];
+        [card addSubview:msg];
+
+        [v addSubview:card];
+        y -= 108;
+    }
+
+    // ── Pro features note (persistent blue benefit line) ──────────────────────
+    NSTextField *proNote = [self sublabel:
+        [self L:@"settings.provider.proFeaturesNote"
+          fallback:@"⭐ EasyWeatherWidget Pro: Enjoy pollution data plus the ability to preset up to 5 cities at once"]
+        frame:NSMakeRect(16, y - 36, 524, 34)];
+    proNote.textColor = [NSColor colorWithRed:0.22 green:0.74 blue:0.97 alpha:1.0]; // #38bdf8
+    [v addSubview:proNote];
 
     item.view = v;
     return item;

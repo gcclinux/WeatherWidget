@@ -507,7 +507,7 @@ func (m *manager) cornerToXY(corner string, monitorIndex int) (int, int) {
 		count = 1
 	}
 	const (
-		cardW = 628  // kCardWidth + 2*kCardPaddingH
+		cardW = 531  // ~15% narrower enhanced card (kEnhancedCardW 506 + padding)
 		cardH = 226  // typical enhanced card height
 		gap   = 6
 	)

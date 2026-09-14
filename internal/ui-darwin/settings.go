@@ -160,6 +160,9 @@ func (m *manager) settingsStrings() map[string]string {
 		"settings.provider.label", "settings.provider.apiKeyLabel",
 		"settings.provider.apiKeyPlaceholder", "settings.interval.title",
 		"settings.provider.note",
+		"settings.provider.apiKeyActivation.title",
+		"settings.provider.apiKeyActivation.message",
+		"settings.provider.proFeaturesNote",
 		// Locations tab
 		"settings.locations.savedTitle", "settings.locations.savedSubtitle",
 		"settings.locations.addTitle", "settings.locations.nameLabel",

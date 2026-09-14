@@ -27,9 +27,9 @@ static const CGFloat kCardRadius = 16.0;
 static const int kPollSlots = 8;    // CO NO NO2 O3 SO2 NH3 PM2.5 PM10
 
 // Card layout widths (shared by the card view and the container helpers).
-// kSimpleCardW was reduced 15% (210 → 178) to make the simple-view widget
-// narrower per request.
-static const CGFloat kEnhancedCardW = 600;
+// Both card widths were reduced ~15% per request to make the widget narrower:
+// simple 210 → 178, enhanced 600 → 506.
+static const CGFloat kEnhancedCardW = 506;
 static const CGFloat kSimpleCardW   = 178;
 static const CGFloat kCardGap       = 8;
 static const CGFloat kCardPad       = 10;
