@@ -764,7 +764,9 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 				buttons := container.NewHBox(upBtn, downBtn, removeBtn)
 				row := container.NewBorder(nil, nil, leftContent, buttons)
 				cityListBox.Add(row)
-				cityListBox.Add(widget.NewSeparator())
+				if idx < len(state.cities)-1 {
+					cityListBox.Add(widget.NewSeparator())
+				}
 			}
 			cityListBox.Refresh()
 		}
@@ -1285,13 +1287,15 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 				header = titleVBox
 			}
 
-			cardVBox := container.NewVBox(
-				header,
-				widget.NewSeparator(),
+			cardBody := container.NewBorder(
+				container.NewVBox(header, widget.NewSeparator()),
+				nil,
+				nil,
+				nil,
 				content,
 			)
 
-			return container.NewStack(cardBg, cardBorder, container.NewPadded(cardVBox))
+			return container.NewStack(cardBg, cardBorder, container.NewPadded(cardBody))
 		}
 
 		// ── Panel Display checkboxes ─────────────────────────────────────────
@@ -1666,11 +1670,16 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 			),
 		)
 
-		aboutContent := container.NewPadded(container.NewVScroll(container.NewVBox(
-			aboutCard,
+		previewBox := container.NewVBox(
 			previewLabel,
 			previewGrid,
-		)))
+		)
+		aboutBody := container.NewBorder(
+			aboutCard,
+			nil, nil, nil,
+			container.NewCenter(previewBox),
+		)
+		aboutContent := container.NewPadded(container.NewVScroll(aboutBody))
 		aboutTab := container.NewTabItemWithIcon(u.t("settings.tab.about"), theme.InfoIcon(), container.NewThemeOverride(aboutContent, settingsTh))
 
 		// Create the main content area - use custom navigation on macOS to avoid
