@@ -69,7 +69,6 @@ func openSettingsWindow(m *manager) {
 		newCfg, err := mergeSettingsJSON(m.cfg, []byte(newCfgJSON))
 		if err != nil {
 			log.Printf("uidarwin: settings save: could not parse settings JSON: %v", err)
-			log.Printf("uidarwin: settings save: raw JSON = %s", newCfgJSON)
 			return
 		}
 		if err := m.onSettingsSave(newCfg); err != nil {

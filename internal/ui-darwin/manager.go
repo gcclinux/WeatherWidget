@@ -608,10 +608,6 @@ func (m *manager) openSettings() {
 // onSettingsSave persists a new config and rebuilds the UI as needed.
 // It mirrors ui-gtk/manager.go onSettingsSave exactly.
 func (m *manager) onSettingsSave(newCfg *config.Config) error {
-	pf0 := newCfg.GetPollutionFields()
-	log.Printf("uidarwin: onSettingsSave: ENTER tempUnit=%s pressure=%v viewMode=%s AQI=%v CO=%v O3=%v NH3=%v PM25=%v PM10=%v",
-		newCfg.TemperatureUnit, newCfg.GetDisplayFields().ShowPressure, newCfg.ViewMode,
-		pf0.ShowAQI, pf0.ShowCO, pf0.ShowO3, pf0.ShowNH3, pf0.ShowPM25, pf0.ShowPM10)
 	if !newCfg.HasLicense() {
 		newCfg.Cities = config.DefaultCities()
 	}
@@ -666,8 +662,6 @@ func (m *manager) onSettingsSave(newCfg *config.Config) error {
 
 	// Apply all shared-state changes and the UI rebuild on the main thread.
 	mainQueue <- func() {
-		log.Printf("uidarwin: settings UI closure: START (path=%s)",
-			map[bool]string{true: "rebuild", false: "soft"}[citiesChanged || viewModeChanged || localeChanged])
 		m.cfg = newCfg
 		m.opacity = opacity
 		m.noBackground = newCfg.NoBackground
@@ -708,7 +702,6 @@ func (m *manager) onSettingsSave(newCfg *config.Config) error {
 			}
 		}
 		m.applyPosition()
-		log.Printf("uidarwin: settings UI closure: DONE")
 	}
 
 	m.sched.SetInterval(time.Duration(newCfg.RefreshInterval) * time.Minute)

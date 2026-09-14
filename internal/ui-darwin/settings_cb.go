@@ -38,7 +38,6 @@ func settingsSaveCB(newCfgJSON *C.char) {
 		return
 	}
 	s := C.GoString(newCfgJSON)
-	log.Printf("uidarwin: settingsSaveCB: received %d bytes", len(s))
 	settingsSaveMu.Lock()
 	fn := settingsSaveFn
 	settingsSaveMu.Unlock()
