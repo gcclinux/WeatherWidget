@@ -103,14 +103,18 @@ func TestSimpleCityPanel_Update(t *testing.T) {
 	if p.cityText.Text != "Broxburn, GB" {
 		t.Errorf("cityText = %q, want %q", p.cityText.Text, "Broxburn, GB")
 	}
-	if p.humidityText.Text != "💧 Hum 74%" {
-		t.Errorf("humidityText = %q, want %q", p.humidityText.Text, "💧 Hum 74%")
+	// The simple view now renders each metric as "emoji + localized name + value"
+	// via the shared *Display structs (lm is nil here → English fallback names),
+	// so labels are the full "Humidity"/"Pressure"/"UV Index" rather than the
+	// older abbreviated "Hum"/no-label forms.
+	if p.humidityText.Text != "💧 Humidity 74%" {
+		t.Errorf("humidityText = %q, want %q", p.humidityText.Text, "💧 Humidity 74%")
 	}
-	if p.pressureText.Text != "🌡 1010 hPa" {
-		t.Errorf("pressureText = %q, want %q", p.pressureText.Text, "🌡 1010 hPa")
+	if p.pressureText.Text != "🌡 Pressure 1010 hPa" {
+		t.Errorf("pressureText = %q, want %q", p.pressureText.Text, "🌡 Pressure 1010 hPa")
 	}
-	if p.uvIndexText.Text != "☀ UV 2.6" {
-		t.Errorf("uvIndexText = %q, want %q", p.uvIndexText.Text, "☀ UV 2.6")
+	if p.uvIndexText.Text != "☀ UV Index 2.6" {
+		t.Errorf("uvIndexText = %q, want %q", p.uvIndexText.Text, "☀ UV Index 2.6")
 	}
 }
 

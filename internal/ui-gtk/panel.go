@@ -532,7 +532,7 @@ func (p *cityPanel) update(d *weather.WeatherData, tempUnit config.TemperatureUn
 func (p *cityPanel) applyPollutionRows(pf *config.PollutionFields) {
 	p.pollutionFields = pf
 
-	rows := weather.PlanPollutionRows(pf, weather.PollutionOf(p.lastData))
+	rows := weather.PlanPollutionRows(pf, weather.PollutionOf(p.lastData), p.lm)
 
 	// Map metric -> planned row (and its position within the plan).
 	planned := make(map[weather.PollutionMetric]weather.PollutionRow, len(rows))

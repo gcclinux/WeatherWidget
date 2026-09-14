@@ -592,7 +592,7 @@ func (p *SimpleCityPanel) ApplyPollutionFields(pf *config.PollutionFields) {
 // applyPollutionCells populates and shows the pollution cells selected by the
 // current pollution fields and present in the latest data; others are hidden.
 func (p *SimpleCityPanel) applyPollutionCells() {
-	rows := weather.PlanPollutionRows(p.pollutionFields, weather.PollutionOf(p.lastData))
+	rows := weather.PlanPollutionRows(p.pollutionFields, weather.PollutionOf(p.lastData), p.lm)
 	planned := make(map[weather.PollutionMetric]weather.PollutionRow, len(rows))
 	for _, r := range rows {
 		planned[r.Metric] = r
@@ -659,28 +659,40 @@ func (p *SimpleCityPanel) Update(data *weather.WeatherData, tempUnit config.Temp
 	p.descText.Text = weather.FormatDescription(data.Description, p.lm)
 	p.descText.Refresh()
 
-	p.humidityText.Text = weather.FormatHumidity(data.Humidity, p.lm)
+	// Build each metric line from the shared, fully-localized *Display structs
+	// (emoji + localized name + value) so labels follow the chosen UI language.
+	// This replaces the older Format* helpers, some of which (wind, pressure,
+	// UV index) did not localize their label at all.
+	humid := weather.HumidityDisplay(data.Humidity, p.lm)
+	wind := weather.WindDisplay(data.WindSpeed, data.WindDirection, windUnit, p.lm)
+	gust := weather.WindGustDisplay(data.WindGust, windUnit, p.lm)
+	dew := weather.DewPointDisplay(data.DewPoint, p.lm)
+	press := weather.PressureDisplay(data.Pressure, p.lm)
+	uv := weather.UVIndexDisplay(data.UVIndex, p.lm)
+
+	p.humidityText.Text = fmt.Sprintf("%s %s %s", humid.Emoji, humid.Name, humid.Value)
 	p.humidityText.Refresh()
 
-	p.windText.Text = weather.FormatWind(data.WindSpeed, windUnit)
+	// Wind direction is already part of wind.Value, so windDirText is cleared.
+	p.windText.Text = fmt.Sprintf("%s %s %s", wind.Emoji, wind.Name, wind.Value)
 	p.windText.Refresh()
 
 	p.cityText.Text = weather.FormatCityRegion(data.CityName, data.Region)
 	p.cityText.Refresh()
 
-	p.windGustText.Text = weather.FormatWindGust(data.WindGust, windUnit, p.lm)
+	p.windGustText.Text = fmt.Sprintf("%s %s %s", gust.Emoji, gust.Name, gust.Value)
 	p.windGustText.Refresh()
 
-	p.dewPointText.Text = weather.FormatDewPoint(data.DewPoint, p.lm)
+	p.dewPointText.Text = fmt.Sprintf("%s %s %s", dew.Emoji, dew.Name, dew.Value)
 	p.dewPointText.Refresh()
 
-	p.pressureText.Text = weather.FormatPressure(data.Pressure)
+	p.pressureText.Text = fmt.Sprintf("%s %s %s", press.Emoji, press.Name, press.Value)
 	p.pressureText.Refresh()
 
-	p.uvIndexText.Text = weather.FormatUVIndex(data.UVIndex)
+	p.uvIndexText.Text = fmt.Sprintf("%s %s %s", uv.Emoji, uv.Name, uv.Value)
 	p.uvIndexText.Refresh()
 
-	p.windDirText.Text = weather.FormatWindDir(data.WindDirection)
+	p.windDirText.Text = ""
 	p.windDirText.Refresh()
 
 	// Update air quality and pollution metrics.

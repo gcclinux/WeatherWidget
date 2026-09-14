@@ -435,10 +435,18 @@ func (m *manager) updateCard(card uintptr, d *weather.WeatherData) {
 		isNight, opacityToAlpha(m.opacity),
 	)
 
+	// Push the localized metric NAME words + AQI label so the tile labels follow
+	// the chosen UI language (values were sent above). "AQI" is a universal
+	// abbreviation left as-is (same value shown on the compact tile).
+	nativeSetCardMetricNames(card,
+		humidDisp.Name, windDisp.Name, gustDisp.Name,
+		dewDisp.Name, pressDisp.Name, uvDisp.Name, "AQI",
+	)
+
 	// Air-quality / pollution rows.
 	pf := m.cfg.GetPollutionFields()
 	pd := weather.PollutionOf(d)
-	rows := weather.PlanPollutionRows(pf, pd)
+	rows := weather.PlanPollutionRows(pf, pd, m.lm)
 
 	// AQI.
 	aqiLabel := ""

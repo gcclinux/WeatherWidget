@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"weatherwidget/internal/config"
+	"weatherwidget/internal/i18n"
 )
 
 // PollutionMetric identifies one air-quality metric.
@@ -105,6 +106,34 @@ func FormatAQI(v int) string {
 	return fmt.Sprintf("%d (%s)", v, AQICategory(v))
 }
 
+// aqiCategoryKey maps each AQI index (1-5) to its i18n key and English fallback.
+var aqiCategoryKey = map[int]struct {
+	key      string
+	fallback string
+}{
+	1: {"weather.aqi.good", "Good"},
+	2: {"weather.aqi.fair", "Fair"},
+	3: {"weather.aqi.moderate", "Moderate"},
+	4: {"weather.aqi.poor", "Poor"},
+	5: {"weather.aqi.veryPoor", "Very Poor"},
+}
+
+// AQICategoryLocalized is like AQICategory but returns the qualitative label in
+// the active locale (falling back to English when lm is nil or the key is
+// missing). Values outside 1-5 return "".
+func AQICategoryLocalized(v int, lm *i18n.LocaleManager) string {
+	e, ok := aqiCategoryKey[v]
+	if !ok {
+		return ""
+	}
+	return tr(lm, e.key, e.fallback)
+}
+
+// FormatAQILocalized renders "N (Category)" with the category localized.
+func FormatAQILocalized(v int, lm *i18n.LocaleManager) string {
+	return fmt.Sprintf("%d (%s)", v, AQICategoryLocalized(v, lm))
+}
+
 // FormatPollutant renders a µg/m³ value with one decimal and the unit suffix.
 func FormatPollutant(v float64) string { return fmt.Sprintf("%.1f µg/m³", v) }
 
@@ -112,9 +141,17 @@ func FormatPollutant(v float64) string { return fmt.Sprintf("%.1f µg/m³", v) }
 // only metrics that are both selected in fields AND have a value present in d.
 // Pure: no GTK, no I/O. When fields is nil, config.DefaultPollutionFields()
 // is used. No header entry is emitted.
-func PlanPollutionRows(fields *config.PollutionFields, d PollutionData) []PollutionRow {
+// An optional *i18n.LocaleManager may be passed to localize the AQI category
+// label (e.g. "Good" → "Gut"). It is variadic so existing callers that don't
+// have a LocaleManager keep working unchanged.
+func PlanPollutionRows(fields *config.PollutionFields, d PollutionData, lm ...*i18n.LocaleManager) []PollutionRow {
 	if fields == nil {
 		fields = config.DefaultPollutionFields()
+	}
+
+	var localeMgr *i18n.LocaleManager
+	if len(lm) > 0 {
+		localeMgr = lm[0]
 	}
 
 	var rows []PollutionRow
@@ -129,7 +166,7 @@ func PlanPollutionRows(fields *config.PollutionFields, d PollutionData) []Pollut
 			selected = fields.ShowAQI
 			if d.AQI != nil {
 				present = true
-				value = FormatAQI(*d.AQI)
+				value = FormatAQILocalized(*d.AQI, localeMgr)
 			}
 		case MetricCO:
 			selected = fields.ShowCO

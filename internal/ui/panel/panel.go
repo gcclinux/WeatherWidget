@@ -628,7 +628,7 @@ func (p *CityPanel) ApplyPollutionFields(pf *config.PollutionFields) {
 // applyAirCells populates and shows the air-quality cells selected by the
 // current pollution fields and present in the latest data; others are hidden.
 func (p *CityPanel) applyAirCells() {
-	rows := weather.PlanPollutionRows(p.pollutionFields, weather.PollutionOf(p.lastData))
+	rows := weather.PlanPollutionRows(p.pollutionFields, weather.PollutionOf(p.lastData), p.lm)
 	planned := make(map[weather.PollutionMetric]weather.PollutionRow, len(rows))
 	for _, r := range rows {
 		planned[r.Metric] = r

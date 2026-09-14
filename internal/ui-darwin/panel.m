@@ -249,6 +249,7 @@ static NSAttributedString *simpleLineAttr(NSString *iconPath, NSString *text, CG
 // Air quality row
 @property (nonatomic, strong) WWAirTile  *aqiTile;
 @property (nonatomic, strong) NSArray<WWAirTile *> *pollTiles; // kPollSlots
+@property (nonatomic, copy)   NSString   *aqiName; // localized "AQI"/"Air Quality Index" label
 
 // Error
 @property (nonatomic, strong) NSTextField *errorLbl;
@@ -637,9 +638,11 @@ static NSAttributedString *simpleLineAttr(NSString *iconPath, NSString *text, CG
         }
         _aqiTile.hidden = NO;
         // Simple-view line: inline icon + "AQI: value" (matches GTK simple view).
+        // Use the localized AQI label when available (set via setMetricNames…).
+        NSString *aqiWord = self.aqiName.length ? self.aqiName : @"AQI";
         CGFloat sz = _simpleAQILine.font ? _simpleAQILine.font.pointSize : 10;
         _simpleAQILine.attributedStringValue =
-            simpleLineAttr(iconPath, [NSString stringWithFormat:@"AQI: %@", s], sz);
+            simpleLineAttr(iconPath, [NSString stringWithFormat:@"%@: %@", aqiWord, s], sz);
         // Visibility in simple mode is governed by applyFieldMask/data; show it
         // here since AQI data just arrived.
         if (_simpleMode) _simpleAQILine.hidden = NO;
@@ -679,6 +682,25 @@ static NSString *pollSlotName(int slot) {
     } else {
         tile.hidden = YES;
         line.hidden = YES;
+    }
+}
+
+// setMetricNamesHumidity:... updates the localized NAME labels on the enhanced
+// metric tiles and stores the localized AQI name (used by the AQI tile and the
+// simple-view AQI line). The metric VALUES arrive separately via updateCardData;
+// this only refreshes the label words so they follow the chosen UI language.
+- (void)setMetricNamesHumidity:(NSString *)humid wind:(NSString *)wind
+    windGust:(NSString *)gust dewPoint:(NSString *)dew pressure:(NSString *)press
+    uvIndex:(NSString *)uv aqi:(NSString *)aqi {
+    if (humid.length) _metricTiles[0].nameLbl.stringValue = humid;
+    if (wind.length)  _metricTiles[1].nameLbl.stringValue = wind;
+    if (gust.length)  _metricTiles[2].nameLbl.stringValue = gust;
+    if (dew.length)   _metricTiles[3].nameLbl.stringValue = dew;
+    if (press.length) _metricTiles[4].nameLbl.stringValue = press;
+    if (uv.length)    _metricTiles[5].nameLbl.stringValue = uv;
+    if (aqi.length) {
+        self.aqiName = aqi;
+        _aqiTile.nameLbl.stringValue = aqi;
     }
 }
 
@@ -880,6 +902,28 @@ void updateCardData(
               humid:nHumid wind:nWind windGust:nGust
               dewPt:nDew press:nPress uv:nUV
               isNight:(BOOL)isNight opacity:opacity];
+    });
+}
+
+// setCardMetricNames updates the localized NAME words on the enhanced metric
+// tiles + the AQI label so they follow the chosen UI language. Values are sent
+// separately via updateCardData. Strings are copied synchronously (Go frees
+// them right after this returns).
+void setCardMetricNames(uintptr_t cardHandle,
+                        const char *humid, const char *wind, const char *windGust,
+                        const char *dewPt, const char *pressure, const char *uvIndex,
+                        const char *aqi) {
+    NSString *nH = nsFromC(humid);
+    NSString *nW = nsFromC(wind);
+    NSString *nG = nsFromC(windGust);
+    NSString *nD = nsFromC(dewPt);
+    NSString *nP = nsFromC(pressure);
+    NSString *nU = nsFromC(uvIndex);
+    NSString *nA = nsFromC(aqi);
+    dispatch_async(dispatch_get_main_queue(), ^{
+        [(__bridge WWCityCardView *)(void *)cardHandle
+            setMetricNamesHumidity:nH wind:nW windGust:nG dewPoint:nD
+                          pressure:nP uvIndex:nU aqi:nA];
     });
 }
 

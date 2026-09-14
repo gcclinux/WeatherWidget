@@ -111,6 +111,12 @@ extern void updateCardData(
 // updateCardAQI sets the AQI label with an inline icon (pass "" label to hide).
 extern void updateCardAQI(uintptr_t card, const char *iconPath, const char *label);
 
+// setCardMetricNames sets the localized metric NAME words on the enhanced tiles
+// (Humidity/Wind/Wind Gust/Dew Point/Pressure/UV Index) and the AQI label.
+extern void setCardMetricNames(uintptr_t card,
+    const char *humid, const char *wind, const char *windGust,
+    const char *dewPt, const char *pressure, const char *uvIndex, const char *aqi);
+
 // updateCardPollutant updates one of the eight individual pollutant labels.
 // slot: 0=CO 1=NO 2=NO2 3=O3 4=SO2 5=NH3 6=PM2.5 7=PM10.  "" to hide.
 extern void updateCardPollutant(uintptr_t card, int slot, const char *iconPath, const char *value);
@@ -294,6 +300,26 @@ func nativeUpdateCardAQI(card uintptr, iconPath, label string) {
 	defer C.free(unsafe.Pointer(ci))
 	defer C.free(unsafe.Pointer(cs))
 	C.updateCardAQI(C.uintptr_t(card), ci, cs)
+}
+
+// nativeSetCardMetricNames pushes the localized metric name words + AQI label
+// to a card's tiles so they render in the user's chosen language.
+func nativeSetCardMetricNames(card uintptr, humid, wind, windGust, dewPt, pressure, uvIndex, aqi string) {
+	cH := C.CString(humid)
+	cW := C.CString(wind)
+	cG := C.CString(windGust)
+	cD := C.CString(dewPt)
+	cP := C.CString(pressure)
+	cU := C.CString(uvIndex)
+	cA := C.CString(aqi)
+	defer C.free(unsafe.Pointer(cH))
+	defer C.free(unsafe.Pointer(cW))
+	defer C.free(unsafe.Pointer(cG))
+	defer C.free(unsafe.Pointer(cD))
+	defer C.free(unsafe.Pointer(cP))
+	defer C.free(unsafe.Pointer(cU))
+	defer C.free(unsafe.Pointer(cA))
+	C.setCardMetricNames(C.uintptr_t(card), cH, cW, cG, cD, cP, cU, cA)
 }
 
 func nativeUpdateCardPollutant(card uintptr, slot int, iconPath, value string) {

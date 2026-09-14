@@ -3,6 +3,7 @@
 package uitk
 
 import (
+	"fmt"
 	"strings"
 	"time"
 
@@ -352,13 +353,27 @@ func (p *simpleCityPanel) update(d *weather.WeatherData, tempUnit config.Tempera
 	p.cityLbl.SetText(d.CityName + ", " + d.Region)
 	p.tempLbl.SetText(weather.FormatTemperature(d.Temperature, tempUnit))
 	p.descLbl.SetText(weather.FormatDescription(d.Description, p.lm))
-	p.humidLbl.SetText(weather.FormatHumidity(d.Humidity, p.lm))
-	p.windLbl.SetText(weather.FormatWind(d.WindSpeed, windUnit))
-	p.windGustLbl.SetText(weather.FormatWindGust(d.WindGust, windUnit, p.lm))
-	p.dewPointLbl.SetText(weather.FormatDewPoint(d.DewPoint, p.lm))
-	p.pressureLbl.SetText(weather.FormatPressure(d.Pressure))
-	p.uvIndexLbl.SetText(weather.FormatUVIndex(d.UVIndex))
-	p.windDirLbl.SetText(weather.FormatWindDir(d.WindDirection))
+
+	// Build each metric line from the shared, fully-localized *Display structs
+	// (emoji + localized name + value) so labels follow the chosen UI language.
+	// This replaces the older Format* helpers, some of which (wind, pressure,
+	// UV index) did not localize their label at all.
+	humid := weather.HumidityDisplay(d.Humidity, p.lm)
+	wind := weather.WindDisplay(d.WindSpeed, d.WindDirection, windUnit, p.lm)
+	gust := weather.WindGustDisplay(d.WindGust, windUnit, p.lm)
+	dew := weather.DewPointDisplay(d.DewPoint, p.lm)
+	press := weather.PressureDisplay(d.Pressure, p.lm)
+	uv := weather.UVIndexDisplay(d.UVIndex, p.lm)
+
+	p.humidLbl.SetText(fmt.Sprintf("%s %s %s", humid.Emoji, humid.Name, humid.Value))
+	// Wind keeps its own label; the compass direction is already part of
+	// wind.Value, so the separate windDirLbl is cleared to avoid duplication.
+	p.windLbl.SetText(fmt.Sprintf("%s %s %s", wind.Emoji, wind.Name, wind.Value))
+	p.windGustLbl.SetText(fmt.Sprintf("%s %s %s", gust.Emoji, gust.Name, gust.Value))
+	p.dewPointLbl.SetText(fmt.Sprintf("%s %s %s", dew.Emoji, dew.Name, dew.Value))
+	p.pressureLbl.SetText(fmt.Sprintf("%s %s %s", press.Emoji, press.Name, press.Value))
+	p.uvIndexLbl.SetText(fmt.Sprintf("%s %s %s", uv.Emoji, uv.Name, uv.Value))
+	p.windDirLbl.SetText("")
 
 	// Load weather icon at the current icon size.
 	theme := config.IconThemeNew
@@ -378,7 +393,7 @@ func (p *simpleCityPanel) update(d *weather.WeatherData, tempUnit config.Tempera
 func (p *simpleCityPanel) applyPollutionRows(pf *config.PollutionFields) {
 	p.pollutionFields = pf
 
-	rows := weather.PlanPollutionRows(pf, weather.PollutionOf(p.lastData))
+	rows := weather.PlanPollutionRows(pf, weather.PollutionOf(p.lastData), p.lm)
 
 	planned := make(map[weather.PollutionMetric]weather.PollutionRow, len(rows))
 	planIndex := make(map[weather.PollutionMetric]int, len(rows))
