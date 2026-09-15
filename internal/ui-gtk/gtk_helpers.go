@@ -50,16 +50,21 @@ func panelAlpha(opacity int, noBackground bool) float64 {
 	if noBackground {
 		return 0.0
 	}
-	switch {
-	case opacity >= 100:
-		return 0.85
-	case opacity >= 75:
-		return 0.70
-	case opacity >= 50:
-		return 0.55
-	default: // 25%
-		return 0.40
+	// Map the opacity percentage (25–100) linearly onto an alpha range of
+	// 0.40–0.85 so the whole card darkens smoothly as the slider moves,
+	// instead of jumping between four fixed steps.
+	if opacity < 25 {
+		opacity = 25
 	}
+	if opacity > 100 {
+		opacity = 100
+	}
+	const (
+		minAlpha = 0.40
+		maxAlpha = 0.85
+	)
+	frac := float64(opacity-25) / float64(100-25) // 0.0 at 25%, 1.0 at 100%
+	return minAlpha + frac*(maxAlpha-minAlpha)
 }
 
 // paintRoundedRect fills a rounded rectangle at (x, y, w, h) with the given
@@ -113,7 +118,37 @@ func buildCSS(opacity int, noBackground bool, fsCityTime, fsTempIcon, fsConditio
 	}
 
 	// The card background itself is painted manually in manager.paintCards
-	// (see panelAlpha); the CSS below only styles text, tiles, and borders.
+	// (see panelAlpha); the CSS below styles text, and the tile/grid/separator
+	// backgrounds and borders that make up the interior "boxes".
+	//
+	// The metric grid, metric tiles and the separator are drawn by GTK CSS
+	// (not Cairo), so their opacity must be derived from the same opacity
+	// value here — otherwise they stay a fixed shade while the Cairo-painted
+	// card behind them darkens, which is exactly the "only the icon
+	// backgrounds change" symptom.
+	cardAlpha := panelAlpha(opacity, noBackground)
+
+	// Derive interior alphas from the card alpha so the whole widget darkens
+	// together. When noBackground is set (cardAlpha == 0) the interior boxes
+	// disappear as well.
+	//   - lineAlpha: the tile/grid border and separator lines
+	//
+	// The metric tiles themselves keep a fully transparent fill so the
+	// Cairo-painted card (manager.paintCards) shows through them directly.
+	// This makes the six metric cells (Humidity, Wind, Wind Gust, Dew Point,
+	// Pressure, UV Index) track the transparency slider exactly like the rest
+	// of the card, instead of layering a fixed dark fill that reads as a
+	// separate static block.
+	lineAlpha := 0.10 + cardAlpha*0.18 // ~0.17 at 25%, ~0.25 at 100%
+	if noBackground {
+		lineAlpha = 0.0
+	}
+
+	// Tile fill is transparent so the card tint behind it is what the user
+	// sees; only the grid/tile borders and the separator scale with opacity.
+	tileFillCSS := "transparent"
+	lineCSS := fmt.Sprintf("rgba(255, 255, 255, %.3f)", lineAlpha)
+	sepCSS := lineCSS
 
 	return fmt.Sprintf(`
 window {
@@ -169,12 +204,12 @@ window {
 /* Right-hand metrics grid: transparent tiles separated by thin borders that
    read as a grid, matching the design mockup. */
 .metrics-grid {
-    border: 1px solid rgba(255, 255, 255, 0.14);
+    border: 1px solid %s;
     border-radius: 8px;
 }
 .metric-tile {
-    background-color: transparent;
-    border: 1px solid rgba(255, 255, 255, 0.14);
+    background-color: %s;
+    border: 1px solid %s;
     padding: 6px 10px;
 }
 .metric-emoji {
@@ -191,7 +226,7 @@ window {
 }
 /* Thin divider between the top region and the air-quality row. */
 .card-separator {
-    background-color: rgba(255, 255, 255, 0.15);
+    background-color: %s;
     min-height: 1px;
     margin: 6px 0;
 }
@@ -253,7 +288,10 @@ window {
     color: #eeeeee;
 }
 `, fsCityTime, fsTempIcon, fsConditions, fsTime, fsConditions, fsConditions,
-		fsConditions+2, fsConditions, fsConditions+2, fsConditions-1, fsConditions,
+		lineCSS, tileFillCSS, lineCSS,
+		fsConditions+2, fsConditions, fsConditions+2,
+		sepCSS,
+		fsConditions-1, fsConditions,
 		fsCityTime, fsTime, fsConditions, fsTempIcon, fsConditions, fsConditions)
 }
 

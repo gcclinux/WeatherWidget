@@ -532,6 +532,11 @@ func (m *manager) SetOpacity(pct int) {
 	for _, p := range m.panels {
 		p.setTintAlpha(alpha)
 	}
+	// Force a redraw so the Cairo-painted card background (paintCards) repaints
+	// with the new alpha in step with the CSS-styled interior boxes.
+	if m.win != nil {
+		m.win.QueueDraw()
+	}
 }
 
 // SetFontSizes updates all three font size values and immediately refreshes the
