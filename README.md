@@ -55,6 +55,9 @@ Features:
 
 ![Weather Widget Settings](images/weather-macos.png)
 
+**Weather Dadwin Settings**
+![Weathe Darwin Settings](images/darwin-settings.png)
+
 **Weather Widget Languages Settings**
 
 ![Weather Widget Settings](images/weather-languages.png)
