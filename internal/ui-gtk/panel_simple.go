@@ -710,3 +710,23 @@ func (p *simpleCityPanel) stopClock() {
 		p.clockTicker = nil
 	}
 }
+
+// refreshClock re-renders the time/date labels immediately from the current
+// wall-clock time in the panel's timezone.
+func (p *simpleCityPanel) refreshClock() {
+	tz := p.timezone
+	if tz == "" {
+		tz = "UTC"
+	}
+	loc, err := time.LoadLocation(tz)
+	if err != nil {
+		loc = time.UTC
+	}
+	localT := time.Now().In(loc)
+	timeStr := weather.FormatTime(localT, tz, p.lm)
+	dateStr := weather.FormatDate(localT, tz, p.lm)
+	runOnUI(func() {
+		p.timeLbl.SetText(timeStr)
+		p.dateLbl.SetText(dateStr)
+	})
+}

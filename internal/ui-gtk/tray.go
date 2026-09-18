@@ -246,6 +246,12 @@ func (m *manager) buildTrayMenu() *gtk.Menu {
 	sep, _ := gtk.SeparatorMenuItemNew()
 	menu.Append(sep)
 
+	refreshItem, _ := gtk.MenuItemNewWithLabel(m.t("tray.refresh"))
+	refreshItem.Connect("activate", func() {
+		runOnUI(func() { m.manualRefresh() })
+	})
+	menu.Append(refreshItem)
+
 	settingsItem, _ := gtk.MenuItemNewWithLabel(m.t("tray.settings"))
 	settingsItem.Connect("activate", func() {
 		runOnUI(func() { m.openSettings() })

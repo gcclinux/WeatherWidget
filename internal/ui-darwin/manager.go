@@ -605,6 +605,54 @@ func (m *manager) openSettings() {
 	openSettingsWindow(m)
 }
 
+// manualRefresh is invoked from the "Refresh" tray menu entry. It re-renders
+// the local time/date on every card immediately (correcting a stale clock
+// after wake-from-sleep, where the per-second ticker may not have fired) and
+// pulls fresh weather + pollution data out-of-band via the scheduler (which
+// reads from the configured remote API or local database).
+func (m *manager) manualRefresh() {
+	log.Println("uidarwin: manual refresh requested from tray menu")
+
+	// Snapshot the cards and their timezones so we can push an immediate
+	// time/date render without holding cardsMu across native calls.
+	m.cardsMu.Lock()
+	cards := make([]uintptr, len(m.cards))
+	copy(cards, m.cards)
+	m.cardsMu.Unlock()
+
+	cities := m.cfg.Cities
+	alpha := opacityToAlpha(m.opacity)
+	for i, card := range cards {
+		tz := "UTC"
+		if i < len(cities) && cities[i].Timezone != "" {
+			tz = cities[i].Timezone
+		}
+		loc, err := time.LoadLocation(tz)
+		if err != nil {
+			loc = time.UTC
+		}
+		now := time.Now().In(loc)
+		timeStr := weather.FormatTime(now, tz, m.lm)
+		dateStr := weather.FormatDate(now, tz, m.lm)
+		c := card
+		ts, ds := timeStr, dateStr
+		mainQueue <- func() {
+			// Empty strings for all non-time/date fields are skipped by the
+			// ObjC layer, so this updates only the clock labels.
+			nativeUpdateCardData(c,
+				"", "", ts, ds,
+				"", "", "", "", "", "", "", "",
+				false, alpha,
+			)
+		}
+	}
+
+	// Pull fresh weather + pollution data out-of-band.
+	if m.sched != nil {
+		m.sched.FetchNow()
+	}
+}
+
 // onSettingsSave persists a new config and rebuilds the UI as needed.
 // It mirrors ui-gtk/manager.go onSettingsSave exactly.
 func (m *manager) onSettingsSave(newCfg *config.Config) error {

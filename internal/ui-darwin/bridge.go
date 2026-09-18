@@ -146,13 +146,15 @@ extern void setCardFontSizes(uintptr_t card, int cityTimeSize, int tempSize, int
 // ── Tray C API ──────────────────────────────────────────────────────────────
 
 // createStatusItem creates an NSStatusItem and returns its handle.
-// settingsLabel / quitLabel are the menu item titles.
-// onSettings / onQuit are C function pointers invoked on the main thread
-// (defined in tray.m as traySettingsCB / trayQuitCB).
+// settingsLabel / refreshLabel / quitLabel are the menu item titles.
+// onSettings / onRefresh / onQuit are C function pointers invoked on the main
+// thread (defined in tray.m as traySettingsCB / trayRefreshCB / trayQuitCB).
 extern uintptr_t createStatusItem(
     const char *settingsLabel,
+    const char *refreshLabel,
     const char *quitLabel,
     void (*onSettings)(void),
+    void (*onRefresh)(void),
     void (*onQuit)(void)
 );
 
@@ -160,8 +162,10 @@ extern uintptr_t createStatusItem(
 extern void updateStatusItemMenu(
     uintptr_t item,
     const char *settingsLabel,
+    const char *refreshLabel,
     const char *quitLabel,
     void (*onSettings)(void),
+    void (*onRefresh)(void),
     void (*onQuit)(void)
 );
 
@@ -398,27 +402,33 @@ func nativeSetCardFontSizes(card uintptr, cityTime, temp, cond int) {
 // The two function pointers (traySettingsCB / trayQuitCB) are defined in
 // tray.m; they look up the registered Go callbacks via the global table in
 // tray.go (registerCallback / invokeCallback).
-func nativeCreateStatusItem(settingsLabel, quitLabel string) uintptr {
+func nativeCreateStatusItem(settingsLabel, refreshLabel, quitLabel string) uintptr {
 	cs := C.CString(settingsLabel)
+	cr := C.CString(refreshLabel)
 	cq := C.CString(quitLabel)
 	defer C.free(unsafe.Pointer(cs))
+	defer C.free(unsafe.Pointer(cr))
 	defer C.free(unsafe.Pointer(cq))
 	return uintptr(C.createStatusItem(
-		cs, cq,
+		cs, cr, cq,
 		(*[0]byte)(C.traySettingsCB),
+		(*[0]byte)(C.trayRefreshCB),
 		(*[0]byte)(C.trayQuitCB),
 	))
 }
 
 // nativeUpdateStatusItemMenu rebuilds the tray menu with fresh labels.
-func nativeUpdateStatusItemMenu(item uintptr, settingsLabel, quitLabel string) {
+func nativeUpdateStatusItemMenu(item uintptr, settingsLabel, refreshLabel, quitLabel string) {
 	cs := C.CString(settingsLabel)
+	cr := C.CString(refreshLabel)
 	cq := C.CString(quitLabel)
 	defer C.free(unsafe.Pointer(cs))
+	defer C.free(unsafe.Pointer(cr))
 	defer C.free(unsafe.Pointer(cq))
 	C.updateStatusItemMenu(
-		C.uintptr_t(item), cs, cq,
+		C.uintptr_t(item), cs, cr, cq,
 		(*[0]byte)(C.traySettingsCB),
+		(*[0]byte)(C.trayRefreshCB),
 		(*[0]byte)(C.trayQuitCB),
 	)
 }

@@ -31,6 +31,10 @@ type panelView interface {
 	applyPollutionRows(pf *config.PollutionFields)
 	setIconSize(size int)
 	stopClock()
+	// refreshClock immediately re-renders the time/date labels from the current
+	// wall-clock time, correcting a stale display (e.g. after wake-from-sleep)
+	// without waiting for the next per-second tick.
+	refreshClock()
 }
 
 // rootBox returns the enhanced panel's top-level card box.
@@ -934,4 +938,24 @@ func (p *cityPanel) stopClock() {
 		p.clockTicker.Stop()
 		p.clockTicker = nil
 	}
+}
+
+// refreshClock re-renders the time/date labels immediately from the current
+// wall-clock time in the panel's timezone.
+func (p *cityPanel) refreshClock() {
+	tz := p.timezone
+	if tz == "" {
+		tz = "UTC"
+	}
+	loc, err := time.LoadLocation(tz)
+	if err != nil {
+		loc = time.UTC
+	}
+	localT := time.Now().In(loc)
+	timeStr := weather.FormatTime(localT, tz, p.lm)
+	dateStr := weather.FormatDate(localT, tz, p.lm)
+	runOnUI(func() {
+		p.timeLbl.SetText(timeStr)
+		p.dateLbl.SetText(dateStr)
+	})
 }
