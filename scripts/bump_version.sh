@@ -14,6 +14,7 @@ set -e
 #   - installer/AppxManifest.xml (MSIX package version, 4-part)
 #   - docs/site/index.html (hero badge version)
 #   - README.md (example commands)
+#   - flatpak/uk.co.easysmartapps.WeatherWidget.metainfo.xml (new <release> entry)
 
 NEW_VERSION="$1"
 
@@ -159,6 +160,43 @@ if [ -f "$README_FILE" ]; then
             UPDATED=$((UPDATED + 1))
         else
             echo "  [FAIL] README.md"
+            FAILED=$((FAILED + 1))
+        fi
+    fi
+fi
+
+# --- 7. Update flatpak metainfo.xml (prepend a new <release> entry) ---
+# AppStream expects newest-first releases. Rather than editing an existing
+# version (the block is a changelog history), we prepend a new <release>
+# element with today's date. Idempotent: skips if the newest entry already
+# matches NEW_VERSION.
+METAINFO_FILE="$PROJECT_ROOT/flatpak/uk.co.easysmartapps.WeatherWidget.metainfo.xml"
+if [ -f "$METAINFO_FILE" ]; then
+    RELEASE_DATE=$(date +%F)
+    # Detect the version of the first (newest) <release> entry.
+    CURRENT_TOP=$(grep -oE '<release version="[^"]*"' "$METAINFO_FILE" | head -n1 | sed -E 's/.*version="([^"]*)".*/\1/')
+
+    if [ "$CURRENT_TOP" = "$NEW_VERSION" ]; then
+        echo "  [SKIP] flatpak metainfo.xml (already at $NEW_VERSION)"
+    else
+        if awk -v ver="$NEW_VERSION" -v rdate="$RELEASE_DATE" '
+            !inserted && /<releases>/ {
+                print
+                print "    <release version=\"" ver "\" date=\"" rdate "\">"
+                print "      <description>"
+                print "        <p>Maintenance release.</p>"
+                print "      </description>"
+                print "    </release>"
+                inserted = 1
+                next
+            }
+            { print }
+        ' "$METAINFO_FILE" > "$METAINFO_FILE.tmp" && mv "$METAINFO_FILE.tmp" "$METAINFO_FILE"; then
+            echo "  [OK] flatpak/uk.co.easysmartapps.WeatherWidget.metainfo.xml (release: $NEW_VERSION, $RELEASE_DATE)"
+            UPDATED=$((UPDATED + 1))
+        else
+            rm -f "$METAINFO_FILE.tmp"
+            echo "  [FAIL] flatpak/uk.co.easysmartapps.WeatherWidget.metainfo.xml"
             FAILED=$((FAILED + 1))
         fi
     fi
