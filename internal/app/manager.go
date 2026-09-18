@@ -88,6 +88,7 @@ func (a *AppManager) Run() error {
 	a.ui.SetupSystemTray(
 		a.appDataDir,
 		func() { a.openSettings() },
+		func() { a.manualRefresh() },
 		func() { a.Shutdown() },
 	)
 
@@ -252,6 +253,7 @@ func (a *AppManager) onSettingsSave(newCfg *config.Config) error {
 		a.ui.SetupSystemTray(
 			a.appDataDir,
 			func() { a.openSettings() },
+			func() { a.manualRefresh() },
 			func() { a.Shutdown() },
 		)
 	}
@@ -438,6 +440,26 @@ func (a *AppManager) providerConfigChanged(old, new *config.Config) bool {
 			old.DatabaseConfig.Query != new.DatabaseConfig.Query
 	}
 	return false
+}
+
+// manualRefresh is invoked from the "Refresh" tray menu entry. It pulls fresh
+// weather + pollution data out-of-band and re-renders the local time/date on
+// every panel. Restarting the panel clocks immediately re-reads time.Now() so
+// the displayed clock self-corrects even if the system had been asleep (where
+// the per-second ticker may not have fired). The scheduler's FetchNow re-pulls
+// data from the configured source (remote API or local database).
+func (a *AppManager) manualRefresh() {
+	log.Printf("manual refresh requested from tray menu")
+
+	// Re-render local time/date right away by restarting the panel clocks.
+	// StartClock renders the current time and date before its first tick, so a
+	// stale clock (e.g. after wake-from-sleep) is corrected instantly.
+	a.startPanelClocks(a.cfg.Cities)
+
+	// Pull fresh weather + pollution data out-of-band.
+	if a.scheduler != nil {
+		a.scheduler.FetchNow()
+	}
 }
 
 // startPanelClocks starts the clock ticker on each city panel.

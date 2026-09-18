@@ -1,0 +1,6 @@
+# Local flatpak-builder test artifacts (do not commit)
+build-dir/
+.flatpak-builder/
+repo/
+# shared-modules is a git submodule in the Flathub repo, not committed here
+shared-modules/

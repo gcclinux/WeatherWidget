@@ -15,8 +15,9 @@ import (
 // or setup fails, a warning is logged and the app continues without tray.
 //
 // onSettings is called when the user selects "Settings" from the tray menu.
+// onRefresh is called when the user selects "Refresh" from the tray menu.
 // onExit is called when the user selects "Quit" from the tray menu.
-func (u *UIManager) SetupSystemTray(appDataDir string, onSettings func(), onExit func()) {
+func (u *UIManager) SetupSystemTray(appDataDir string, onSettings func(), onRefresh func(), onExit func()) {
 	desk, ok := u.app.(desktop.App)
 	if !ok {
 		log.Println("warning: system tray not supported on this platform, continuing without tray")
@@ -45,6 +46,7 @@ func (u *UIManager) SetupSystemTray(appDataDir string, onSettings func(), onExit
 	// will display the current locale's translations whenever SetupSystemTray
 	// is called again after a locale change — no extra refresh logic needed.
 	settingsItem := fyne.NewMenuItem(u.t("tray.settings"), onSettings)
+	refreshItem := fyne.NewMenuItem(u.t("tray.refresh"), onRefresh)
 	quitItem := fyne.NewMenuItem(u.t("tray.quit"), onExit)
 	quitItem.IsQuit = true
 
@@ -56,6 +58,7 @@ func (u *UIManager) SetupSystemTray(appDataDir string, onSettings func(), onExit
 			u.widget.Hide()
 		}),
 		fyne.NewMenuItemSeparator(),
+		refreshItem,
 		settingsItem,
 		fyne.NewMenuItemSeparator(),
 		quitItem,

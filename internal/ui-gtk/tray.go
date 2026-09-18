@@ -223,6 +223,14 @@ func (m *manager) buildTrayMenu() *gtk.Menu {
 	showItem.Connect("activate", func() {
 		runOnUI(func() {
 			m.win.ShowAll()
+			// ShowAll() recursively shows every child, overriding the Hide()
+			// calls that applyPollutionRows/applyDisplayFields made for
+			// unselected fields. Re-apply the saved config so hidden pollution
+			// tiles (and display fields) stay hidden, matching buildWindow.
+			for _, p := range m.panels {
+				p.applyDisplayFields(m.cfg.GetDisplayFields())
+				p.applyPollutionRows(m.cfg.GetPollutionFields())
+			}
 			m.win.SetKeepBelow(true)
 			m.applyPosition()
 		})
@@ -237,6 +245,12 @@ func (m *manager) buildTrayMenu() *gtk.Menu {
 
 	sep, _ := gtk.SeparatorMenuItemNew()
 	menu.Append(sep)
+
+	refreshItem, _ := gtk.MenuItemNewWithLabel(m.t("tray.refresh"))
+	refreshItem.Connect("activate", func() {
+		runOnUI(func() { m.manualRefresh() })
+	})
+	menu.Append(refreshItem)
 
 	settingsItem, _ := gtk.MenuItemNewWithLabel(m.t("tray.settings"))
 	settingsItem.Connect("activate", func() {

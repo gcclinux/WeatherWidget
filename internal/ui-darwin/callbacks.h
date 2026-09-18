@@ -9,3 +9,7 @@ void traySettingsCB(void);
 // trayQuitCB is invoked when the user clicks "Quit" in the tray menu.
 // Defined in tray.m; bridges to the Go onQuit callback stored in g_onQuit.
 void trayQuitCB(void);
+
+// trayRefreshCB is invoked when the user clicks "Refresh" in the tray menu.
+// Defined in tray.m; bridges to the Go onRefresh callback in the registry.
+void trayRefreshCB(void);

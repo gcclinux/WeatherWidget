@@ -32,7 +32,8 @@ import "sync"
 const (
 	cbIndexSettings = 0
 	cbIndexQuit     = 1
-	cbCount         = 2
+	cbIndexRefresh  = 2
+	cbCount         = 3
 )
 
 var (
@@ -47,7 +48,8 @@ func registerCallback(index int, fn func()) {
 	cbMu.Unlock()
 }
 
-// invokeCallback is called from C (tray.m → traySettingsCB / trayQuitCB).
+// invokeCallback is called from C (tray.m → traySettingsCB / trayQuitCB /
+// trayRefreshCB). index: 0 = Settings, 1 = Quit, 2 = Refresh.
 //
 //export invokeCallback
 func invokeCallback(index C.int) {
@@ -103,6 +105,7 @@ func setupTray(m *manager) {
 	// Register Go-side callbacks into the indexed slots.
 	registerCallback(cbIndexSettings, func() { m.openSettings() })
 	registerCallback(cbIndexQuit, func() { m.shutdown() })
+	registerCallback(cbIndexRefresh, func() { m.manualRefresh() })
 
 	// Fallback labels in case the locale manager isn't loaded yet (tray is
 	// created before loadConfigAndLocale during launch).
@@ -110,12 +113,16 @@ func setupTray(m *manager) {
 	if settingsLabel == "" || settingsLabel == "tray.settings" {
 		settingsLabel = "Settings"
 	}
+	refreshLabel := m.t("tray.refresh")
+	if refreshLabel == "" || refreshLabel == "tray.refresh" {
+		refreshLabel = "Refresh"
+	}
 	quitLabel := m.t("tray.quit")
 	if quitLabel == "" || quitLabel == "tray.quit" {
 		quitLabel = "Quit"
 	}
 
-	handle := nativeCreateStatusItem(settingsLabel, quitLabel)
+	handle := nativeCreateStatusItem(settingsLabel, refreshLabel, quitLabel)
 	m.trayItem = handle
 }
 
@@ -127,6 +134,7 @@ func updateTrayMenu(m *manager) {
 	nativeUpdateStatusItemMenu(
 		m.trayItem,
 		m.t("tray.settings"),
+		m.t("tray.refresh"),
 		m.t("tray.quit"),
 	)
 }

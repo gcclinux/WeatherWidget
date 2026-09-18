@@ -388,6 +388,12 @@ func (m *manager) buildWindow() error {
 		if err != nil {
 			return false
 		}
+		refreshItem, _ := gtk.MenuItemNewWithLabel(m.t("tray.refresh"))
+		refreshItem.Connect("activate", func() {
+			runOnUI(func() { m.manualRefresh() })
+		})
+		menu.Append(refreshItem)
+
 		settingsItem, _ := gtk.MenuItemNewWithLabel(m.t("tray.settings"))
 		settingsItem.Connect("activate", func() {
 			runOnUI(func() { m.openSettings() })
@@ -521,6 +527,25 @@ func (m *manager) handleWeatherUpdate(results []weather.WeatherResult) {
 // openSettings opens the GTK settings dialog.
 func (m *manager) openSettings() {
 	showSettingsDialog(m)
+}
+
+// manualRefresh is invoked from the "Refresh" tray/context menu entry. It
+// re-renders the local time/date on every panel immediately (correcting a
+// stale clock after wake-from-sleep, where the per-second ticker may not have
+// fired) and pulls fresh weather + pollution data out-of-band via the
+// scheduler (which reads from the configured remote API or local database).
+func (m *manager) manualRefresh() {
+	log.Println("manual refresh requested from menu")
+
+	for _, p := range m.panels {
+		if p != nil {
+			p.refreshClock()
+		}
+	}
+
+	if m.sched != nil {
+		m.sched.FetchNow()
+	}
 }
 
 // SetOpacity updates the opacity level and refreshes CSS.
