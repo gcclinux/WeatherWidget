@@ -257,12 +257,52 @@ For each new release:
 The manifest grants only what WeatherWidget needs:
 
 - `--share=network` — fetch weather from provider APIs over HTTPS.
-- `--socket=fallback-x11`, `--socket=wayland`, `--share=ipc`, `--device=dri` —
-  GTK3 rendering on Wayland (falling back to X11/XWayland) with GPU acceleration.
+- `--socket=x11` + `--env=GDK_BACKEND=x11`, `--share=ipc`, `--device=dri` —
+  GTK3 rendering on X11/XWayland with GPU acceleration.
 - `--talk-name=org.kde.StatusNotifierWatcher`,
   `--talk-name=org.freedesktop.Notifications` — the system tray icon.
 
-Config is written to the app's sandboxed data dir. If you later need the widget
-to remember a custom on-screen position that relies on host window state, test
-under both X11 and Wayland before widening permissions — Flathub review prefers
-the **narrowest** set that still works.
+### Why `--socket=x11` (and `GDK_BACKEND=x11`) rather than `fallback-x11`+`wayland`
+
+WeatherWidget is a **positioned desktop widget**: the user chooses an absolute
+on-screen location (e.g. `1024,10`) in Settings, and that position is saved to
+config and restored on launch.
+
+Native Wayland deliberately forbids clients from setting their own absolute
+window position — the compositor decides placement. So under a pure Wayland
+backend (`--socket=wayland` with GDK auto-selecting Wayland), GNOME Mutter
+ignores the saved coordinates and centres the widget. This was the observed
+Flatpak bug: the config loaded correctly and `win.Move(x,y)` was called, but the
+window still landed in the centre.
+
+The app therefore runs on **XWayland**, exactly as the deb/rpm/AppImage/Snap
+builds do, where its X11 positioning path (`WM_NORMAL_HINTS` USPosition +
+`XMoveWindow` + `_NET_MOVERESIZE_WINDOW`) is honoured. That requires:
+
+- `--socket=x11` — a real X11 socket. Note `--socket=fallback-x11` is **not**
+  enough here: it only exposes an X11 socket when there is *no* Wayland session,
+  so on a Wayland desktop it provides nothing and forcing x11 fails with
+  `cannot open display`.
+- `--env=GDK_BACKEND=x11` — forces the GDK X11 backend so the app connects to
+  XWayland instead of auto-selecting native Wayland. This mirrors the Snap,
+  which also sets `GDK_BACKEND=x11`.
+
+The app's Go code honours a pre-set `GDK_BACKEND`: when it is `x11` it uses the
+X11 positioning path; when unset (e.g. a native Wayland desktop package without
+this env) it auto-selects Wayland and skips the X11-only calls. So this manifest
+env is what selects the XWayland path inside the sandbox.
+
+> Trade-off / Flathub review note: `flatpak-builder-lint manifest` accepts this
+> configuration, but a reviewer may still ask about raw `--socket=x11`. It is
+> justified here because absolute window positioning is a core feature that
+> Wayland does not permit. If a narrower set is required, the fallback is
+> `--socket=fallback-x11` + `--socket=wayland` (dropping `GDK_BACKEND=x11`),
+> which builds and runs but **loses saved-position support on Wayland
+> sessions** — the widget will open where the compositor decides.
+
+Config is written to the app's sandboxed data dir
+(`~/.var/app/uk.co.easysmartapps.WeatherWidget/config/…`). The GTK entry point
+resolves this via `os.UserConfigDir()`, which honours `$XDG_CONFIG_HOME` — set
+automatically by Flatpak — so settings and window position persist across
+restarts. (Hardcoding `~/.config` would write to a host path the sandbox does
+not persist, which is why early Flatpak builds appeared to "lose" all settings.)
