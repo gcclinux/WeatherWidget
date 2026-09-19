@@ -33,10 +33,23 @@ finish-args:
   # Weather data is fetched over HTTPS from provider APIs.
   - --share=network
   # GUI: the widget renders with GTK3 and needs a display server.
-  # fallback-x11 uses Wayland when available and X11 otherwise, which is the
-  # pattern Flathub's linter requires (never raw --socket=x11 with wayland).
-  - --socket=fallback-x11
-  - --socket=wayland
+  #
+  # NOTE: WeatherWidget is a *positioned* desktop widget — the user chooses an
+  # absolute on-screen location (e.g. 1024,10). Native Wayland deliberately
+  # forbids clients from setting their own absolute window position, so under a
+  # pure Wayland backend the compositor (GNOME Mutter) ignores the saved
+  # coordinates and centres the widget. To honour the user's position we run on
+  # XWayland (like the deb/rpm/appimage/snap builds do), which requires a real
+  # X11 socket rather than fallback-x11 (the latter provides no X11 socket when
+  # a Wayland session is present, which is exactly our case).
+  - --socket=x11
+  # Force the GTK/GDK X11 backend so the app connects to XWayland and its
+  # X11 positioning path (WM_NORMAL_HINTS + XMoveWindow + _NET_MOVERESIZE_WINDOW)
+  # is used. Without this, GDK would auto-select the native Wayland backend and
+  # the saved position would be ignored. This mirrors the Snap, which also sets
+  # GDK_BACKEND=x11. The app honours a pre-set GDK_BACKEND and only auto-selects
+  # Wayland when it is unset.
+  - --env=GDK_BACKEND=x11
   # Shared IPC (needed by X11/XWayland shared memory).
   - --share=ipc
   # GPU acceleration for GTK/OpenGL rendering.

@@ -79,9 +79,12 @@ func (m *manager) tFmt(key string, args ...interface{}) string {
 // Run initialises GTK, sets up all application components, and starts the
 // GTK main loop. It does not return until the application exits.
 func Run(appDataDir string, openSettings bool) {
-	// Set GDK_BACKEND=x11 via C's setenv before GTK reads the environment.
-	// This ensures reliable window positioning via XWayland on Wayland desktops.
-	ensureGDKBackendX11()
+	// Select the GDK backend before GTK reads the environment. On X11 sessions
+	// this forces GDK_BACKEND=x11 (reliable XWayland positioning); on Wayland
+	// sessions it leaves GDK to auto-select its native Wayland backend so the
+	// app still starts inside confined runtimes (Flatpak/Snap) where no X11
+	// display is exposed.
+	ensureGDKBackend()
 
 	log.Printf("GDK_BACKEND=%s", os.Getenv("GDK_BACKEND"))
 
@@ -324,12 +327,27 @@ func (m *manager) buildWindow() error {
 
 	// --- Window positioning ---
 	//
-	// GDK_BACKEND=x11 is always set (via main.go or snap environment).
-	// XMoveWindow works for native builds (deb/rpm/appimage) where the app
-	// connects directly to XWayland. For snaps, the X11 portal blocks
-	// XMoveWindow, so positioning is done via Settings → Display controls.
+	// Two paths, selected at runtime by the session type:
+	//
+	//   X11 sessions (GDK_BACKEND=x11, native deb/rpm/appimage): the app
+	//   connects directly to X11/XWayland, so we drive positioning with X11
+	//   hints and XMoveWindow, which the WM honours precisely.
+	//
+	//   Wayland sessions (native Wayland backend, incl. Flatpak/Snap): Xlib
+	//   calls are invalid — win.Native() is a Wayland surface, not an X11
+	//   window — so the X11 helpers are skipped. GTK3's native Wayland backend
+	//   honours win.Move() when called before ShowAll(), so we rely on
+	//   applyPosition()/win.Move() instead.
 	//
 	// The Settings position controls work for ALL environments.
+
+	// Use the native-Wayland positioning path only when the X11 backend is NOT
+	// in effect. ensureGDKBackend() has already run by now, so GDK_BACKEND=="x11"
+	// means the app is on X11/XWayland (native builds AND the Snap, which forces
+	// x11) and the X11 helpers are valid. When it is not x11 and the session is
+	// Wayland (the Flatpak-on-Wayland case), win.Native() is a Wayland surface
+	// and the Xlib helpers must be skipped.
+	wayland := isWayland() && os.Getenv("GDK_BACKEND") != "x11"
 
 	// Compute target position once.
 	var posX, posY int
@@ -343,36 +361,51 @@ func (m *manager) buildWindow() error {
 	// Set event mask before realize.
 	win.SetEvents(int(gdk.BUTTON_PRESS_MASK | gdk.BUTTON_RELEASE_MASK | gdk.POINTER_MOTION_MASK))
 
-	// Phase 1: realize → X11 hints → move → show.
+	// Phase 1: realize → (X11 hints/move on X11 only) → move → show.
 	win.Realize()
-	x11SetPositionHint(win, posX, posY)
-	x11MoveWindow(win, posX, posY)
+	if !wayland {
+		x11SetPositionHint(win, posX, posY)
+		x11MoveWindow(win, posX, posY)
+	}
 	m.applyPosition()
 
-	// Phase 2: after map, force position with repeated XMoveWindow.
-	win.Connect("map-event", func(_ *gtk.Window, _ *gdk.Event) bool {
-		x11MoveWindow(m.win, posX, posY)
-		glib.TimeoutAdd(100, func() bool {
-			x11MoveWindow(m.win, posX, posY)
-			return false
-		})
-		glib.TimeoutAdd(400, func() bool {
-			x11MoveWindow(m.win, posX, posY)
-			x11NetMoveWindow(m.win, posX, posY)
-			return false
-		})
-		glib.TimeoutAdd(1000, func() bool {
-			x11MoveWindow(m.win, posX, posY)
+	if wayland {
+		// Native Wayland: set the initial position hint via win.Move() before
+		// the window is shown. Mutter respects this on the first map.
+		win.Move(posX, posY)
+		win.Connect("map-event", func(_ *gtk.Window, _ *gdk.Event) bool {
+			m.win.Move(posX, posY)
 			m.positioned = true
 			return false
 		})
-		return false
-	})
+	} else {
+		// Phase 2 (X11 only): after map, force position with repeated XMoveWindow.
+		win.Connect("map-event", func(_ *gtk.Window, _ *gdk.Event) bool {
+			x11MoveWindow(m.win, posX, posY)
+			glib.TimeoutAdd(100, func() bool {
+				x11MoveWindow(m.win, posX, posY)
+				return false
+			})
+			glib.TimeoutAdd(400, func() bool {
+				x11MoveWindow(m.win, posX, posY)
+				x11NetMoveWindow(m.win, posX, posY)
+				return false
+			})
+			glib.TimeoutAdd(1000, func() bool {
+				x11MoveWindow(m.win, posX, posY)
+				m.positioned = true
+				return false
+			})
+			return false
+		})
+	}
 
 	// Drag-to-reposition: left-click drag moves the window.
 	moveFunc := func(x, y int) {
 		win.Move(x, y)
-		x11MoveWindow(win, x, y)
+		if !wayland {
+			x11MoveWindow(win, x, y)
+		}
 	}
 
 	enableDrag(win, moveFunc, nil)

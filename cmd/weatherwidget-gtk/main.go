@@ -40,8 +40,19 @@ func main() {
 	uitk.Run(appDataDir, *settingsFlag)
 }
 
-// appDataDirectory returns ~/.config/WeatherWidget.
+// appDataDirectory returns the base directory for application data.
+//
+// It uses os.UserConfigDir(), which honours $XDG_CONFIG_HOME when set and
+// otherwise falls back to ~/.config. This matters for confined runtimes:
+// under Flatpak/Snap, $XDG_CONFIG_HOME points at the app's private, persistent
+// config directory (e.g. ~/.var/app/<app-id>/config), so settings survive
+// restarts. On a normal Linux desktop XDG_CONFIG_HOME is usually unset, so
+// this resolves to ~/.config/WeatherWidget exactly as before.
 func appDataDirectory() string {
+	if dir, err := os.UserConfigDir(); err == nil {
+		return filepath.Join(dir, "WeatherWidget")
+	}
+	// Fallback: derive ~/.config manually if UserConfigDir fails.
 	home, err := os.UserHomeDir()
 	if err != nil {
 		home = "."
