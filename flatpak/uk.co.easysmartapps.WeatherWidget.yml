@@ -1,7 +1,7 @@
 # Flatpak manifest for WeatherWidget
 #
 # App ID:  uk.co.easysmartapps.WeatherWidget
-# Runtime: GNOME Platform 49 (current supported release)
+# Runtime: GNOME Platform 51 (latest release)
 # Build:   Go + native GTK3 (gotk3) + libayatana-appindicator3, CGO enabled.
 #
 # ---------------------------------------------------------------------------
@@ -15,7 +15,7 @@
 # ---------------------------------------------------------------------------
 #
 # Local test build (from the flatpak/ directory):
-#   flatpak install -y flathub org.gnome.Platform//49 org.gnome.Sdk//49 \
+#   flatpak install -y flathub org.gnome.Platform//51 org.gnome.Sdk//51 \
 #       org.freedesktop.Sdk.Extension.golang//25.08
 #   flatpak-builder --user --install --force-clean build-dir \
 #       uk.co.easysmartapps.WeatherWidget.yml
@@ -23,7 +23,7 @@
 
 app-id: uk.co.easysmartapps.WeatherWidget
 runtime: org.gnome.Platform
-runtime-version: '49'
+runtime-version: '51'
 sdk: org.gnome.Sdk
 sdk-extensions:
   - org.freedesktop.Sdk.Extension.golang
@@ -56,7 +56,6 @@ finish-args:
   - --device=dri
   # System tray icon via StatusNotifierItem / AppIndicator.
   - --talk-name=org.kde.StatusNotifierWatcher
-  - --talk-name=org.freedesktop.Notifications
 
 # The GNOME runtime already provides GTK3, GLib, Cairo, Pango, gdk-pixbuf.
 # We only add libayatana-appindicator (tray) and the app itself.
@@ -87,28 +86,11 @@ modules:
         # Silence gotk3 / appindicator C header deprecation noise.
         CGO_CFLAGS: '-Wno-deprecated-declarations'
     build-commands:
-      # The go.mod.yml + modules.txt sources below have populated ./vendor,
-      # so we build with -mod=vendor and never touch the network.
-      - |
-        set -e
-        export GOPATH="$PWD/.gopath"
-        VERSION="$(cat release 2>/dev/null | tr -d '[:space:]')"
-        [ -z "$VERSION" ] && VERSION="dev"
-        go build -v -mod=vendor \
-          -ldflags="-s -w -X main.version=${VERSION}" \
-          -o weatherwidget \
-          ./cmd/weatherwidget-gtk/
-      - install -Dm755 weatherwidget /app/bin/weatherwidget
-      - install -Dm644 flatpak/uk.co.easysmartapps.WeatherWidget.desktop
-          /app/share/applications/uk.co.easysmartapps.WeatherWidget.desktop
-      - install -Dm644 flatpak/uk.co.easysmartapps.WeatherWidget.metainfo.xml
-          /app/share/metainfo/uk.co.easysmartapps.WeatherWidget.metainfo.xml
-      - install -Dm644 assets/icons/day/clear_day.png
-          /app/share/icons/hicolor/256x256/apps/uk.co.easysmartapps.WeatherWidget.png
-      - install -Dm644 assets/icons/day/clear_day.png
-          /app/share/icons/hicolor/128x128/apps/uk.co.easysmartapps.WeatherWidget.png
-      - install -Dm644 assets/icons/day/clear_day.png
-          /app/share/icons/hicolor/64x64/apps/uk.co.easysmartapps.WeatherWidget.png
+      # All build + install logic lives in an upstream-maintained script so the
+      # manifest stays declarative. The script builds offline (-mod=vendor from
+      # the ./vendor tree populated by go.mod.yml) and installs the binary,
+      # desktop entry, AppStream metainfo, and icons.
+      - bash flatpak/build-flatpak.sh
     sources:
       - type: dir
         path: ..

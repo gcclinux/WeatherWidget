@@ -16,14 +16,16 @@
   <description>
     <p>
       WeatherWidget puts live weather and world clocks on your desktop — a
-      compact, transparent overlay that stays on top of your windows so you
-      never lose sight of conditions in the places that matter.
+      compact, transparent overlay for keeping an eye on conditions in the
+      places that matter.
     </p>
     <p>
       Monitor multiple cities at a glance. See temperature, humidity, wind
       speed and direction, weather conditions, and local time — all updating
-      in real time. The widget is borderless, always-on-top, and adjustable in
-      transparency so it blends naturally with your workflow.
+      in real time. The widget is borderless and adjustable in transparency so
+      it blends naturally with your workflow. On X11 desktops it can stay on
+      top of your other windows; on Wayland, window stacking is managed by the
+      compositor.
     </p>
     <p>Features:</p>
     <ul>
