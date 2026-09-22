@@ -161,6 +161,8 @@ type CityPanel struct {
 	// Both are stored so they can be swapped live when day/night changes.
 	cardBgImg     *canvas.Image
 	cardBgOverlay *canvas.Rectangle
+	cardBorder    *canvas.Rectangle
+	noBackground  bool
 
 	lastData        *weather.WeatherData // cached for re-render on unit change
 	lastTempUnit    config.TemperatureUnit
@@ -522,6 +524,11 @@ func (p *CityPanel) buildLayout() fyne.CanvasObject {
 		p.cardBgImg = newCardBgImage(isNight)
 		p.cardBgOverlay = newCardBgOverlay()
 	}
+	if p.cardBorder == nil {
+		p.cardBorder = newCardBorder()
+	}
+
+	p.applyBackgroundVisibility()
 
 	// On Windows, stack a per-pixel corner mask on top of the card so that the
 	// four corner areas (outside the rounded rect) are painted with the Win32
@@ -529,9 +536,9 @@ func (p *CityPanel) buildLayout() fyne.CanvasObject {
 	// where the NSWindow content-view layer clips to a corner radius.
 	// newCornerMask() returns nil on all non-Windows platforms and is a no-op.
 	if mask := newCornerMask(); mask != nil {
-		return container.NewStack(p.cardBgImg, p.cardBgOverlay, container.NewPadded(content), mask)
+		return container.NewStack(p.cardBgImg, p.cardBgOverlay, container.NewPadded(content), mask, p.cardBorder)
 	}
-	return container.NewStack(p.cardBgImg, p.cardBgOverlay, container.NewPadded(content))
+	return container.NewStack(p.cardBgImg, p.cardBgOverlay, container.NewPadded(content), p.cardBorder)
 }
 
 // cardCornerRadius and cardStrokeWidth define the rounded, bordered card geometry.
@@ -581,12 +588,50 @@ func newCardBgImage(isNight bool) *canvas.Image {
 	return img
 }
 
+// newCardBorder returns a transparent rectangle with a rounded stroke border
+// to cleanly frame each city card.
+func newCardBorder() *canvas.Rectangle {
+	rect := canvas.NewRectangle(color.Transparent)
+	rect.CornerRadius = cardCornerRadius
+	rect.StrokeColor = color.NRGBA{R: 255, G: 255, B: 255, A: 100}
+	rect.StrokeWidth = cardStrokeWidth
+	return rect
+}
+
 // newCardBgOverlay returns a semi-transparent dark rectangle to overlay on top
 // of the background image so that white text remains readable.
 func newCardBgOverlay() *canvas.Rectangle {
 	rect := canvas.NewRectangle(color.NRGBA{R: 0, G: 0, B: 0, A: 120})
 	rect.CornerRadius = cardCornerRadius
 	return rect
+}
+
+// SetNoBackground enables or disables the background wallpaper image and dark overlay.
+// When noBg is true, the card has a transparent background with the rounded border intact.
+func (p *CityPanel) SetNoBackground(noBg bool) {
+	p.noBackground = noBg
+	p.applyBackgroundVisibility()
+}
+
+// NoBackground reports whether the background wallpaper is currently disabled.
+func (p *CityPanel) NoBackground() bool {
+	return p.noBackground
+}
+
+// applyBackgroundVisibility updates visibility of the background image and overlay.
+func (p *CityPanel) applyBackgroundVisibility() {
+	if p.cardBgImg == nil || p.cardBgOverlay == nil {
+		return
+	}
+	if p.noBackground {
+		p.cardBgImg.Hide()
+		p.cardBgOverlay.Hide()
+	} else {
+		p.cardBgImg.Show()
+		p.cardBgOverlay.Show()
+	}
+	p.cardBgImg.Refresh()
+	p.cardBgOverlay.Refresh()
 }
 
 // applyDayNightBg swaps the card background image to the day or night variant.

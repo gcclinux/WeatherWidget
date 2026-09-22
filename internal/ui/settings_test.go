@@ -1,8 +1,11 @@
 package ui
 
 import (
+	"image/color"
 	"testing"
 
+	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/test"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
@@ -365,5 +368,84 @@ func TestShowSettingsError(t *testing.T) {
 		t.Error("expected no overlay when error is nil")
 	}
 }
+
+func TestBuildConfigFromUI_NoBackground(t *testing.T) {
+	stateTrue := &settingsState{
+		cities:       []config.CityConfig{{Name: "London", Region: "UK"}},
+		selectedLang: "en-GB",
+		noBackground: true,
+	}
+	cfgTrue := buildConfigFromUIHelper(t, stateTrue)
+	if !cfgTrue.NoBackground {
+		t.Errorf("NoBackground = %v, want true", cfgTrue.NoBackground)
+	}
+
+	stateFalse := &settingsState{
+		cities:       []config.CityConfig{{Name: "London", Region: "UK"}},
+		selectedLang: "en-GB",
+		noBackground: false,
+	}
+	cfgFalse := buildConfigFromUIHelper(t, stateFalse)
+	if cfgFalse.NoBackground {
+		t.Errorf("NoBackground = %v, want false", cfgFalse.NoBackground)
+	}
+}
+
+func TestUIManager_SetNoBackground(t *testing.T) {
+	test.NewApp()
+	lm, _ := i18n.NewLocaleManager(i18n.LocaleFS)
+	um := NewUIManager(test.NewApp(), lm)
+	cities := []config.CityConfig{{Name: "London", Region: "UK"}}
+	um.ShowWidgetWithMode(cities, config.ViewModeEnhanced)
+
+	um.SetNoBackground(true)
+	if !um.noBackground {
+		t.Error("expected um.noBackground to be true")
+	}
+	for _, p := range um.panels {
+		if !p.NoBackground() {
+			t.Error("expected panel.NoBackground() to be true")
+		}
+	}
+
+	um.SetNoBackground(false)
+	if um.noBackground {
+		t.Error("expected um.noBackground to be false")
+	}
+	for _, p := range um.panels {
+		if p.NoBackground() {
+			t.Error("expected panel.NoBackground() to be false")
+		}
+	}
+}
+
+func TestSpacedVBoxLayout(t *testing.T) {
+	rect1 := canvas.NewRectangle(color.White)
+	rect1.SetMinSize(fyne.NewSize(100, 50))
+	rect2 := canvas.NewRectangle(color.White)
+	rect2.SetMinSize(fyne.NewSize(80, 40))
+
+	l := &spacedVBoxLayout{spacing: 8}
+	objects := []fyne.CanvasObject{rect1, rect2}
+
+	minSize := l.MinSize(objects)
+	if minSize.Width != 100 {
+		t.Errorf("minSize.Width = %v, want 100", minSize.Width)
+	}
+	// Height should be 50 + 8 + 40 = 98
+	if minSize.Height != 98 {
+		t.Errorf("minSize.Height = %v, want 98", minSize.Height)
+	}
+
+	l.Layout(objects, fyne.NewSize(100, 98))
+	if rect1.Position().Y != 0 {
+		t.Errorf("rect1.Position().Y = %v, want 0", rect1.Position().Y)
+	}
+	if rect2.Position().Y != 58 {
+		t.Errorf("rect2.Position().Y = %v, want 58", rect2.Position().Y)
+	}
+}
+
+
 
 

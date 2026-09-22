@@ -105,6 +105,7 @@ func (a *AppManager) Run() error {
 	a.weather = weather.NewWeatherService(provider)
 
 	// 7. Show widget and apply Win32 styles.
+	a.ui.SetNoBackground(cfg.NoBackground)
 	a.ui.ShowWidgetWithMode(cfg.Cities, cfg.ViewMode)
 	a.ui.ApplyDisplayFields(cfg.GetDisplayFields())
 	a.ui.ApplyPollutionFields(cfg.GetPollutionFields())
@@ -271,6 +272,9 @@ func (a *AppManager) onSettingsSave(newCfg *config.Config) error {
 	// Reset scheduler interval.
 	a.scheduler.SetInterval(time.Duration(newCfg.RefreshInterval) * time.Minute)
 	a.scheduler.SetCities(newCfg.Cities)
+
+	// Apply background visibility setting.
+	a.ui.SetNoBackground(newCfg.NoBackground)
 
 	// Rebuild city panels if city list or view mode changed.
 	if len(oldCfg.Cities) != len(newCfg.Cities) || !sameCities(oldCfg.Cities, newCfg.Cities) || oldCfg.ViewMode != newCfg.ViewMode {

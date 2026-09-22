@@ -76,6 +76,7 @@ type settingsState struct {
 	pollutionFields   *config.PollutionFields // current pollution field checkbox state
 	customX           *int                   // pending custom X position
 	customY           *int                   // pending custom Y position
+	noBackground      bool                   // pending background removal state
 }
 
 // t is a helper that returns the translated string for the given key.
@@ -212,6 +213,7 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 		pollutionFields:   cfg.GetPollutionFields(),
 		customX:           cfg.CustomX,
 		customY:           cfg.CustomY,
+		noBackground:      cfg.NoBackground,
 	}
 	if state.selectedLang == "" {
 		state.selectedLang = "en-GB"
@@ -224,6 +226,7 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 	origWindUnit := config.NormalizeWindSpeedUnit(cfg.WindSpeedUnit)
 	origIconTheme := config.NormalizeIconTheme(cfg.IconTheme)
 	origViewMode := config.NormalizeViewMode(cfg.ViewMode)
+	origNoBackground := cfg.NoBackground
 	origCustomX := cfg.CustomX
 	origCustomY := cfg.CustomY
 
@@ -1445,10 +1448,23 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 			config.ViewModeSimple:   viewModeSimpleOption,
 		}
 
+		var bgCheck *widget.Check
+		bgCheck = widget.NewCheck(u.t("settings.background.enable"), func(checked bool) {
+			state.noBackground = !checked
+			// Live preview: toggle background wallpaper on active panels
+			u.SetNoBackground(state.noBackground)
+		})
+		bgCheck.SetChecked(!state.noBackground)
+
 		viewModeRadio := widget.NewRadioGroup(
 			[]string{viewModeEnhancedOption, viewModeSimpleOption},
 			func(selected string) {
 				state.selectedViewMode = viewModeValueMap[selected]
+				if state.selectedViewMode == config.ViewModeSimple {
+					bgCheck.Disable()
+				} else {
+					bgCheck.Enable()
+				}
 				// Live preview: rebuild the main widget with the new view mode
 				u.ShowWidgetWithMode(cfg.Cities, state.selectedViewMode)
 				// Re-apply display and pollution fields to the new panels
@@ -1474,10 +1490,13 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 		} else {
 			viewModeRadio.SetSelected(viewModeEnhancedOption)
 		}
+		if normalizedViewMode == config.ViewModeSimple {
+			bgCheck.Disable()
+		}
 
 		appearanceContent := container.NewPadded(container.NewVScroll(container.NewVBox(
 			sectionCard(u.t("settings.viewMode.title"), u.t("settings.viewMode.subtitle"),
-				"🎨", color.NRGBA{R: 99, G: 102, B: 241, A: 255}, viewModeRadio,
+				"🎨", color.NRGBA{R: 99, G: 102, B: 241, A: 255}, container.NewVBox(viewModeRadio, bgCheck),
 			),
 			sectionCard(u.t("settings.position.title"), u.t("settings.position.subtitle"),
 				"📍", color.NRGBA{R: 225, G: 29, B: 72, A: 255}, container.NewVBox(positionItems...),
@@ -1791,6 +1810,7 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 			if u.GetViewMode() != origViewMode {
 				u.ShowWidgetWithMode(cfg.Cities, origViewMode)
 			}
+			u.SetNoBackground(origNoBackground)
 			u.RerenderPanels(origUnit, origWindUnit, origIconTheme)
 			if origCustomX != nil && origCustomY != nil {
 				u.SetPosition(*origCustomX, *origCustomY)
@@ -1863,6 +1883,7 @@ func buildConfigFromUI(
 		CustomX:         customX,
 		CustomY:         customY,
 		Opacity:         opacity,
+		NoBackground:    state.noBackground,
 		Locale:          locale,
 	}
 	cfg.TemperatureUnit = config.NormalizeTemperatureUnit(state.selectedUnit)

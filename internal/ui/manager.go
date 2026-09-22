@@ -39,6 +39,7 @@ type UIManager struct {
 	cornerPosition string
 	monitorIndex   int
 	isCustomPos    bool
+	noBackground   bool
 }
 
 // NewUIManager creates a new UIManager and its main widget window.
@@ -80,6 +81,44 @@ func (u *UIManager) ApplyWin32Styles() {
 // horizontally, resizes the window to fit, and displays it.
 func (u *UIManager) ShowWidget(cities []config.CityConfig) {
 	u.ShowWidgetWithMode(cities, config.ViewModeEnhanced)
+}
+
+// spacedVBoxLayout arranges objects vertically with a fixed spacing between them.
+type spacedVBoxLayout struct {
+	spacing float32
+}
+
+func (s *spacedVBoxLayout) MinSize(objects []fyne.CanvasObject) fyne.Size {
+	var w, h float32
+	first := true
+	for _, o := range objects {
+		if !o.Visible() {
+			continue
+		}
+		sz := o.MinSize()
+		if sz.Width > w {
+			w = sz.Width
+		}
+		if !first {
+			h += s.spacing
+		}
+		h += sz.Height
+		first = false
+	}
+	return fyne.NewSize(w, h)
+}
+
+func (s *spacedVBoxLayout) Layout(objects []fyne.CanvasObject, size fyne.Size) {
+	var y float32
+	for _, o := range objects {
+		if !o.Visible() {
+			continue
+		}
+		oSize := o.MinSize()
+		o.Resize(fyne.NewSize(size.Width, oSize.Height))
+		o.Move(fyne.NewPos(0, y))
+		y += oSize.Height + s.spacing
+	}
 }
 
 // ShowWidgetWithMode creates city panels for each city using the specified view mode.
@@ -149,6 +188,7 @@ func (u *UIManager) ShowWidgetWithMode(cities []config.CityConfig, viewMode conf
 		objects := make([]fyne.CanvasObject, count)
 		for i := 0; i < count; i++ {
 			p := panel.NewCityPanel(u.lm)
+			p.SetNoBackground(u.noBackground)
 			u.panels[i] = p
 			objects[i] = p.Container()
 			if i < len(cities) && cities[i].Timezone != "" {
@@ -158,8 +198,8 @@ func (u *UIManager) ShowWidgetWithMode(cities []config.CityConfig, viewMode conf
 			}
 		}
 
-		// Stack the city cards vertically — one card under another.
-		stack := container.NewVBox(objects...)
+		// Stack the city cards vertically with a small gap between each city.
+		stack := container.NewPadded(container.New(&spacedVBoxLayout{spacing: 8}, objects...))
 		u.widget.SetContent(stack)
 
 		if len(u.lastData) > 0 {
@@ -235,6 +275,14 @@ func (u *UIManager) resizeToContent(count int) {
 // GetViewMode returns the current view mode.
 func (u *UIManager) GetViewMode() config.ViewMode {
 	return u.viewMode
+}
+
+// SetNoBackground enables or disables the background wallpaper for enhanced view panels.
+func (u *UIManager) SetNoBackground(noBg bool) {
+	u.noBackground = noBg
+	for _, p := range u.panels {
+		p.SetNoBackground(noBg)
+	}
 }
 
 // UpdatePanels updates each CityPanel with the corresponding weather data, units, and icon theme.

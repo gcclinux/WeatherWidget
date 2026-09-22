@@ -305,3 +305,53 @@ func TestCityPanel_DynamicDisplayFields_StartupOrder(t *testing.T) {
 	}
 }
 
+func TestCityPanel_CardBorderAndNoBackground(t *testing.T) {
+	test.NewApp()
+	p := NewCityPanel(nil)
+
+	if p.cardBorder == nil {
+		t.Fatal("expected cardBorder to be initialized")
+	}
+	if p.cardBorder.CornerRadius != cardCornerRadius {
+		t.Errorf("cardBorder.CornerRadius = %v, want %v", p.cardBorder.CornerRadius, cardCornerRadius)
+	}
+	if p.cardBorder.StrokeWidth != cardStrokeWidth {
+		t.Errorf("cardBorder.StrokeWidth = %v, want %v", p.cardBorder.StrokeWidth, cardStrokeWidth)
+	}
+
+	if p.cardBgImg == nil || p.cardBgOverlay == nil {
+		t.Fatal("expected cardBgImg and cardBgOverlay to be initialized")
+	}
+	if !p.cardBgImg.Visible() {
+		t.Error("expected cardBgImg to be visible by default")
+	}
+	if !p.cardBgOverlay.Visible() {
+		t.Error("expected cardBgOverlay to be visible by default")
+	}
+
+	// Disable background
+	p.SetNoBackground(true)
+	if !p.noBackground {
+		t.Error("expected noBackground to be true")
+	}
+	if p.cardBgImg.Visible() {
+		t.Error("expected cardBgImg to be hidden when noBackground is true")
+	}
+	if p.cardBgOverlay.Visible() {
+		t.Error("expected cardBgOverlay to be hidden when noBackground is true")
+	}
+
+	// Re-enable background
+	p.SetNoBackground(false)
+	if p.noBackground {
+		t.Error("expected noBackground to be false")
+	}
+	if !p.cardBgImg.Visible() {
+		t.Error("expected cardBgImg to be visible when noBackground is false")
+	}
+	if !p.cardBgOverlay.Visible() {
+		t.Error("expected cardBgOverlay to be visible when noBackground is false")
+	}
+}
+
+
