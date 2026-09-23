@@ -64,24 +64,16 @@
 
   <screenshots>
     <screenshot type="default">
-      <caption>Linux desktop view with enhanced weather &amp; pollution enabled</caption>
-      <image>https://raw.githubusercontent.com/gcclinux/WeatherWidget/main/images/store/store-desktop.png</image>
+      <caption>Enhanced view showing detailed weather for multiple cities</caption>
+      <image>https://raw.githubusercontent.com/gcclinux/WeatherWidget/main/images/weather-linux-enhanced.png</image>
     </screenshot>
     <screenshot>
-      <caption>GTK settings view with the display tab open showing the Enhanced (Modern) selection</caption>
-      <image>https://raw.githubusercontent.com/gcclinux/WeatherWidget/main/images/store/store-enhanced.png</image>
+      <caption>Simple view with a compact layout</caption>
+      <image>https://raw.githubusercontent.com/gcclinux/WeatherWidget/main/images/weather-linux-simple.png</image>
     </screenshot>
     <screenshot>
-      <caption>GTK settings view with Japanese example of native language selection in WeatherWidget</caption>
-      <image>https://raw.githubusercontent.com/gcclinux/WeatherWidget/main/images/store/store-languages.png</image>
-    </screenshot>
-    <screenshot>
-      <caption>GTK settings view with widget tab selected showing available pollution data</caption>
-      <image>https://raw.githubusercontent.com/gcclinux/WeatherWidget/main/images/store/store-pollution.png</image>
-    </screenshot>
-    <screenshot>
-      <caption>Simple Weather view with Original Icons and Sample data</caption>
-      <image>https://raw.githubusercontent.com/gcclinux/WeatherWidget/main/images/store/store-simple-view.png</image>
+      <caption>Language settings with 12 supported languages</caption>
+      <image>https://raw.githubusercontent.com/gcclinux/WeatherWidget/main/images/weather-languages.png</image>
     </screenshot>
   </screenshots>
 
