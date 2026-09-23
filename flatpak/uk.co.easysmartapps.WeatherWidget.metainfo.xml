@@ -7,11 +7,16 @@
   <project_license>AGPL-3.0-or-later</project_license>
 
   <name>WeatherWidget</name>
-  <summary>Live weather and world clocks on your desktop</summary>
+  <summary>Live weather and world clocks</summary>
 
   <developer id="uk.co.easysmartapps">
     <name>WeatherWidget Team</name>
   </developer>
+
+  <branding>
+    <color type="primary" scheme_preference="light">#3584e4</color>
+    <color type="primary" scheme_preference="dark">#182d46</color>
+  </branding>
 
   <description>
     <p>
