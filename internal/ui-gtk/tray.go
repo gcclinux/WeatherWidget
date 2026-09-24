@@ -156,6 +156,7 @@ func prepareTrayIcon() (themeDir string, iconName string) {
 	if err := os.WriteFile(iconPath, iconData, 0644); err != nil {
 		log.Printf("GTK tray: failed to write tray icon: %v", err)
 		return "", "weather-clear"
+	}
 	return baseDir, "weather-clear"
 }
 
