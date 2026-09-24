@@ -72,6 +72,28 @@ func panelAlpha(opacity int, noBackground bool) float64 {
 // built with an explicit MoveTo + four corner arcs (this gotk3 cairo binding
 // does not expose NewSubPath).
 func paintRoundedRect(cr *cairo.Context, x, y, w, h, radius, r, g, b, a float64) {
+	roundedRectPath(cr, x, y, w, h, radius)
+	cr.SetSourceRGBA(r, g, b, a)
+	cr.Fill()
+}
+
+// strokeRoundedRect draws a rounded-rectangle outline (no fill) at
+// (x, y, w, h) with the given RGBA and line width. It is the border companion
+// to paintRoundedRect and is used to frame each city panel when the card
+// background is removed (no-background mode), matching the Fyne backend's
+// faint white rounded border.
+func strokeRoundedRect(cr *cairo.Context, x, y, w, h, radius, lineWidth, r, g, b, a float64) {
+	roundedRectPath(cr, x, y, w, h, radius)
+	cr.SetSourceRGBA(r, g, b, a)
+	cr.SetLineWidth(lineWidth)
+	cr.Stroke()
+}
+
+// roundedRectPath builds a rounded-rectangle path on the cairo context using an
+// explicit MoveTo + four corner arcs (this gotk3 cairo binding does not expose
+// NewSubPath). It sets the current path but does not paint; callers Fill() or
+// Stroke() afterwards.
+func roundedRectPath(cr *cairo.Context, x, y, w, h, radius float64) {
 	const degrees = math.Pi / 180.0
 	if radius > w/2 {
 		radius = w / 2
@@ -81,13 +103,11 @@ func paintRoundedRect(cr *cairo.Context, x, y, w, h, radius, r, g, b, a float64)
 	}
 	cr.NewPath()
 	cr.MoveTo(x+radius, y)
-	cr.Arc(x+w-radius, y+radius, radius, -90*degrees, 0*degrees)   // top-right
-	cr.Arc(x+w-radius, y+h-radius, radius, 0*degrees, 90*degrees)  // bottom-right
-	cr.Arc(x+radius, y+h-radius, radius, 90*degrees, 180*degrees)  // bottom-left
-	cr.Arc(x+radius, y+radius, radius, 180*degrees, 270*degrees)   // top-left
+	cr.Arc(x+w-radius, y+radius, radius, -90*degrees, 0*degrees)  // top-right
+	cr.Arc(x+w-radius, y+h-radius, radius, 0*degrees, 90*degrees) // bottom-right
+	cr.Arc(x+radius, y+h-radius, radius, 90*degrees, 180*degrees) // bottom-left
+	cr.Arc(x+radius, y+radius, radius, 180*degrees, 270*degrees)  // top-left
 	cr.ClosePath()
-	cr.SetSourceRGBA(r, g, b, a)
-	cr.Fill()
 }
 
 // buildCSS returns the CSS string for the widget panels based on opacity,

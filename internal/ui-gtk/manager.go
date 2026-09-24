@@ -349,6 +349,16 @@ func (m *manager) buildWindow() error {
 	// and the Xlib helpers must be skipped.
 	wayland := isWayland() && os.Getenv("GDK_BACKEND") != "x11"
 
+	// On a native-Wayland backend, prefer the wlr-layer-shell path when the
+	// compositor supports it (KDE/KWin, sway, Hyprland, wayfire, river). That
+	// path anchors the window to a corner with margins, which the compositor
+	// honours — unlike win.Move(), which Mutter ignores. GNOME/Mutter reports
+	// no layer-shell support and is already routed to XWayland by
+	// ensureGDKBackend(), so it never reaches here. layerShellBuilt is false in
+	// the default build (library not linked), so this is skipped unless the app
+	// was built with -tags layershell.
+	useLayerShell := wayland && layerShellBuilt && layerShellSupported()
+
 	// Compute target position once.
 	var posX, posY int
 	if m.cfg.CustomX != nil && m.cfg.CustomY != nil {
@@ -361,6 +371,13 @@ func (m *manager) buildWindow() error {
 	// Set event mask before realize.
 	win.SetEvents(int(gdk.BUTTON_PRESS_MASK | gdk.BUTTON_RELEASE_MASK | gdk.POINTER_MOTION_MASK))
 
+	// layer-shell must be initialised before the window is realized.
+	if useLayerShell {
+		layerShellInit(win)
+		anchorLeft, anchorTop, mX, mY := m.layerShellAnchorMargins(posX, posY)
+		layerShellPosition(win, anchorLeft, anchorTop, mX, mY)
+	}
+
 	// Phase 1: realize → (X11 hints/move on X11 only) → move → show.
 	win.Realize()
 	if !wayland {
@@ -369,16 +386,27 @@ func (m *manager) buildWindow() error {
 	}
 	m.applyPosition()
 
-	if wayland {
-		// Native Wayland: set the initial position hint via win.Move() before
-		// the window is shown. Mutter respects this on the first map.
+	switch {
+	case useLayerShell:
+		// Native Wayland via layer-shell: position is set through anchors +
+		// margins (above). The compositor places the window on map; there is no
+		// win.Move() dance to perform. Mark positioned once mapped.
+		win.Connect("map-event", func(_ *gtk.Window, _ *gdk.Event) bool {
+			m.positioned = true
+			return false
+		})
+	case wayland:
+		// Native Wayland WITHOUT layer-shell (rare: a non-GNOME Wayland session
+		// whose compositor lacks the protocol). Best effort: set the initial
+		// position hint via win.Move() before show; the compositor may honour
+		// it on the first map.
 		win.Move(posX, posY)
 		win.Connect("map-event", func(_ *gtk.Window, _ *gdk.Event) bool {
 			m.win.Move(posX, posY)
 			m.positioned = true
 			return false
 		})
-	} else {
+	default:
 		// Phase 2 (X11 only): after map, force position with repeated XMoveWindow.
 		win.Connect("map-event", func(_ *gtk.Window, _ *gdk.Event) bool {
 			x11MoveWindow(m.win, posX, posY)
@@ -402,6 +430,13 @@ func (m *manager) buildWindow() error {
 
 	// Drag-to-reposition: left-click drag moves the window.
 	moveFunc := func(x, y int) {
+		if useLayerShell {
+			// Re-anchor with new margins so the compositor repositions the
+			// window; win.Move() has no effect under layer-shell.
+			anchorLeft, anchorTop, mX, mY := m.layerShellAnchorMargins(x, y)
+			layerShellPosition(win, anchorLeft, anchorTop, mX, mY)
+			return
+		}
 		win.Move(x, y)
 		if !wayland {
 			x11MoveWindow(win, x, y)
@@ -475,15 +510,23 @@ func (m *manager) buildWindow() error {
 // uniform tint that matches the CSS-styled labels and tiles.
 func (m *manager) paintCards(cr *cairoContext) {
 	alpha := panelAlpha(m.opacity, m.noBackground)
-	if alpha <= 0 {
-		return // no-background / fully transparent mode: nothing to paint
-	}
 	const (
 		radius = 16.0 // matches .city-panel border-radius
 		margin = 2.0  // matches .city-panel margin
 		r      = 20.0 / 255.0
 		g      = 20.0 / 255.0
 		b      = 20.0 / 255.0
+	)
+	// In no-background mode the card fill alpha is 0. Rather than paint
+	// nothing, stroke a faint rounded border around each city so the panels
+	// stay visually framed against the desktop — matching the Fyne backend's
+	// cardBorder (white ~40% alpha, 1px, rounded).
+	const (
+		borderWidth = 1.0
+		borderR     = 1.0
+		borderG     = 1.0
+		borderB     = 1.0
+		borderA     = 100.0 / 255.0 // matches Fyne NRGBA{255,255,255,100}
 	)
 	for _, p := range m.panels {
 		if p == nil || p.rootBox() == nil {
@@ -497,7 +540,14 @@ func (m *manager) paintCards(cr *cairoContext) {
 		if wd <= 0 || ht <= 0 {
 			continue
 		}
-		paintRoundedRect(cr, x, y, wd, ht, radius, r, g, b, alpha)
+		if alpha > 0 {
+			paintRoundedRect(cr, x, y, wd, ht, radius, r, g, b, alpha)
+			continue
+		}
+		// No-background mode: inset by half the line width so the 1px stroke
+		// sits fully inside the panel bounds rather than being clipped.
+		inset := borderWidth / 2
+		strokeRoundedRect(cr, x+inset, y+inset, wd-borderWidth, ht-borderWidth, radius, borderWidth, borderR, borderG, borderB, borderA)
 	}
 }
 
@@ -520,6 +570,29 @@ func (m *manager) applyPosition() {
 		log.Printf("positioning to corner %s: (%d,%d)", m.cfg.CornerPosition, x, y)
 	}
 	m.win.Move(x, y)
+}
+
+// layerShellAnchorMargins converts an absolute target position (posX, posY) on
+// the current monitor into a layer-shell anchor corner plus inward margins.
+//
+// layer-shell does not accept absolute (x, y); it anchors a window to screen
+// edges and offsets it with per-edge margins. Anchoring to the TOP-LEFT corner
+// and using the target coordinates directly as the left/top margins reproduces
+// absolute positioning measured from the monitor's top-left origin, which is
+// how CustomX/CustomY and cornerToXY are already defined. Negative targets are
+// clamped to zero so the widget stays on-screen.
+//
+// It returns (anchorLeft, anchorTop, marginX, marginY). anchorLeft/anchorTop
+// are always true here (top-left origin); the signature keeps the door open for
+// edge-relative anchoring later without changing callers.
+func (m *manager) layerShellAnchorMargins(posX, posY int) (bool, bool, int, int) {
+	if posX < 0 {
+		posX = 0
+	}
+	if posY < 0 {
+		posY = 0
+	}
+	return true, true, posX, posY
 }
 
 // panelSize returns the total (width, height) of the current panels.
@@ -617,6 +690,11 @@ func (m *manager) SetNoBackground(enable bool) {
 		p.setTintAlpha(alpha)
 	}
 	m.applyCSS()
+	// Force a redraw so paintCards re-runs and swaps between the filled card
+	// (background on) and the rounded border outline (background removed).
+	if m.win != nil {
+		m.win.QueueDraw()
+	}
 }
 
 // rebuildPanels destroys existing panels and creates new ones from config.
