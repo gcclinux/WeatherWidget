@@ -240,10 +240,16 @@ echo "==> Creating $DMG_NAME..."
 rm -f "$DMG_NAME"
 
 # Stage: .app + Applications symlink for drag-install UX.
+#
+# The build artifact on disk keeps the versioned name ($APP_NAME-$VERSION.app)
+# so multiple versions can coexist in the build dir, but INSIDE the DMG the
+# bundle is named "$APP_NAME.app" (no version). This ensures a drag-install
+# always overwrites /Applications/$APP_NAME.app instead of piling up a new
+# versioned copy on every release.
 DMG_STAGE="$BUILD_DIR/dmg-stage"
 rm -rf "$DMG_STAGE"
 mkdir -p "$DMG_STAGE"
-cp -R "$APP_BUNDLE" "$DMG_STAGE/"
+cp -R "$APP_BUNDLE" "$DMG_STAGE/$APP_NAME.app"
 ln -s /Applications "$DMG_STAGE/Applications"
 
 DMG_TMP="$BUILD_DIR/$APP_NAME-$VERSION-tmp.dmg"
