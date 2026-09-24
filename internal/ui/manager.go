@@ -1,8 +1,6 @@
 package ui
 
 import (
-	"log"
-
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
 
@@ -294,7 +292,6 @@ func (u *UIManager) UpdatePanels(data []weather.WeatherData, tempUnit config.Tem
 	u.lastIconTheme = iconTheme
 
 	if u.viewMode == config.ViewModeSimple {
-		log.Printf("UIManager: updating %d simple panels with %d data entries", len(u.simplePanels), len(data))
 		for i, p := range u.simplePanels {
 			if i >= len(data) {
 				break
@@ -304,7 +301,6 @@ func (u *UIManager) UpdatePanels(data []weather.WeatherData, tempUnit config.Tem
 		}
 		u.resizeToContent(len(u.simplePanels))
 	} else {
-		log.Printf("UIManager: updating %d panels with %d data entries", len(u.panels), len(data))
 		for i, p := range u.panels {
 			if i >= len(data) {
 				break

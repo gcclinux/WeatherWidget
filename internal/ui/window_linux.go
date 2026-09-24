@@ -30,6 +30,5 @@ func createWidgetWindow(app fyne.App, title string) fyne.Window {
 	w.SetFixedSize(true)
 	w.SetPadded(false)
 
-	log.Println("Linux: created undecorated widget window via CreateSplashWindow")
 	return w
 }

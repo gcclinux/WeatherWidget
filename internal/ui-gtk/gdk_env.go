@@ -3,12 +3,9 @@
 package uitk
 
 // #include <stdlib.h>
-// #include <stdio.h>
 //
 // static void force_gdk_backend_x11(void) {
 //     setenv("GDK_BACKEND", "x11", 1);
-//     // Debug: verify from C side
-//     fprintf(stderr, "C-level GDK_BACKEND=%s\n", getenv("GDK_BACKEND"));
 // }
 import "C"
 

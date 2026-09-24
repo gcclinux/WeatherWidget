@@ -312,8 +312,6 @@ func (r *RemoteAPIAdapter) fetchWU(ctx context.Context, city config.CityConfig) 
 		return nil, fmt.Errorf("WU API error (status %d): %s", resp.StatusCode, string(body))
 	}
 
-	log.Printf("WU raw response for %s: %s", city.Name, string(body))
-
 	var wu wuResponse
 	if err := json.Unmarshal(body, &wu); err != nil {
 		return nil, fmt.Errorf("parse WU response: %w", err)

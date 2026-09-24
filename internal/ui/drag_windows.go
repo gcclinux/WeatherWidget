@@ -76,5 +76,4 @@ func enableWindowDrag(onDragEnd func()) {
 		log.Println("enableWindowDrag: SetWindowLongPtrW returned 0, fallback origProc:", origProc)
 	}
 	dragState.origProc = origProc
-	log.Println("enableWindowDrag: window subclassed for drag support")
 }

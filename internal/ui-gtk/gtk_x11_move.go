@@ -85,7 +85,6 @@ func x11SetPositionHint(win *gtk.Window, x, y int) {
 		return
 	}
 	C.x11_set_position_hint((*C.GtkWidget)(unsafe.Pointer(ptr)), C.int(x), C.int(y))
-	log.Printf("x11SetPositionHint: WM_NORMAL_HINTS USPosition set to (%d,%d)", x, y)
 }
 
 // x11NetMoveWindow sends _NET_MOVERESIZE_WINDOW via GDK's existing X11
@@ -97,7 +96,6 @@ func x11NetMoveWindow(win *gtk.Window, x, y int) {
 		return
 	}
 	C.x11_net_moveresize((*C.GtkWidget)(unsafe.Pointer(ptr)), C.int(x), C.int(y))
-	log.Printf("x11NetMoveWindow: sent _NET_MOVERESIZE_WINDOW (%d,%d)", x, y)
 }
 
 // x11MoveWindow calls XMoveWindow directly — the most forceful X11 positioning.
@@ -108,5 +106,4 @@ func x11MoveWindow(win *gtk.Window, x, y int) {
 		return
 	}
 	C.x11_move_window((*C.GtkWidget)(unsafe.Pointer(ptr)), C.int(x), C.int(y))
-	log.Printf("x11MoveWindow: XMoveWindow to (%d,%d)", x, y)
 }

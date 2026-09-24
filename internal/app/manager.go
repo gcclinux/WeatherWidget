@@ -58,11 +58,17 @@ func (a *AppManager) Run() error {
 
 	// 2. Load configuration.
 	a.config = config.NewConfigService(a.appDataDir)
+	log.Printf("config path: %s", a.config.ConfigPath())
 	cfg, err := a.config.Load()
 	if err != nil {
 		cfg = config.DefaultConfig()
 	}
 	a.cfg = cfg
+	if cfg.CustomX != nil && cfg.CustomY != nil {
+		log.Printf("config loaded: customX=%d customY=%d", *cfg.CustomX, *cfg.CustomY)
+	} else {
+		log.Printf("config loaded: no customX/customY (will use corner: %s)", cfg.CornerPosition)
+	}
 
 	// 2b. Create locale manager and load the configured locale.
 	lm, err := i18n.NewLocaleManager(i18n.LocaleFS)
@@ -95,9 +101,7 @@ func (a *AppManager) Run() error {
 	// 5. If config is default (no API key / no DB config), show the widget
 	// with default cities. The app will work in free mode using the built-in
 	// cities. Only open settings if the user explicitly requests it.
-	// We still log that we're running in free mode.
 	if a.isDefaultConfig(cfg) {
-		log.Printf("running in free mode — no license key configured, using default cities")
 	}
 
 	// 6. Create weather provider and service.
@@ -111,7 +115,6 @@ func (a *AppManager) Run() error {
 	a.ui.ApplyPollutionFields(cfg.GetPollutionFields())
 	a.ui.ApplyWin32Styles()
 	a.applyPosition(cfg)
-	log.Printf("WeatherWidget window shown at %s", cfg.CornerPosition)
 
 	// 8. Enable drag-to-reposition — persists custom coordinates on drag end.
 	a.ui.EnableDrag(func() {
@@ -120,8 +123,6 @@ func (a *AppManager) Run() error {
 		a.cfg.CustomY = &y
 		if err := a.config.Save(a.cfg); err != nil {
 			log.Printf("failed to save custom position (%d, %d): %v", x, y, err)
-		} else {
-			log.Printf("custom position saved: (%d, %d)", x, y)
 		}
 	})
 
@@ -145,7 +146,6 @@ func (a *AppManager) Run() error {
 	go func() {
 		resumeCh := power.ResumeNotifier()
 		for range resumeCh {
-			log.Printf("system resumed from sleep — triggering immediate weather refresh")
 			a.scheduler.FetchNow()
 		}
 	}()
@@ -195,7 +195,6 @@ func (a *AppManager) OpenSettings() {
 func (a *AppManager) applyPosition(cfg *config.Config) {
 	if cfg.CustomX != nil && cfg.CustomY != nil {
 		a.ui.SetPosition(*cfg.CustomX, *cfg.CustomY)
-		log.Printf("positioned widget at custom coordinates (%d, %d)", *cfg.CustomX, *cfg.CustomY)
 	} else {
 		a.ui.SetCorner(cfg.CornerPosition, cfg.MonitorIndex)
 	}
@@ -362,12 +361,6 @@ func (a *AppManager) handleWeatherUpdate(results []weather.WeatherResult) {
 	simplePanels := a.ui.SimplePanels()
 	viewMode := a.ui.GetViewMode()
 	
-	panelCount := len(panels)
-	if viewMode == config.ViewModeSimple {
-		panelCount = len(simplePanels)
-	}
-	log.Printf("handling weather update: %d results, %d UI panels available (mode: %s)", len(results), panelCount, viewMode)
-
 	data := make([]weather.WeatherData, 0, len(results))
 	for i, r := range results {
 		if r.Data != nil {
@@ -405,7 +398,6 @@ func (a *AppManager) handleWeatherUpdate(results []weather.WeatherResult) {
 			}
 		}
 	}
-	log.Printf("dispatching %d data updates to UI panels", len(data))
 	fyne.Do(func() {
 		a.ui.UpdatePanels(data, a.cfg.TemperatureUnit, a.cfg.WindSpeedUnit, a.cfg.IconTheme)
 	})
@@ -453,8 +445,6 @@ func (a *AppManager) providerConfigChanged(old, new *config.Config) bool {
 // the per-second ticker may not have fired). The scheduler's FetchNow re-pulls
 // data from the configured source (remote API or local database).
 func (a *AppManager) manualRefresh() {
-	log.Printf("manual refresh requested from tray menu")
-
 	// Re-render local time/date right away by restarting the panel clocks.
 	// StartClock renders the current time and date before its first tick, so a
 	// stale clock (e.g. after wake-from-sleep) is corrected instantly.

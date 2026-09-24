@@ -80,12 +80,10 @@ func applyWaylandWindowHints() bool {
 	if wid != "" {
 		cmd := exec.Command(wmctrlPath, "-i", "-r", wid, "-b", "add,skip_taskbar,skip_pager")
 		if err := cmd.Run(); err == nil {
-			log.Println("Linux/Wayland: set skip_taskbar,skip_pager via wmctrl -i")
 			success = true
 		}
 		cmd = exec.Command(wmctrlPath, "-i", "-r", wid, "-b", "add,below")
 		if err := cmd.Run(); err == nil {
-			log.Println("Linux/Wayland: set window to below via wmctrl -i")
 			success = true
 		}
 		if success {
@@ -95,13 +93,11 @@ func applyWaylandWindowHints() bool {
 
 	cmd := exec.Command(wmctrlPath, "-r", widgetTitle, "-b", "add,skip_taskbar,skip_pager")
 	if err := cmd.Run(); err == nil {
-		log.Println("Linux/Wayland: set skip_taskbar,skip_pager via wmctrl")
 		success = true
 	}
 
 	cmd = exec.Command(wmctrlPath, "-r", widgetTitle, "-b", "add,below")
 	if err := cmd.Run(); err == nil {
-		log.Println("Linux/Wayland: set window to below via wmctrl")
 		success = true
 	}
 
@@ -117,11 +113,7 @@ func applyX11WindowStyle() {
 	cmd := exec.Command("xprop", "-name", widgetTitle,
 		"-f", "_MOTIF_WM_HINTS", "32c",
 		"-set", "_MOTIF_WM_HINTS", "0x2, 0x0, 0x0, 0x0, 0x0")
-	if err := cmd.Run(); err != nil {
-		log.Printf("Linux/X11: failed to remove title bar via xprop: %v", err)
-		return
-	}
-	log.Println("Linux/X11: successfully removed title bar via xprop")
+	cmd.Run()
 }
 
 // ---------------------------------------------------------------------------
@@ -284,7 +276,6 @@ func moveWindowWmctrl(x, y int) bool {
 		cmd := exec.Command(wmctrlPath, "-i", "-r", wid, "-e",
 			fmt.Sprintf("0,%d,%d,-1,-1", x, y))
 		if err := cmd.Run(); err == nil {
-			log.Printf("Linux: moved window %s to (%d, %d) via wmctrl -i", wid, x, y)
 			return true
 		}
 	}
@@ -293,7 +284,6 @@ func moveWindowWmctrl(x, y int) bool {
 		cmd := exec.Command(wmctrlPath, "-r", title, "-e",
 			fmt.Sprintf("0,%d,%d,-1,-1", x, y))
 		if err := cmd.Run(); err == nil {
-			log.Printf("Linux: moved window to (%d, %d) via wmctrl -r %s", x, y, title)
 			return true
 		}
 	}
@@ -322,7 +312,6 @@ func moveWindowXdotool(x, y int) bool {
 		log.Printf("Linux: moveWindowXdotool windowmove failed for %s: %v", wid, err)
 		return false
 	}
-	log.Printf("Linux: moved window to (%d, %d) via xdotool (wid=%s)", x, y, wid)
 	return true
 }
 
@@ -417,7 +406,6 @@ func setWindowOpacity(opacityPercent int) {
 //	 25% → lighter grey (RGB 90)
 func setWindowOpacityWayland(opacityPercent int) {
 	SetLinuxBackgroundShade(opacityPercent)
-	log.Printf("Linux/Wayland: background shade set for opacity %d%%", opacityPercent)
 }
 
 // setWindowOpacityX11 applies whole-window transparency on X11 via xprop.
@@ -450,7 +438,6 @@ func setWindowOpacityX11(opacityPercent int) {
 			log.Printf("Linux/X11: xprop opacity failed: %v", err)
 			return
 		}
-		log.Printf("Linux/X11: set window opacity to %d%% (user: %d%%)", x11Percent, opacityPercent)
 	}()
 }
 

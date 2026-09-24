@@ -10,7 +10,6 @@ package uidarwin
 
 import (
 	"fmt"
-	"log"
 	"os"
 	"path/filepath"
 )
@@ -64,7 +63,6 @@ func setAutoStartEnabled(enabled bool) error {
 		if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
 			return err
 		}
-		log.Printf("uidarwin: auto-start disabled (%s removed)", path)
 		return nil
 	}
 
@@ -83,6 +81,5 @@ func setAutoStartEnabled(enabled bool) error {
 	if err := os.WriteFile(path, []byte(launchAgentPlist(exePath)), 0o644); err != nil {
 		return err
 	}
-	log.Printf("uidarwin: auto-start enabled (%s)", path)
 	return nil
 }

@@ -156,9 +156,6 @@ func prepareTrayIcon() (themeDir string, iconName string) {
 	if err := os.WriteFile(iconPath, iconData, 0644); err != nil {
 		log.Printf("GTK tray: failed to write tray icon: %v", err)
 		return "", "weather-clear"
-	}
-
-	log.Printf("GTK tray: icon theme prepared at %s", baseDir)
 	return baseDir, "weather-clear"
 }
 
@@ -205,8 +202,6 @@ func setupTray(m *manager) {
 		C.setIndicatorMenu(ind, (*C.GtkWidget)(unsafe.Pointer(menu.Native())))
 		C.setIndicatorActive(ind, 1)
 	}
-
-	log.Println("GTK tray: AppIndicator tray installed")
 }
 
 var activeIndicator *C.AppIndicator

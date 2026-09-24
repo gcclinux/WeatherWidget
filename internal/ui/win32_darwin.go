@@ -195,7 +195,6 @@ func moveWindow(_ fyne.Window, x, y int) {
 		log.Println("macOS: moveWindow — could not get NSWindow handle")
 		return
 	}
-	log.Printf("macOS: moveWindow x=%d y=%d", x, y)
 	C.moveNSWindowTo(handle, C.int(x), C.int(y))
 	go func(h C.uintptr_t, px, py C.int) {
 		for _, delay := range []int{150, 400, 900} {
@@ -250,7 +249,6 @@ func setWindowOpacity(_ int) {
 		return
 	}
 	C.setDarwinBackgroundAlpha(handle, C.int(100))
-	log.Printf("macOS: setWindowOpacity 100%%")
 }
 
 // getMonitorCount returns the number of display monitors on macOS.

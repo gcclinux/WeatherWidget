@@ -86,8 +86,6 @@ func Run(appDataDir string, openSettings bool) {
 	// display is exposed.
 	ensureGDKBackend()
 
-	log.Printf("GDK_BACKEND=%s", os.Getenv("GDK_BACKEND"))
-
 	gtk.Init(nil)
 
 	// Install the centralized UI dispatcher on the main thread before any
@@ -229,7 +227,6 @@ func (m *manager) start(openSettings bool) error {
 	// Listen for power-resume events.
 	go func() {
 		for range power.ResumeNotifier() {
-			log.Println("system resume — triggering weather refresh")
 			m.sched.FetchNow()
 		}
 	}()
@@ -563,11 +560,9 @@ func (m *manager) applyPosition() {
 	var x, y int
 	if m.cfg.CustomX != nil && m.cfg.CustomY != nil {
 		x, y = *m.cfg.CustomX, *m.cfg.CustomY
-		log.Printf("restoring position to saved coordinates (%d,%d)", x, y)
 	} else {
 		pw, ph := m.panelSize()
 		x, y = cornerToXY(m.cfg.CornerPosition, m.cfg.MonitorIndex, pw, ph)
-		log.Printf("positioning to corner %s: (%d,%d)", m.cfg.CornerPosition, x, y)
 	}
 	m.win.Move(x, y)
 }
@@ -641,8 +636,6 @@ func (m *manager) openSettings() {
 // fired) and pulls fresh weather + pollution data out-of-band via the
 // scheduler (which reads from the configured remote API or local database).
 func (m *manager) manualRefresh() {
-	log.Println("manual refresh requested from menu")
-
 	for _, p := range m.panels {
 		if p != nil {
 			p.refreshClock()

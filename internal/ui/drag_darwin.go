@@ -3,7 +3,6 @@
 package ui
 
 import (
-	"log"
 	"sync"
 	"time"
 )
@@ -35,7 +34,6 @@ func enableWindowDrag(onDragEnd func()) {
 	darwinLastX, darwinLastY = getWindowPosition()
 
 	go darwinPollPosition(darwinDragStop)
-	log.Println("macOS: drag position poller started")
 }
 
 // notifyDarwinMoveByUs should be called before programmatic moves so the
@@ -81,7 +79,6 @@ func darwinPollPosition(stop chan struct{}) {
 				darwinDragMu.Unlock()
 
 				if cb != nil {
-					log.Printf("macOS: position changed from (%d,%d) to (%d,%d), saving", lastX, lastY, x, y)
 					cb()
 				}
 			}

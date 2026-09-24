@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"image"
 	"image/color"
-	"log"
 	"sync"
 	"time"
 
@@ -740,7 +739,6 @@ func (p *SimpleCityPanel) ShowError(stale bool) {
 // StartClock starts a 1-second ticker that updates the time label
 // with the current time in the given IANA timezone.
 func (p *SimpleCityPanel) StartClock(timezone string) {
-	log.Printf("SimpleCityPanel: starting clock for timezone %s", timezone)
 	p.StopClock() // stop any existing clock first
 
 	p.mu.Lock()

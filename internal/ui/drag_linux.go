@@ -3,7 +3,6 @@
 package ui
 
 import (
-	"log"
 	"sync"
 	"time"
 )
@@ -39,12 +38,6 @@ func enableWindowDrag(onDragEnd func()) {
 	linuxLastX, linuxLastY = getWindowPosition()
 
 	go pollWindowPosition(linuxDragStop)
-
-	if isWayland() {
-		log.Println("Linux/Wayland: drag position poller started (use Super+drag to reposition)")
-	} else {
-		log.Println("Linux/X11: drag position poller started")
-	}
 }
 
 // notifyLinuxMoveByUs should be called before programmatic moves so the
@@ -90,7 +83,6 @@ func pollWindowPosition(stop chan struct{}) {
 				linuxDragMu.Unlock()
 
 				if cb != nil {
-					log.Printf("Linux: position changed from (%d,%d) to (%d,%d), saving", lastX, lastY, x, y)
 					cb()
 				}
 			}

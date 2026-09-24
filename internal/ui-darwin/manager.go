@@ -132,7 +132,7 @@ func Run(appDataDir string, openSettings bool) {
 // [NSApp run] so the tray has proper labels and settings has a valid config.
 func (m *manager) loadConfigAndLocale() {
 	m.cfgSvc = config.NewConfigService(m.appDataDir)
-	log.Printf("uidarwin: config path: %s", m.cfgSvc.ConfigPath())
+	log.Printf("config path: %s", m.cfgSvc.ConfigPath())
 	cfg, err := m.cfgSvc.Load()
 	if err != nil {
 		cfg = config.DefaultConfig()
@@ -149,9 +149,9 @@ func (m *manager) loadConfigAndLocale() {
 	m.fontSizeConditions = cfg.GetFontSizeConditions()
 
 	if cfg.CustomX != nil && cfg.CustomY != nil {
-		log.Printf("uidarwin: config loaded: customX=%d customY=%d", *cfg.CustomX, *cfg.CustomY)
+		log.Printf("config loaded: customX=%d customY=%d", *cfg.CustomX, *cfg.CustomY)
 	} else {
-		log.Printf("uidarwin: config loaded: corner=%s", cfg.CornerPosition)
+		log.Printf("config loaded: no customX/customY (will use corner: %s)", cfg.CornerPosition)
 	}
 
 	lm, err := i18n.NewLocaleManager(i18n.LocaleFS)
@@ -198,8 +198,6 @@ func (m *manager) start(openSettings bool) error {
 	// 8. Show window. The tray was already created synchronously via
 	// createTrayHook before [NSApp run]. start() runs on a goroutine after
 	// applicationDidFinishLaunching, so the Cocoa loop is servicing events;
-	// these native calls dispatch to the main thread safely.
-	log.Printf("uidarwin: showing window")
 	nativeShowWidgetWindow(m.win)
 	nativeSetWidgetWindowOpacity(m.win, opacityToAlpha(m.opacity))
 	if openSettings {
@@ -229,7 +227,6 @@ func (m *manager) start(openSettings bool) error {
 	// 13. Power-resume: trigger immediate refresh on wake from sleep.
 	go func() {
 		for range power.ResumeNotifier() {
-			log.Println("uidarwin: system resume — triggering weather refresh")
 			m.sched.FetchNow()
 		}
 	}()
@@ -491,12 +488,10 @@ func (m *manager) updateCard(card uintptr, d *weather.WeatherData) {
 func (m *manager) applyPosition() {
 	if m.cfg.CustomX != nil && m.cfg.CustomY != nil {
 		x, y := *m.cfg.CustomX, *m.cfg.CustomY
-		log.Printf("uidarwin: restoring position (%d, %d)", x, y)
 		nativeMoveWidgetWindow(m.win, x, y)
 		return
 	}
 	x, y := m.cornerToXY(m.cfg.CornerPosition, m.cfg.MonitorIndex)
-	log.Printf("uidarwin: corner %s → (%d, %d)", m.cfg.CornerPosition, x, y)
 	nativeMoveWidgetWindow(m.win, x, y)
 }
 
@@ -584,8 +579,6 @@ func (m *manager) pollDragPosition() {
 				go func() {
 					if err := m.cfgSvc.Save(m.cfg); err != nil {
 						log.Printf("uidarwin: drag position save failed: %v", err)
-					} else {
-						log.Printf("uidarwin: drag position saved (%d, %d)", cx, cy)
 					}
 				}()
 			})
@@ -611,8 +604,6 @@ func (m *manager) openSettings() {
 // pulls fresh weather + pollution data out-of-band via the scheduler (which
 // reads from the configured remote API or local database).
 func (m *manager) manualRefresh() {
-	log.Println("uidarwin: manual refresh requested from tray menu")
-
 	// Snapshot the cards and their timezones so we can push an immediate
 	// time/date render without holding cardsMu across native calls.
 	m.cardsMu.Lock()
@@ -705,9 +696,6 @@ func (m *manager) onSettingsSave(newCfg *config.Config) error {
 		opacity = 100
 	}
 
-	log.Printf("uidarwin: onSettingsSave: saved OK; localeChanged=%v viewModeChanged=%v citiesChanged=%v — queuing UI update",
-		localeChanged, viewModeChanged, citiesChanged)
-
 	// Apply all shared-state changes and the UI rebuild on the main thread.
 	mainQueue <- func() {
 		m.cfg = newCfg
@@ -761,7 +749,6 @@ func (m *manager) onSettingsSave(newCfg *config.Config) error {
 // ── Shutdown ──────────────────────────────────────────────────────────────────
 
 func (m *manager) shutdown() {
-	log.Println("uidarwin: shutting down")
 	if m.sched != nil {
 		m.sched.Stop()
 	}
