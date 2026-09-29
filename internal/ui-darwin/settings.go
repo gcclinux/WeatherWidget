@@ -170,6 +170,7 @@ func (m *manager) settingsStrings() map[string]string {
 		"settings.locations.latPlaceholder", "settings.locations.lonLabel",
 		"settings.locations.lonPlaceholder", "settings.locations.tzLabel",
 		"settings.locations.tzPlaceholder", "settings.locations.addBtn",
+		"settings.locations.searchBtn", "settings.locations.searching",
 		"settings.locations.removeBtn",
 		// Widget tab: panel display
 		"settings.display.title", "settings.display.subtitle",
@@ -201,6 +202,9 @@ func (m *manager) settingsStrings() map[string]string {
 		"settings.about.airIndexLabel",
 		// Alerts
 		"error.settings.licenseRequired", "error.settings.cityNameRequired",
+		"error.settings.cityNameRequiredSearch", "error.settings.apiKeyRequired",
+		"error.settings.regionRequiredEww", "error.settings.searchFailed",
+		"error.settings.noCityFound",
 	}
 	out := make(map[string]string, len(keys))
 	for _, k := range keys {

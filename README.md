@@ -35,32 +35,30 @@ Features:
 
 ## Screenshots
 
-**System Tray Menu**  
+**Linux Fog background**  
+<img src="images/store/linux/weatherwidget-background-fog.png" alt="Linux Fog background" width="600">
+ 
+**Linux Classic View**  
+<img src="images/store/linux/weatherwidget-classic-view.png" alt="Linux Classic View" width="600">
 
-![Win32 Task Manager Menu](images/win32-taskmanager-menu.png)
+**Linux Transparant background**  
+<img src="images/store/linux/weatherwidget-transparant.png" alt="Linux Clear Sky background" width="600">
 
-**Opacity / background** - (Up to 3 Cities on Free, Up to 5 Cities on Pro)
+**Windows background view**  
+<img src="images/store/windows/weatherwidget-background-view.png" alt="Windows Fog background" width="600">
 
-![Win32 Background](images/weather-windows.png)
+**Windows classic view**  
+<img src="images/store/windows/weatherwidget-classic-view.png" alt="Windows Classic View" width="600">
 
-**Weather Widget Simple View**  
+**Windows Transparant background**  
+<img src="images/store/windows/weatherwidget-transparant.png" alt="Windows Clear Sky background" width="600">
 
-![Weather Widget Settings](images/weather-linux-simple.png)
+**MacOS Classic View**  
+<img src="images/store/macos/weatherwidget-classic-view.png" alt="MacOS Classic View" width="600">
 
-**Weather Widget Ehanced View**  
+**MacOS Transparant background**  
+<img src="images/store/macos/weatherwidget-transparant.png" alt="MacOS Clear Sky background" width="600">
 
-![Weather Widget Settings](images/weather-linux-enhanced.png)
-
-**Weather Widget MacOS**  
-
-![Weather Widget Settings](images/weather-macos.png)
-
-**Weather Dadwin Settings**
-![Weathe Darwin Settings](images/darwin-settings.png)
-
-**Weather Widget Languages Settings**
-
-![Weather Widget Settings](images/weather-languages.png)
 
 ## Download
 

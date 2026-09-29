@@ -152,6 +152,8 @@ static inline NSNumber *jbool(BOOL v) { return v ? @YES : @NO; }
 @property (nonatomic, strong) NSTextField    *addLatField;
 @property (nonatomic, strong) NSTextField    *addLonField;
 @property (nonatomic, strong) NSTextField    *addTZField;
+@property (nonatomic, strong) NSButton       *addCityBtn;    // enabled only when all fields filled
+@property (nonatomic, strong) NSTextField    *searchStatusLbl; // search feedback label
 
 // Widget tab — display fields
 @property (nonatomic, strong) NSButton *dfCity;
@@ -472,13 +474,13 @@ static WWSettingsController *g_settingsController = nil;
     item.label = [self L:@"settings.tab.locations" fallback:@"Locations"];
 
     WWSettingsController *weakSelf = self;
-    NSScrollView *scroll = [self scrollableWithDocumentHeight:520 buildBlock:^(NSView *doc) {
+    NSScrollView *scroll = [self scrollableWithDocumentHeight:560 buildBlock:^(NSView *doc) {
         WWSettingsController *s = weakSelf;
-        CGFloat y = 486;
+        CGFloat y = 526;
 
         [doc addSubview:[s label:[s L:@"settings.locations.savedTitle" fallback:@"Saved Cities"] frame:NSMakeRect(16, y, 300, 20) bold:YES]];
         y -= 22;
-        [doc addSubview:[s sublabel:[s L:@"settings.locations.savedSubtitle" fallback:@"Reorder or remove cities. Free tier is limited to the default cities."]
+        [doc addSubview:[s sublabel:[s L:@"settings.locations.savedSubtitle" fallback:@"Manage your tracked locations (1\u20135 cities)."]
             frame:NSMakeRect(16, y, 520, 18)]];
         y -= 8;
 
@@ -501,42 +503,294 @@ static WWSettingsController *g_settingsController = nil;
         [doc addSubview:[s label:[s L:@"settings.locations.addTitle" fallback:@"Add New City"] frame:NSMakeRect(16, y, 300, 20) bold:YES]];
         y -= 30;
 
+        // Name row: entry + Search API button side by side.
         [doc addSubview:[s label:[s L:@"settings.locations.nameLabel" fallback:@"Name"] frame:NSMakeRect(16, y, 90, 20) bold:NO]];
-        s.addNameField = [[NSTextField alloc] initWithFrame:NSMakeRect(110, y - 2, 430, 24)];
+        s.addNameField = [[NSTextField alloc] initWithFrame:NSMakeRect(110, y - 2, 310, 24)];
         s.addNameField.placeholderString = [s L:@"settings.locations.namePlaceholder" fallback:@"City name"];
+        s.addNameField.delegate = s;
         [doc addSubview:s.addNameField];
+
+        NSButton *searchBtn = [NSButton buttonWithTitle:[s L:@"settings.locations.searchBtn" fallback:@"Search API"]
+            target:s action:@selector(onSearchCity:)];
+        searchBtn.frame = NSMakeRect(426, y - 2, 114, 26);
+        searchBtn.toolTip = [s L:@"settings.locations.searchBtn" fallback:@"Search API"];
+        if (![s hasLicense]) searchBtn.enabled = NO;
+        [doc addSubview:searchBtn];
         y -= 32;
 
-        [doc addSubview:[s label:[s L:@"settings.locations.regionLabel" fallback:@"Region"] frame:NSMakeRect(16, y, 90, 20) bold:NO]];
+        // Region, Country row (manual entry — required).
+        [doc addSubview:[s label:[s L:@"settings.locations.regionLabel" fallback:@"Region, Country"] frame:NSMakeRect(16, y, 90, 20) bold:NO]];
         s.addRegionField = [[NSTextField alloc] initWithFrame:NSMakeRect(110, y - 2, 430, 24)];
-        s.addRegionField.placeholderString = [s L:@"settings.locations.regionPlaceholder" fallback:@"Country / state code (e.g. GB)"];
+        s.addRegionField.placeholderString = [s L:@"settings.locations.regionPlaceholder" fallback:@"Region, Country (e.g.  CA, US)"];
+        s.addRegionField.delegate = s;
         [doc addSubview:s.addRegionField];
         y -= 32;
 
+        // Coordinates row (populated by Search API).
         [doc addSubview:[s label:[s L:@"settings.locations.latLabel" fallback:@"Latitude"] frame:NSMakeRect(16, y, 90, 20) bold:NO]];
         s.addLatField = [[NSTextField alloc] initWithFrame:NSMakeRect(110, y - 2, 200, 24)];
-        s.addLatField.placeholderString = [s L:@"settings.locations.latPlaceholder" fallback:@"e.g. 55.9344"];
+        s.addLatField.placeholderString = [s L:@"settings.locations.latPlaceholder" fallback:@"Latitude (optional)"];
+        s.addLatField.delegate = s;
         [doc addSubview:s.addLatField];
         [doc addSubview:[s label:[s L:@"settings.locations.lonLabel" fallback:@"Longitude"] frame:NSMakeRect(320, y, 80, 20) bold:NO]];
         s.addLonField = [[NSTextField alloc] initWithFrame:NSMakeRect(400, y - 2, 140, 24)];
-        s.addLonField.placeholderString = [s L:@"settings.locations.lonPlaceholder" fallback:@"e.g. -3.4693"];
+        s.addLonField.placeholderString = [s L:@"settings.locations.lonPlaceholder" fallback:@"Longitude (optional)"];
+        s.addLonField.delegate = s;
         [doc addSubview:s.addLonField];
         y -= 32;
 
+        // Timezone row (populated by Search API).
         [doc addSubview:[s label:[s L:@"settings.locations.tzLabel" fallback:@"Timezone"] frame:NSMakeRect(16, y, 90, 20) bold:NO]];
         s.addTZField = [[NSTextField alloc] initWithFrame:NSMakeRect(110, y - 2, 430, 24)];
-        s.addTZField.placeholderString = [s L:@"settings.locations.tzPlaceholder" fallback:@"IANA zone (e.g. Europe/London)"];
+        s.addTZField.placeholderString = [s L:@"settings.locations.tzPlaceholder" fallback:@"America/Los_Angeles"];
+        s.addTZField.delegate = s;
         [doc addSubview:s.addTZField];
-        y -= 40;
+        y -= 36;
 
-        NSButton *addBtn = [NSButton buttonWithTitle:[NSString stringWithFormat:@"＋ %@", [s L:@"settings.locations.addBtn" fallback:@"Add City"]]
+        // Search-feedback / status label.
+        s.searchStatusLbl = [NSTextField labelWithString:@""];
+        s.searchStatusLbl.frame = NSMakeRect(16, y, 420, 18);
+        s.searchStatusLbl.font = [NSFont systemFontOfSize:11];
+        s.searchStatusLbl.textColor = [NSColor secondaryLabelColor];
+        [doc addSubview:s.searchStatusLbl];
+        y -= 30;
+
+        // Add City button — disabled until all 5 fields are non-empty.
+        NSButton *addBtn = [NSButton buttonWithTitle:[NSString stringWithFormat:@"\uff0b %@",
+            [s L:@"settings.locations.addBtn" fallback:@"Add City"]]
             target:s action:@selector(onAddCity:)];
-        addBtn.frame = NSMakeRect(440, y, 100, 28);
+        addBtn.frame = NSMakeRect(436, y, 104, 28);
+        addBtn.enabled = NO; // enabled dynamically by -updateAddCityBtn
+        if (![s hasLicense]) addBtn.enabled = NO;
+        s.addCityBtn = addBtn;
         [doc addSubview:addBtn];
     }];
     scroll.frame = NSMakeRect(0, 0, 572, 600);
     item.view = scroll;
     return item;
+}
+
+// Enables or disables the Add City button based on whether all five required
+// fields (Name, Region/Country, Latitude, Longitude, Timezone) are non-empty.
+// Called whenever any of those fields changes.
+- (void)updateAddCityBtn {
+    if (!self.addCityBtn) return;
+    if (![self hasLicense]) {
+        self.addCityBtn.enabled = NO;
+        return;
+    }
+    NSString *name   = [self.addNameField.stringValue   stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
+    NSString *region = [self.addRegionField.stringValue stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
+    NSString *lat    = [self.addLatField.stringValue    stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
+    NSString *lon    = [self.addLonField.stringValue    stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
+    NSString *tz     = [self.addTZField.stringValue     stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
+    self.addCityBtn.enabled = (name.length > 0 && region.length > 0 &&
+                               lat.length > 0 && lon.length > 0 && tz.length > 0);
+}
+
+// NSControlTextDidChangeNotification delegate — fired whenever any observed
+// NSTextField's text content changes; used to gate the Add City button.
+- (void)controlTextDidChange:(NSNotification *)aNotification {
+    [self updateAddCityBtn];
+}
+
+// ── Search API action ─────────────────────────────────────────────────────────
+// Geocodes the city entered in addNameField (and optionally addRegionField)
+// using the configured weather provider's geocoding API, then populates the
+// Latitude, Longitude, and Timezone fields.  The request runs on a background
+// thread; UI updates are dispatched back to the main thread.
+- (void)onSearchCity:(id)sender {
+    if (![self hasLicense]) {
+        [self showAlert:[self L:@"settings.locations.addTitle" fallback:@"Add New City"]
+                   info:[self L:@"error.settings.licenseRequired"
+                            fallback:@"Adding cities requires a Pro API key. Configure one in the Provider tab."]];
+        return;
+    }
+
+    NSString *name = [self.addNameField.stringValue
+        stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
+    if (name.length == 0) {
+        [self showAlert:[self L:@"settings.locations.searchBtn" fallback:@"Search API"]
+                   info:[self L:@"error.settings.cityNameRequiredSearch"
+                            fallback:@"City name is required to search."]];
+        return;
+    }
+
+    NSDictionary *api = self.cfg[@"apiConfig"];
+    NSString *apiKey = api[@"apiKey"] ?: @"";
+    if (apiKey.length == 0) {
+        [self showAlert:[self L:@"settings.locations.searchBtn" fallback:@"Search API"]
+                   info:[self L:@"error.settings.apiKeyRequired"
+                            fallback:@"API Key is required in the settings above to search."]];
+        return;
+    }
+
+    NSString *provider = api[@"provider"] ?: @"easyweatherwidget";
+    NSString *region = [self.addRegionField.stringValue
+        stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
+
+    // For the EasyWeatherWidget provider, Region is required to narrow the search.
+    if ([provider isEqualToString:@"easyweatherwidget"] && region.length == 0) {
+        [self showAlert:[self L:@"settings.locations.searchBtn" fallback:@"Search API"]
+                   info:[self L:@"error.settings.regionRequiredEww"
+                            fallback:@"Region, Country is required to search via EasyWeatherWidget."]];
+        return;
+    }
+
+    // Disable the search button and show the searching label while in-flight.
+    NSButton *btn = (NSButton *)sender;
+    btn.enabled = NO;
+    self.searchStatusLbl.stringValue = [self L:@"settings.locations.searching" fallback:@"Searching..."];
+    self.searchStatusLbl.textColor = [NSColor secondaryLabelColor];
+
+    // Capture everything needed for the background task.
+    NSString *capturedProvider = [provider copy];
+    NSString *capturedKey      = [apiKey copy];
+    NSString *capturedName     = [name copy];
+    NSString *capturedRegion   = [region copy];
+    WWSettingsController *weakSelf = self;
+
+    dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+        __block NSString *foundName   = nil;
+        __block NSString *foundRegion = nil;
+        __block NSString *foundLat    = nil;
+        __block NSString *foundLon    = nil;
+        __block NSString *foundTZ     = nil;
+        __block NSString *errorMsg    = nil;
+
+        if ([capturedProvider isEqualToString:@"easyweatherwidget"]) {
+            // ── EasyWeatherWidget geocoding API ──────────────────────────────
+            NSString *query = [NSString stringWithFormat:@"%@,%@", capturedName, capturedRegion];
+            NSString *encodedQuery = [query stringByAddingPercentEncodingWithAllowedCharacters:
+                [NSCharacterSet URLPathAllowedCharacterSet]];
+            NSString *encodedKey = [capturedKey stringByAddingPercentEncodingWithAllowedCharacters:
+                [NSCharacterSet URLPathAllowedCharacterSet]];
+            NSString *uStr = [NSString stringWithFormat:
+                @"https://weather-gateway-ricardo.web.app/api/v1/weather/key=%@/%@",
+                encodedKey, encodedQuery];
+            NSURL *url = [NSURL URLWithString:uStr];
+            NSURLRequest *req = [NSURLRequest requestWithURL:url
+                cachePolicy:NSURLRequestReloadIgnoringLocalCacheData timeoutInterval:10.0];
+            dispatch_semaphore_t sem = dispatch_semaphore_create(0);
+            [[[NSURLSession sharedSession] dataTaskWithRequest:req completionHandler:^(NSData *data, NSURLResponse *resp, NSError *err) {
+                if (err || !data) {
+                    errorMsg = err ? err.localizedDescription : @"No data";
+                } else {
+                    NSDictionary *result = [NSJSONSerialization JSONObjectWithData:data options:0 error:nil];
+                    NSString *neighborhood = result[@"Neighborhood"];
+                    NSString *country      = result[@"Country"];
+                    NSNumber *latNum       = result[@"Lat"];
+                    NSNumber *lonNum       = result[@"Lon"];
+                    if (neighborhood.length > 0 && latNum && lonNum) {
+                        foundName   = neighborhood;
+                        foundRegion = country ?: @"";
+                        foundLat    = [NSString stringWithFormat:@"%f", [latNum doubleValue]];
+                        foundLon    = [NSString stringWithFormat:@"%f", [lonNum doubleValue]];
+                        // Timezone lookup via the OpenStreetMap nominatim-style TZ offset API.
+                        double lat = [latNum doubleValue];
+                        double lon = [lonNum doubleValue];
+                        NSString *tzUrl = [NSString stringWithFormat:
+                            @"https://nominatim.openstreetmap.org/reverse?format=json&lat=%f&lon=%f",
+                            lat, lon];
+                        NSData *tzData = [NSData dataWithContentsOfURL:[NSURL URLWithString:tzUrl]];
+                        NSDictionary *tzResult = tzData ? [NSJSONSerialization JSONObjectWithData:tzData options:0 error:nil] : nil;
+                        NSString *tz = tzResult[@"address"][@"country_code"];
+                        // Fallback: look up IANA timezone from the TimeZoneDB or use UTC.
+                        // For a richer lookup use the dedicated timezone API.
+                        NSString *tzApiUrl = [NSString stringWithFormat:
+                            @"https://timeapi.io/api/timezone/coordinate?latitude=%f&longitude=%f",
+                            lat, lon];
+                        NSData *tzApiData = [NSData dataWithContentsOfURL:[NSURL URLWithString:tzApiUrl]];
+                        if (tzApiData) {
+                            NSDictionary *tzApiResult = [NSJSONSerialization JSONObjectWithData:tzApiData options:0 error:nil];
+                            NSString *ianaZone = tzApiResult[@"timeZone"];
+                            if (ianaZone.length > 0) {
+                                foundTZ = ianaZone;
+                            }
+                        }
+                        if (!foundTZ) foundTZ = @"";
+                    } else {
+                        errorMsg = [NSString stringWithFormat:@"no city found matching \u2018%@\u2019", capturedName];
+                    }
+                }
+                dispatch_semaphore_signal(sem);
+            }] resume];
+            dispatch_semaphore_wait(sem, dispatch_time(DISPATCH_TIME_NOW, 12 * NSEC_PER_SEC));
+            dispatch_release(sem);
+
+        } else {
+            // ── OpenWeatherMap geocoding API ─────────────────────────────────
+            NSString *encodedName = [capturedName stringByAddingPercentEncodingWithAllowedCharacters:
+                [NSCharacterSet URLQueryAllowedCharacterSet]];
+            NSString *encodedKey = [capturedKey stringByAddingPercentEncodingWithAllowedCharacters:
+                [NSCharacterSet URLQueryAllowedCharacterSet]];
+            NSString *uStr = [NSString stringWithFormat:
+                @"http://api.openweathermap.org/geo/1.0/direct?q=%@&limit=1&appid=%@",
+                encodedName, encodedKey];
+            NSURL *url = [NSURL URLWithString:uStr];
+            NSURLRequest *req = [NSURLRequest requestWithURL:url
+                cachePolicy:NSURLRequestReloadIgnoringLocalCacheData timeoutInterval:10.0];
+            dispatch_semaphore_t sem = dispatch_semaphore_create(0);
+            [[[NSURLSession sharedSession] dataTaskWithRequest:req completionHandler:^(NSData *data, NSURLResponse *resp, NSError *err) {
+                if (err || !data) {
+                    errorMsg = err ? err.localizedDescription : @"No data";
+                } else {
+                    NSArray *results = [NSJSONSerialization JSONObjectWithData:data options:0 error:nil];
+                    NSDictionary *r = results.firstObject;
+                    if (r) {
+                        NSString *state   = r[@"state"];
+                        NSString *country = r[@"country"] ?: @"";
+                        foundName   = r[@"name"] ?: @"";
+                        foundRegion = (state.length > 0)
+                            ? [NSString stringWithFormat:@"%@, %@", state, country]
+                            : country;
+                        double lat = [r[@"lat"] doubleValue];
+                        double lon = [r[@"lon"] doubleValue];
+                        foundLat = [NSString stringWithFormat:@"%f", lat];
+                        foundLon = [NSString stringWithFormat:@"%f", lon];
+                        // Timezone lookup via timeapi.io.
+                        NSString *tzApiUrl = [NSString stringWithFormat:
+                            @"https://timeapi.io/api/timezone/coordinate?latitude=%f&longitude=%f",
+                            lat, lon];
+                        NSData *tzApiData = [NSData dataWithContentsOfURL:[NSURL URLWithString:tzApiUrl]];
+                        if (tzApiData) {
+                            NSDictionary *tzResult = [NSJSONSerialization JSONObjectWithData:tzApiData options:0 error:nil];
+                            NSString *ianaZone = tzResult[@"timeZone"];
+                            if (ianaZone.length > 0) foundTZ = ianaZone;
+                        }
+                        if (!foundTZ) foundTZ = @"";
+                    } else {
+                        errorMsg = [NSString stringWithFormat:@"no city found matching \u2018%@\u2019", capturedName];
+                    }
+                }
+                dispatch_semaphore_signal(sem);
+            }] resume];
+            dispatch_semaphore_wait(sem, dispatch_time(DISPATCH_TIME_NOW, 12 * NSEC_PER_SEC));
+            dispatch_release(sem);
+        }
+
+        // ── Back on the main thread: populate fields or show error ────────────
+        dispatch_async(dispatch_get_main_queue(), ^{
+            WWSettingsController *s = weakSelf;
+            if (!s) return;
+            btn.enabled = [s hasLicense];
+            if (errorMsg) {
+                s.searchStatusLbl.textColor = [NSColor systemRedColor];
+                s.searchStatusLbl.stringValue = errorMsg;
+            } else {
+                s.addNameField.stringValue   = foundName   ?: @"";
+                s.addRegionField.stringValue = foundRegion ?: @"";
+                s.addLatField.stringValue    = foundLat    ?: @"";
+                s.addLonField.stringValue    = foundLon    ?: @"";
+                s.addTZField.stringValue     = foundTZ     ?: @"";
+                NSString *summary = [NSString stringWithFormat:@"\u2713 %@, %@",
+                    foundName ?: @"", foundRegion ?: @""];
+                s.searchStatusLbl.textColor = [NSColor systemGreenColor];
+                s.searchStatusLbl.stringValue = summary;
+                [s updateAddCityBtn];
+            }
+        });
+    });
 }
 
 // Rebuilds the city rows in the stack view from self.cities.
@@ -636,13 +890,32 @@ static WWSettingsController *g_settingsController = nil;
                             fallback:@"Adding cities requires a Pro API key. Configure one in the Provider tab."]];
         return;
     }
+
+    // All five fields are required before a city can be added.
     NSString *name = [self.addNameField.stringValue
         stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
+    NSString *region = [self.addRegionField.stringValue
+        stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
+    NSString *latStr = [self.addLatField.stringValue
+        stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
+    NSString *lonStr = [self.addLonField.stringValue
+        stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
+    NSString *tzStr = [self.addTZField.stringValue
+        stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
+
     if (name.length == 0) {
         [self showAlert:[self L:@"settings.locations.addTitle" fallback:@"Add New City"]
-                   info:[self L:@"error.settings.cityNameRequired" fallback:@"Enter a city name before adding."]];
+                   info:[self L:@"error.settings.cityNameRequired" fallback:@"City name is required."]];
         return;
     }
+    // Guard: button should already be disabled if fields are empty, but be defensive.
+    if (region.length == 0 || latStr.length == 0 || lonStr.length == 0 || tzStr.length == 0) {
+        [self showAlert:[self L:@"settings.locations.addTitle" fallback:@"Add New City"]
+                   info:[self L:@"error.settings.cityNameRequiredSearch"
+                            fallback:@"Use Search API to populate Latitude, Longitude, and Timezone before adding."]];
+        return;
+    }
+
     NSInteger maxCities = [self isPro] ? 5 : 3;
     if ((NSInteger)self.cities.count >= maxCities) {
         [self showAlert:@"City limit reached"
@@ -651,25 +924,22 @@ static WWSettingsController *g_settingsController = nil;
     }
 
     NSMutableDictionary *city = [NSMutableDictionary dictionary];
-    city[@"name"] = name;
-    city[@"region"] = [self.addRegionField.stringValue
-        stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
-    city[@"timezone"] = [self.addTZField.stringValue
-        stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
-    NSString *latStr = [self.addLatField.stringValue
-        stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
-    NSString *lonStr = [self.addLonField.stringValue
-        stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
-    if (latStr.length > 0) city[@"latitude"] = @([latStr doubleValue]);
+    city[@"name"]     = name;
+    city[@"region"]   = region;
+    city[@"timezone"] = tzStr;
+    if (latStr.length > 0) city[@"latitude"]  = @([latStr doubleValue]);
     if (lonStr.length > 0) city[@"longitude"] = @([lonStr doubleValue]);
 
     [self.cities addObject:city];
 
-    self.addNameField.stringValue = @"";
+    // Clear the form and reset the Add City button.
+    self.addNameField.stringValue   = @"";
     self.addRegionField.stringValue = @"";
-    self.addLatField.stringValue = @"";
-    self.addLonField.stringValue = @"";
-    self.addTZField.stringValue = @"";
+    self.addLatField.stringValue    = @"";
+    self.addLonField.stringValue    = @"";
+    self.addTZField.stringValue     = @"";
+    self.searchStatusLbl.stringValue = @"";
+    [self updateAddCityBtn];
 
     [self refreshCityList];
 }
@@ -941,16 +1211,37 @@ static WWSettingsController *g_settingsController = nil;
             frame:NSMakeRect(16, y, 520, 18)]];
         y -= 32;
 
+        // Position: X/Y fields + nudge arrow buttons + Apply.
+        // The arrow buttons (◀ ▲ ▼ ▶) move the widget 10 px per click
+        // immediately — no Save required — matching the GTK/Fyne behaviour.
         [doc addSubview:[s label:@"X:" frame:NSMakeRect(16, y, 24, 22) bold:NO]];
-        s.posXField = [[NSTextField alloc] initWithFrame:NSMakeRect(44, y, 90, 24)];
+        s.posXField = [[NSTextField alloc] initWithFrame:NSMakeRect(44, y, 80, 24)];
         [doc addSubview:s.posXField];
-        [doc addSubview:[s label:@"Y:" frame:NSMakeRect(150, y, 24, 22) bold:NO]];
-        s.posYField = [[NSTextField alloc] initWithFrame:NSMakeRect(178, y, 90, 24)];
+        [doc addSubview:[s label:@"Y:" frame:NSMakeRect(134, y, 24, 22) bold:NO]];
+        s.posYField = [[NSTextField alloc] initWithFrame:NSMakeRect(158, y, 80, 24)];
         [doc addSubview:s.posYField];
+
+        // Apply button — commits the X/Y fields to the live window.
         NSButton *applyPos = [NSButton buttonWithTitle:@"Apply"
             target:s action:@selector(onApplyPosition:)];
-        applyPos.frame = NSMakeRect(280, y - 1, 80, 26);
+        applyPos.frame = NSMakeRect(248, y - 1, 68, 26);
         [doc addSubview:applyPos];
+
+        // Nudge buttons (10 px per click, immediate, no Save needed).
+        NSButton *nudgeLeft  = [NSButton buttonWithTitle:@"\u25c0" target:s action:@selector(onNudgePosition:)];
+        NSButton *nudgeUp    = [NSButton buttonWithTitle:@"\u25b2" target:s action:@selector(onNudgePosition:)];
+        NSButton *nudgeDown  = [NSButton buttonWithTitle:@"\u25bc" target:s action:@selector(onNudgePosition:)];
+        NSButton *nudgeRight = [NSButton buttonWithTitle:@"\u25b6" target:s action:@selector(onNudgePosition:)];
+        nudgeLeft.tag  = 0;  // x - 10
+        nudgeUp.tag    = 1;  // y - 10
+        nudgeDown.tag  = 2;  // y + 10
+        nudgeRight.tag = 3;  // x + 10
+        CGFloat nx = 324;
+        for (NSButton *nb in @[nudgeLeft, nudgeUp, nudgeDown, nudgeRight]) {
+            nb.frame = NSMakeRect(nx, y - 1, 34, 26);
+            [doc addSubview:nb];
+            nx += 38;
+        }
         y -= 48;
 
         // Font sizes.
@@ -1314,6 +1605,28 @@ static WWSettingsController *g_settingsController = nil;
     NSData *data = [updated dataUsingEncoding:NSUTF8StringEncoding];
     self.cfg = [[NSJSONSerialization JSONObjectWithData:data
         options:NSJSONReadingMutableContainers error:nil] mutableCopy] ?: self.cfg;
+}
+
+// Nudges the widget position by \u00b110 px in the indicated direction and
+// immediately applies the move (no Save button required).
+//   tag 0 = left  (x - 10)
+//   tag 1 = up    (y - 10)
+//   tag 2 = down  (y + 10)
+//   tag 3 = right (x + 10)
+- (void)onNudgePosition:(NSButton *)sender {
+    const NSInteger delta = 10;
+    NSInteger x = _posXField.integerValue;
+    NSInteger y = _posYField.integerValue;
+    switch (sender.tag) {
+        case 0: x -= delta; break;  // left
+        case 1: y -= delta; break;  // up   (screen-coords: smaller y = higher)
+        case 2: y += delta; break;  // down
+        case 3: x += delta; break;  // right
+        default: break;
+    }
+    _posXField.stringValue = [NSString stringWithFormat:@"%ld", (long)x];
+    _posYField.stringValue = [NSString stringWithFormat:@"%ld", (long)y];
+    [self onApplyPosition:sender];
 }
 
 - (void)onSave:(id)sender {
