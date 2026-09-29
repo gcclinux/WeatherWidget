@@ -130,7 +130,7 @@ static inline NSNumber *jbool(BOOL v) { return v ? @YES : @NO; }
 
 // ── WWSettingsController ──────────────────────────────────────────────────────
 
-@interface WWSettingsController : NSWindowController <NSWindowDelegate>
+@interface WWSettingsController : NSWindowController <NSWindowDelegate, NSTextFieldDelegate>
 @property (nonatomic, strong) NSString  *cfgJSON;   // current config JSON
 @property (nonatomic, strong) NSMutableDictionary *cfg; // mutable parsed config
 @property (nonatomic, strong) NSDictionary *strings;    // localized UI strings (key → text)
@@ -651,6 +651,14 @@ static WWSettingsController *g_settingsController = nil;
     WWSettingsController *weakSelf = self;
 
     dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+        // NOTE (MRC): this file is compiled without ARC, so __block object
+        // variables are NOT retained by the block. Anything assigned here is an
+        // autoreleased string owned by the background thread's (or the
+        // NSURLSession completion handler's) autorelease pool. That pool drains
+        // before the main-thread block below runs, which would leave these
+        // pointers dangling and crash when the fields are populated. So every
+        // result string is retained (via -copy / -retain) at assignment and
+        // released again after the main-thread block has consumed it.
         __block NSString *foundName   = nil;
         __block NSString *foundRegion = nil;
         __block NSString *foundLat    = nil;
@@ -674,7 +682,7 @@ static WWSettingsController *g_settingsController = nil;
             dispatch_semaphore_t sem = dispatch_semaphore_create(0);
             [[[NSURLSession sharedSession] dataTaskWithRequest:req completionHandler:^(NSData *data, NSURLResponse *resp, NSError *err) {
                 if (err || !data) {
-                    errorMsg = err ? err.localizedDescription : @"No data";
+                    errorMsg = [(err ? err.localizedDescription : @"No data") copy];
                 } else {
                     NSDictionary *result = [NSJSONSerialization JSONObjectWithData:data options:0 error:nil];
                     NSString *neighborhood = result[@"Neighborhood"];
@@ -682,10 +690,10 @@ static WWSettingsController *g_settingsController = nil;
                     NSNumber *latNum       = result[@"Lat"];
                     NSNumber *lonNum       = result[@"Lon"];
                     if (neighborhood.length > 0 && latNum && lonNum) {
-                        foundName   = neighborhood;
-                        foundRegion = country ?: @"";
-                        foundLat    = [NSString stringWithFormat:@"%f", [latNum doubleValue]];
-                        foundLon    = [NSString stringWithFormat:@"%f", [lonNum doubleValue]];
+                        foundName   = [neighborhood copy];
+                        foundRegion = [(country ?: @"") copy];
+                        foundLat    = [[NSString stringWithFormat:@"%f", [latNum doubleValue]] copy];
+                        foundLon    = [[NSString stringWithFormat:@"%f", [lonNum doubleValue]] copy];
                         // Timezone lookup via the OpenStreetMap nominatim-style TZ offset API.
                         double lat = [latNum doubleValue];
                         double lon = [lonNum doubleValue];
@@ -705,17 +713,20 @@ static WWSettingsController *g_settingsController = nil;
                             NSDictionary *tzApiResult = [NSJSONSerialization JSONObjectWithData:tzApiData options:0 error:nil];
                             NSString *ianaZone = tzApiResult[@"timeZone"];
                             if (ianaZone.length > 0) {
-                                foundTZ = ianaZone;
+                                foundTZ = [ianaZone copy];
                             }
                         }
                         if (!foundTZ) foundTZ = @"";
                     } else {
-                        errorMsg = [NSString stringWithFormat:@"no city found matching \u2018%@\u2019", capturedName];
+                        errorMsg = [[NSString stringWithFormat:@"no city found matching \u2018%@\u2019", capturedName] copy];
                     }
                 }
                 dispatch_semaphore_signal(sem);
             }] resume];
-            dispatch_semaphore_wait(sem, dispatch_time(DISPATCH_TIME_NOW, 12 * NSEC_PER_SEC));
+            // Wait unconditionally so the completion handler (which signals the
+            // semaphore) has finished before we release it — signalling an
+            // already-released dispatch object would crash under MRC.
+            dispatch_semaphore_wait(sem, DISPATCH_TIME_FOREVER);
             dispatch_release(sem);
 
         } else {
@@ -733,21 +744,21 @@ static WWSettingsController *g_settingsController = nil;
             dispatch_semaphore_t sem = dispatch_semaphore_create(0);
             [[[NSURLSession sharedSession] dataTaskWithRequest:req completionHandler:^(NSData *data, NSURLResponse *resp, NSError *err) {
                 if (err || !data) {
-                    errorMsg = err ? err.localizedDescription : @"No data";
+                    errorMsg = [(err ? err.localizedDescription : @"No data") copy];
                 } else {
                     NSArray *results = [NSJSONSerialization JSONObjectWithData:data options:0 error:nil];
                     NSDictionary *r = results.firstObject;
                     if (r) {
                         NSString *state   = r[@"state"];
                         NSString *country = r[@"country"] ?: @"";
-                        foundName   = r[@"name"] ?: @"";
-                        foundRegion = (state.length > 0)
+                        foundName   = [(r[@"name"] ?: @"") copy];
+                        foundRegion = [((state.length > 0)
                             ? [NSString stringWithFormat:@"%@, %@", state, country]
-                            : country;
+                            : country) copy];
                         double lat = [r[@"lat"] doubleValue];
                         double lon = [r[@"lon"] doubleValue];
-                        foundLat = [NSString stringWithFormat:@"%f", lat];
-                        foundLon = [NSString stringWithFormat:@"%f", lon];
+                        foundLat = [[NSString stringWithFormat:@"%f", lat] copy];
+                        foundLon = [[NSString stringWithFormat:@"%f", lon] copy];
                         // Timezone lookup via timeapi.io.
                         NSString *tzApiUrl = [NSString stringWithFormat:
                             @"https://timeapi.io/api/timezone/coordinate?latitude=%f&longitude=%f",
@@ -756,39 +767,51 @@ static WWSettingsController *g_settingsController = nil;
                         if (tzApiData) {
                             NSDictionary *tzResult = [NSJSONSerialization JSONObjectWithData:tzApiData options:0 error:nil];
                             NSString *ianaZone = tzResult[@"timeZone"];
-                            if (ianaZone.length > 0) foundTZ = ianaZone;
+                            if (ianaZone.length > 0) foundTZ = [ianaZone copy];
                         }
                         if (!foundTZ) foundTZ = @"";
                     } else {
-                        errorMsg = [NSString stringWithFormat:@"no city found matching \u2018%@\u2019", capturedName];
+                        errorMsg = [[NSString stringWithFormat:@"no city found matching \u2018%@\u2019", capturedName] copy];
                     }
                 }
                 dispatch_semaphore_signal(sem);
             }] resume];
-            dispatch_semaphore_wait(sem, dispatch_time(DISPATCH_TIME_NOW, 12 * NSEC_PER_SEC));
+            // Wait unconditionally so the completion handler (which signals the
+            // semaphore) has finished before we release it — signalling an
+            // already-released dispatch object would crash under MRC.
+            dispatch_semaphore_wait(sem, DISPATCH_TIME_FOREVER);
             dispatch_release(sem);
         }
 
         // ── Back on the main thread: populate fields or show error ────────────
         dispatch_async(dispatch_get_main_queue(), ^{
             WWSettingsController *s = weakSelf;
-            if (!s) return;
-            btn.enabled = [s hasLicense];
-            if (errorMsg) {
-                s.searchStatusLbl.textColor = [NSColor systemRedColor];
-                s.searchStatusLbl.stringValue = errorMsg;
-            } else {
-                s.addNameField.stringValue   = foundName   ?: @"";
-                s.addRegionField.stringValue = foundRegion ?: @"";
-                s.addLatField.stringValue    = foundLat    ?: @"";
-                s.addLonField.stringValue    = foundLon    ?: @"";
-                s.addTZField.stringValue     = foundTZ     ?: @"";
-                NSString *summary = [NSString stringWithFormat:@"\u2713 %@, %@",
-                    foundName ?: @"", foundRegion ?: @""];
-                s.searchStatusLbl.textColor = [NSColor systemGreenColor];
-                s.searchStatusLbl.stringValue = summary;
-                [s updateAddCityBtn];
+            if (s) {
+                btn.enabled = [s hasLicense];
+                if (errorMsg) {
+                    s.searchStatusLbl.textColor = [NSColor systemRedColor];
+                    s.searchStatusLbl.stringValue = errorMsg;
+                } else {
+                    s.addNameField.stringValue   = foundName   ?: @"";
+                    s.addRegionField.stringValue = foundRegion ?: @"";
+                    s.addLatField.stringValue    = foundLat    ?: @"";
+                    s.addLonField.stringValue    = foundLon    ?: @"";
+                    s.addTZField.stringValue     = foundTZ     ?: @"";
+                    NSString *summary = [NSString stringWithFormat:@"\u2713 %@, %@",
+                        foundName ?: @"", foundRegion ?: @""];
+                    s.searchStatusLbl.textColor = [NSColor systemGreenColor];
+                    s.searchStatusLbl.stringValue = summary;
+                    [s updateAddCityBtn];
+                }
             }
+            // Balance the +1 retain each result took at assignment (MRC).
+            // -release on a nil pointer or a string literal is a safe no-op.
+            [foundName release];
+            [foundRegion release];
+            [foundLat release];
+            [foundLon release];
+            [foundTZ release];
+            [errorMsg release];
         });
     });
 }

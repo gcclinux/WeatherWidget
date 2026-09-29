@@ -110,6 +110,17 @@ lipo -create \
     "$BUILD_DIR/$BINARY_NAME-darwin-arm64"
 chmod +x "$APP_BUNDLE/Contents/MacOS/$BINARY_NAME"
 
+# ── Standalone universal binary ───────────────────────────────────────────────
+#
+# A ready-to-run universal (arm64 + amd64) binary that needs no installation —
+# copy it anywhere and execute directly, just like a dev build. This is the
+# same fat binary embedded in the .app bundle, lifted out to its own file.
+
+STANDALONE_BIN="$BUILD_DIR/$APP_NAME-standalone-macos-$VERSION.bin"
+echo "==> Creating standalone binary $STANDALONE_BIN..."
+cp "$APP_BUNDLE/Contents/MacOS/$BINARY_NAME" "$STANDALONE_BIN"
+chmod +x "$STANDALONE_BIN"
+
 # ── .icns ─────────────────────────────────────────────────────────────────────
 
 ICONSET="/tmp/$APP_NAME.iconset"
@@ -229,6 +240,13 @@ if [ -n "$SIGN_APP" ]; then
         "$APP_BUNDLE"
     echo "    Verifying signature..."
     codesign --verify --deep --strict "$APP_BUNDLE" && echo "    ✓ Signature valid"
+
+    echo "==> Signing standalone binary with: $SIGN_APP"
+    codesign --force --options runtime \
+        --entitlements "$ENTITLEMENTS_FILE" \
+        --sign "$SIGN_APP" \
+        "$STANDALONE_BIN"
+    codesign --verify --strict "$STANDALONE_BIN" && echo "    ✓ Standalone signature valid"
 else
     echo "    (skipping code signing — pass --sign-app to sign)"
 fi
@@ -321,6 +339,7 @@ echo ""
 echo "==> Build complete!"
 echo "    App:  $APP_BUNDLE"
 echo "    DMG:  $DMG_NAME"
+echo "    Bin:  $STANDALONE_BIN"
 [ "$BUILD_PKG" -eq 1 ] && echo "    PKG:  $BUILD_DIR/$APP_NAME-$VERSION.pkg"
 echo ""
 echo "    To install: open $DMG_NAME and drag to /Applications"
