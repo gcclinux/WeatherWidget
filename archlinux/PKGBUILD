@@ -1,0 +1,60 @@
+# Maintainer: WeatherWidget Team <support@weatherwidget.app>
+pkgname=weatherwidget
+pkgver=2.0.6
+pkgrel=2
+pkgdesc="Compact desktop weather widget with live weather and world clocks (native GTK3)"
+arch=('x86_64' 'aarch64')
+url="https://github.com/gcclinux/WeatherWidget"
+license=('AGPL-3.0-or-later')
+depends=('gtk3' 'libayatana-appindicator' 'hicolor-icon-theme')
+makedepends=('go' 'git' 'pkgconf')
+options=('!debug' '!lto')
+source=("$pkgname-$pkgver.tar.gz::https://github.com/gcclinux/WeatherWidget/archive/refs/tags/v$pkgver.tar.gz")
+sha256sums=('476449c9c5017c5f99751159f93ae57b46da8272f6a1fd196c904e644b1ef974')
+
+prepare() {
+	cd "WeatherWidget-$pkgver"
+	export GOWORK=off
+	export GOFLAGS="-mod=mod"
+	go mod download
+}
+
+build() {
+	cd "WeatherWidget-$pkgver"
+	export CGO_ENABLED=1
+	export GOWORK=off
+	export GOFLAGS="-mod=mod -trimpath"
+	export CGO_CFLAGS="-Wno-deprecated-declarations"
+	go build -ldflags "-linkmode external -extldflags \"$LDFLAGS\" -s -w -X main.version=$pkgver" \
+		-o weatherwidget ./cmd/weatherwidget-gtk/
+}
+
+package() {
+	cd "WeatherWidget-$pkgver"
+
+	install -Dm755 weatherwidget "$pkgdir/usr/bin/weatherwidget"
+	install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+
+	install -d "$pkgdir/usr/share/applications"
+	cat > "$pkgdir/usr/share/applications/weatherwidget.desktop" <<-EOF
+	[Desktop Entry]
+	Type=Application
+	Name=WeatherWidget
+	GenericName=Weather Widget
+	Comment=Live weather and world clocks on your desktop
+	Exec=env GDK_BACKEND=x11 weatherwidget
+	Icon=weatherwidget
+	Terminal=false
+	Categories=Utility;Clock;
+	Keywords=weather;widget;forecast;clock;temperature;
+	StartupNotify=true
+	StartupWMClass=weatherwidget
+	EOF
+	chmod 644 "$pkgdir/usr/share/applications/weatherwidget.desktop"
+
+	local icon_src="assets/icons/day/clear_day.png"
+	install -Dm644 "$icon_src" "$pkgdir/usr/share/pixmaps/weatherwidget.png"
+	for size in 48 64 128 256 512; do
+		install -Dm644 "$icon_src" "$pkgdir/usr/share/icons/hicolor/${size}x${size}/apps/weatherwidget.png"
+	done
+}

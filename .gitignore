@@ -27,3 +27,6 @@ weatherwidget-gtk
 .craft/
 .kiro/
 weatherwidget-linux-amd64
+archlinux/src/*
+archlinux/pkg/*
+archlinux/weatherwidget-*
