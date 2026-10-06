@@ -262,6 +262,7 @@ func (m *manager) buildCards(cities []config.CityConfig) {
 		}
 		nativeSetCardFontSizes(handle, m.fontSizeCityTime, m.fontSizeTempIcon, m.fontSizeConditions)
 		nativeSetCardFieldVisibility(handle, displayFieldMask(m.cfg.GetDisplayFields()))
+		m.applyCardMetricNames(handle)
 		newCards = append(newCards, handle)
 	}
 
@@ -269,7 +270,14 @@ func (m *manager) buildCards(cities []config.CityConfig) {
 	m.cardsMu.Lock()
 	m.cards = newCards
 	cardCount := len(m.cards)
+	results := m.lastResults
 	m.cardsMu.Unlock()
+
+	for i, card := range newCards {
+		if i < len(results) && results[i].Data != nil {
+			m.updateCard(card, results[i].Data)
+		}
+	}
 
 	simple := m.viewMode == config.ViewModeSimple
 	nativeSetContainerLayout(m.container, simple, cardCount)
@@ -366,14 +374,18 @@ func (m *manager) handleWeatherUpdate(results []weather.WeatherResult) {
 			break
 		}
 		card := cards[i]
+		staleWarning := m.t("panel.staleWarning")
+		if staleWarning == "" || staleWarning == "panel.staleWarning" {
+			staleWarning = "Stale data"
+		}
 		if r.HasError && !r.IsStale {
-			nativeShowCardError(card, true, false)
+			nativeShowCardError(card, true, "⚠ Fetch error")
 			continue
 		}
 		if r.HasError && r.IsStale {
-			nativeShowCardError(card, true, true)
+			nativeShowCardError(card, true, "⚠ "+staleWarning)
 		} else {
-			nativeShowCardError(card, false, false)
+			nativeShowCardError(card, false, "")
 		}
 		if r.Data == nil {
 			continue
@@ -440,6 +452,15 @@ func (m *manager) updateCard(card uintptr, d *weather.WeatherData) {
 		dewDisp.Name, pressDisp.Name, uvDisp.Name, "AQI",
 	)
 
+	nativeSetCardPollutantName(card, -1, weather.PollutionMetricName(weather.MetricAQI, m.lm))
+	slotMetrics := []weather.PollutionMetric{
+		weather.MetricCO, weather.MetricNO, weather.MetricNO2, weather.MetricO3,
+		weather.MetricSO2, weather.MetricNH3, weather.MetricPM25, weather.MetricPM10,
+	}
+	for slot, metric := range slotMetrics {
+		nativeSetCardPollutantName(card, slot, weather.PollutionMetricName(metric, m.lm))
+	}
+
 	// Air-quality / pollution rows.
 	pf := m.cfg.GetPollutionFields()
 	pd := weather.PollutionOf(d)
@@ -478,6 +499,32 @@ func (m *manager) updateCard(card uintptr, d *weather.WeatherData) {
 		}
 		iconPath := resolveAirIconPath(row.IconFile)
 		nativeUpdateCardPollutant(card, slot, iconPath, row.ValueText)
+	}
+}
+
+// applyCardMetricNames pushes the localized metric NAME words + air quality /
+// pollutant names to a card so they follow the user's chosen locale.
+func (m *manager) applyCardMetricNames(card uintptr) {
+	windUnit := m.cfg.WindSpeedUnit
+	humidDisp := weather.HumidityDisplay(0, m.lm)
+	windDisp := weather.WindDisplay(0, 0, windUnit, m.lm)
+	gustDisp := weather.WindGustDisplay(0, windUnit, m.lm)
+	dewDisp := weather.DewPointDisplay(0, m.lm)
+	pressDisp := weather.PressureDisplay(0, m.lm)
+	uvDisp := weather.UVIndexDisplay(0, m.lm)
+
+	nativeSetCardMetricNames(card,
+		humidDisp.Name, windDisp.Name, gustDisp.Name,
+		dewDisp.Name, pressDisp.Name, uvDisp.Name, "AQI",
+	)
+
+	nativeSetCardPollutantName(card, -1, weather.PollutionMetricName(weather.MetricAQI, m.lm))
+	slotMetrics := []weather.PollutionMetric{
+		weather.MetricCO, weather.MetricNO, weather.MetricNO2, weather.MetricO3,
+		weather.MetricSO2, weather.MetricNH3, weather.MetricPM25, weather.MetricPM10,
+	}
+	for slot, metric := range slotMetrics {
+		nativeSetCardPollutantName(card, slot, weather.PollutionMetricName(metric, m.lm))
 	}
 }
 
@@ -726,6 +773,7 @@ func (m *manager) onSettingsSave(newCfg *config.Config) error {
 			for _, card := range cards {
 				nativeSetCardFieldVisibility(card, displayFieldMask(newCfg.GetDisplayFields()))
 				nativeSetCardFontSizes(card, m.fontSizeCityTime, m.fontSizeTempIcon, m.fontSizeConditions)
+				m.applyCardMetricNames(card)
 			}
 			// Re-render each card's data from the cached last results so unit
 			// changes (°C/°F, km/h→mph) and pollution-row selection take effect

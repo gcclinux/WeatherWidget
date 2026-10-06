@@ -137,8 +137,12 @@ extern void resizeWindowToContainer(uintptr_t win, uintptr_t container, int mode
 // content updates. Used to fit cards to their final populated height.
 extern void relayoutContainerAsync(uintptr_t win, uintptr_t container, int mode, int cardCount);
 
-// showCardError shows/hides the error overlay on a card (stale=1 shows "stale data").
-extern void showCardError(uintptr_t card, int visible, int stale);
+// setCardPollutantName sets the localized name on an enhanced air tile
+// (slot -1 = AQI, 0..7 = pollutants).
+extern void setCardPollutantName(uintptr_t card, int slot, const char *name);
+
+// showCardError shows/hides the error overlay on a card with a localized text message.
+extern void showCardError(uintptr_t card, int visible, const char *text);
 
 // setCardFontSizes adjusts font sizes on a card (px).  Pass 0 to use defaults.
 extern void setCardFontSizes(uintptr_t card, int cityTimeSize, int tempSize, int condSize);
@@ -341,6 +345,12 @@ func nativeUpdateCardPollutant(card uintptr, slot int, iconPath, value string) {
 	C.updateCardPollutant(C.uintptr_t(card), C.int(slot), ci, cv)
 }
 
+func nativeSetCardPollutantName(card uintptr, slot int, name string) {
+	cn := C.CString(name)
+	defer C.free(unsafe.Pointer(cn))
+	C.setCardPollutantName(C.uintptr_t(card), C.int(slot), cn)
+}
+
 // DisplayField bitmask constants — must match the #defines in the C preamble.
 const (
 	DFCity     = uint32(1 << 0)
@@ -387,16 +397,14 @@ func nativeRelayoutContainerAsync(win, container uintptr, simpleMode bool, cardC
 	C.relayoutContainerAsync(C.uintptr_t(win), C.uintptr_t(container), mode, C.int(cardCount))
 }
 
-func nativeShowCardError(card uintptr, visible, stale bool) {
+func nativeShowCardError(card uintptr, visible bool, text string) {
 	v := C.int(0)
 	if visible {
 		v = 1
 	}
-	s := C.int(0)
-	if stale {
-		s = 1
-	}
-	C.showCardError(C.uintptr_t(card), v, s)
+	ct := C.CString(text)
+	defer C.free(unsafe.Pointer(ct))
+	C.showCardError(C.uintptr_t(card), v, ct)
 }
 
 func nativeSetCardFontSizes(card uintptr, cityTime, temp, cond int) {

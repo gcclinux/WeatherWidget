@@ -199,6 +199,15 @@ static NSAttributedString *simpleLineAttr(NSString *iconPath, NSString *text, CG
 
     _nameLbl  = subLbl(name, 9);
     _nameLbl.alignment = NSTextAlignmentCenter;
+    // Localized pollutant names (e.g. "Carbon Monoxide", "一氧化碳") can be
+    // much longer than the chemical abbreviations, so let the name wrap onto
+    // up to two centred lines (mirrors the GTK air-tile word-wrap) instead of
+    // widening the tile and pushing the air row off the card.
+    _nameLbl.usesSingleLineMode = NO;
+    _nameLbl.cell.wraps = YES;
+    _nameLbl.lineBreakMode = NSLineBreakByWordWrapping;
+    _nameLbl.maximumNumberOfLines = 2;
+    _nameLbl.preferredMaxLayoutWidth = 58;
     _valueLbl = lbl(@"", 10, YES);
     _valueLbl.alignment = NSTextAlignmentCenter;
 
@@ -278,7 +287,26 @@ static NSAttributedString *simpleLineAttr(NSString *iconPath, NSString *text, CG
 
 @end
 
-@implementation WWCityCardView
+// Emoji prefixes for the simple-mode metric lines (order matches _metricTiles).
+static NSString * const kSimpleMetricEmojis[6] = {
+    @"💧", @"💨", @"🌬", @"💧", @"🌡", @"☀"
+};
+
+// wwSetStr replaces an MRC-owned NSString ivar with a copy of s.
+static void wwSetStr(NSString **slot, NSString *s) {
+    if (*slot == s) return;
+    [*slot release];
+    *slot = [s copy];
+}
+
+@implementation WWCityCardView {
+    // Localized metric NAME words and the last metric VALUES for the
+    // simple-mode lines, so each line renders "emoji name value" exactly like
+    // the GTK / Fyne simple views regardless of which arrives first.
+    // Owned under MRC (copied in wwSetStr, released in -dealloc).
+    NSString *_simpleNames[6];
+    NSString *_simpleValues[6];
+}
 
 - (instancetype)initWithCity:(NSString *)city region:(NSString *)region {
     self = [super initWithFrame:NSMakeRect(0, 0, 600, 220)];
@@ -408,6 +436,9 @@ static NSAttributedString *simpleLineAttr(NSString *iconPath, NSString *text, CG
         NSTextField *m = subLbl(@"", 10);
         m.alignment = NSTextAlignmentCenter;
         [sMetrics addObject:m];
+        // English fallback names until the localized words are pushed from Go.
+        _simpleNames[i]  = [names[i] copy];
+        _simpleValues[i] = nil;
     }
     _simpleMetricLines = [sMetrics copy];   // -copy returns an owned +1 object
 
@@ -541,6 +572,26 @@ static NSAttributedString *simpleLineAttr(NSString *iconPath, NSString *text, CG
     [self setNeedsLayout:YES];
 }
 
+- (void)dealloc {
+    for (int i = 0; i < 6; i++) {
+        [_simpleNames[i] release];
+        [_simpleValues[i] release];
+    }
+    [super dealloc];
+}
+
+// refreshSimpleMetricLine re-renders simple-mode metric line i as
+// "emoji name value" (matching GTK/Fyne). No-op until a value has arrived.
+- (void)refreshSimpleMetricLine:(int)i {
+    if (i < 0 || i >= 6) return;
+    NSString *v = _simpleValues[i];
+    if (v.length == 0) return;
+    NSString *n = _simpleNames[i];
+    _simpleMetricLines[i].stringValue = n.length
+        ? [NSString stringWithFormat:@"%@ %@ %@", kSimpleMetricEmojis[i], n, v]
+        : [NSString stringWithFormat:@"%@ %@", kSimpleMetricEmojis[i], v];
+}
+
 // ── Background image loading ──────────────────────────────────────────────────
 
 - (void)loadBackground:(BOOL)night {
@@ -612,18 +663,16 @@ static NSAttributedString *simpleLineAttr(NSString *iconPath, NSString *text, CG
     set(_metricTiles[4].valueLbl, pressStr);
     set(_metricTiles[5].valueLbl, uvStr);
 
-    // Simple-mode plain-text lines: "emoji  value". Only update when a value is
-    // provided (clock-only refreshes pass empty weather strings).
-    void (^setLine)(NSTextField *, NSString *, NSString *) =
-        ^(NSTextField *f, NSString *emoji, NSString *s) {
-        if (s.length > 0) f.stringValue = [NSString stringWithFormat:@"%@ %@", emoji, s];
-    };
-    setLine(_simpleMetricLines[0], @"💧", humidStr);
-    setLine(_simpleMetricLines[1], @"💨", windStr);
-    setLine(_simpleMetricLines[2], @"🌬", windGustStr);
-    setLine(_simpleMetricLines[3], @"💧", dewPtStr);
-    setLine(_simpleMetricLines[4], @"🌡", pressStr);
-    setLine(_simpleMetricLines[5], @"☀", uvStr);
+    // Simple-mode plain-text lines: "emoji name value" with the localized
+    // metric name (matches the GTK / Fyne simple views). Only update when a
+    // value is provided (clock-only refreshes pass empty weather strings).
+    NSString *vals[6] = { humidStr, windStr, windGustStr, dewPtStr, pressStr, uvStr };
+    for (int i = 0; i < 6; i++) {
+        if (vals[i].length > 0) {
+            wwSetStr(&_simpleValues[i], vals[i]);
+            [self refreshSimpleMetricLine:i];
+        }
+    }
 
     [self applyIconNS:iconPath];
 }
@@ -686,22 +735,38 @@ static NSString *pollSlotName(int slot) {
 }
 
 // setMetricNamesHumidity:... updates the localized NAME labels on the enhanced
-// metric tiles and stores the localized AQI name (used by the AQI tile and the
-// simple-view AQI line). The metric VALUES arrive separately via updateCardData;
-// this only refreshes the label words so they follow the chosen UI language.
+// metric tiles AND the simple-mode metric lines, and stores the short AQI word
+// used by the simple-view AQI line. The metric VALUES arrive separately via
+// updateCardData; this only refreshes the label words so they follow the
+// chosen UI language. (The enhanced AQI tile's full localized name is set via
+// setPollutantName:slot:-1.)
 - (void)setMetricNamesHumidity:(NSString *)humid wind:(NSString *)wind
     windGust:(NSString *)gust dewPoint:(NSString *)dew pressure:(NSString *)press
     uvIndex:(NSString *)uv aqi:(NSString *)aqi {
-    if (humid.length) _metricTiles[0].nameLbl.stringValue = humid;
-    if (wind.length)  _metricTiles[1].nameLbl.stringValue = wind;
-    if (gust.length)  _metricTiles[2].nameLbl.stringValue = gust;
-    if (dew.length)   _metricTiles[3].nameLbl.stringValue = dew;
-    if (press.length) _metricTiles[4].nameLbl.stringValue = press;
-    if (uv.length)    _metricTiles[5].nameLbl.stringValue = uv;
+    NSString *names[6] = { humid, wind, gust, dew, press, uv };
+    for (int i = 0; i < 6; i++) {
+        if (names[i].length == 0) continue;
+        _metricTiles[i].nameLbl.stringValue = names[i];
+        wwSetStr(&_simpleNames[i], names[i]);
+        [self refreshSimpleMetricLine:i];
+    }
     if (aqi.length) {
         self.aqiName = aqi;
-        _aqiTile.nameLbl.stringValue = aqi;
     }
+}
+
+// setPollutantName:slot: sets the localized NAME label on an enhanced air
+// tile. slot -1 = AQI tile, 0..7 = pollutant tiles (CO NO NO2 O3 SO2 NH3
+// PM2.5 PM10). Mirrors the GTK/Fyne enhanced views, which label air tiles with
+// weather.PollutionMetricName (e.g. "Air Quality Index", "一氧化碳").
+- (void)setPollutantName:(NSString *)name slot:(int)slot {
+    if (name.length == 0) return;
+    if (slot < 0) {
+        _aqiTile.nameLbl.stringValue = name;
+        return;
+    }
+    if (slot >= kPollSlots) return;
+    _pollTiles[slot].nameLbl.stringValue = name;
 }
 
 - (void)applyFieldMask:(DFMask)mask {
@@ -729,8 +794,10 @@ static NSString *pollSlotName(int slot) {
     _simpleMetricLines[5].hidden = !(mask & DFUVIndex);
 }
 
-- (void)showError:(BOOL)visible stale:(BOOL)stale {
-    _errorLbl.stringValue = stale ? @"⚠ Stale data" : @"⚠ Fetch error";
+// showError:text: shows/hides the error label. text is the (localized) message
+// supplied by Go; when empty the previous text is kept.
+- (void)showError:(BOOL)visible text:(NSString *)text {
+    if (text.length > 0) _errorLbl.stringValue = text;
     _errorLbl.hidden = !visible;
 }
 
@@ -927,6 +994,15 @@ void setCardMetricNames(uintptr_t cardHandle,
     });
 }
 
+// setCardPollutantName sets the localized name on an enhanced air tile
+// (slot -1 = AQI, 0..7 = pollutants). The string is copied synchronously.
+void setCardPollutantName(uintptr_t cardHandle, int slot, const char *name) {
+    NSString *nName = nsFromC(name);
+    dispatch_async(dispatch_get_main_queue(), ^{
+        [(__bridge WWCityCardView *)(void *)cardHandle setPollutantName:nName slot:slot];
+    });
+}
+
 void updateCardAQI(uintptr_t cardHandle, const char *iconPath, const char *label) {
     NSString *nLabel = nsFromC(label);
     NSString *nIcon  = nsFromC(iconPath);
@@ -983,10 +1059,11 @@ void resizeWindowToContainer(uintptr_t winHandle, uintptr_t containerHandle,
     });
 }
 
-void showCardError(uintptr_t cardHandle, int visible, int stale) {
+void showCardError(uintptr_t cardHandle, int visible, const char *text) {
+    NSString *nText = nsFromC(text); // copy now — Go frees it after return
     dispatch_async(dispatch_get_main_queue(), ^{
         [(__bridge WWCityCardView *)(void *)cardHandle
-            showError:(BOOL)visible stale:(BOOL)stale];
+            showError:(BOOL)visible text:nText];
     });
 }
 
