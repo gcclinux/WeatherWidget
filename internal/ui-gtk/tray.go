@@ -254,6 +254,12 @@ func (m *manager) buildTrayMenu() *gtk.Menu {
 	})
 	menu.Append(settingsItem)
 
+	supportItem, _ := gtk.MenuItemNewWithLabel(m.t("tray.support"))
+	supportItem.Connect("activate", func() {
+		openURL("https://easysmartapps.co.uk/contact")
+	})
+	menu.Append(supportItem)
+
 	sep2, _ := gtk.SeparatorMenuItemNew()
 	menu.Append(sep2)
 

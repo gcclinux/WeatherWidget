@@ -146,15 +146,17 @@ extern void setCardFontSizes(uintptr_t card, int cityTimeSize, int tempSize, int
 // ── Tray C API ──────────────────────────────────────────────────────────────
 
 // createStatusItem creates an NSStatusItem and returns its handle.
-// settingsLabel / refreshLabel / quitLabel are the menu item titles.
-// onSettings / onRefresh / onQuit are C function pointers invoked on the main
-// thread (defined in tray.m as traySettingsCB / trayRefreshCB / trayQuitCB).
+// settingsLabel / refreshLabel / supportLabel / quitLabel are the menu item titles.
+// onSettings / onRefresh / onSupport / onQuit are C function pointers invoked on the main
+// thread (defined in tray.m as traySettingsCB / trayRefreshCB / traySupportCB / trayQuitCB).
 extern uintptr_t createStatusItem(
     const char *settingsLabel,
     const char *refreshLabel,
+    const char *supportLabel,
     const char *quitLabel,
     void (*onSettings)(void),
     void (*onRefresh)(void),
+    void (*onSupport)(void),
     void (*onQuit)(void)
 );
 
@@ -163,11 +165,16 @@ extern void updateStatusItemMenu(
     uintptr_t item,
     const char *settingsLabel,
     const char *refreshLabel,
+    const char *supportLabel,
     const char *quitLabel,
     void (*onSettings)(void),
     void (*onRefresh)(void),
+    void (*onSupport)(void),
     void (*onQuit)(void)
 );
+
+// openURLNative opens a URL in the default browser using NSWorkspace.
+extern void openURLNative(const char *url);
 
 // ── RunOnMain ───────────────────────────────────────────────────────────────
 
@@ -399,38 +406,51 @@ func nativeSetCardFontSizes(card uintptr, cityTime, temp, cond int) {
 // ── Tray ─────────────────────────────────────────────────────────────────────
 
 // nativeCreateStatusItem creates the NSStatusItem and wires Go callbacks.
-// The two function pointers (traySettingsCB / trayQuitCB) are defined in
-// tray.m; they look up the registered Go callbacks via the global table in
-// tray.go (registerCallback / invokeCallback).
-func nativeCreateStatusItem(settingsLabel, refreshLabel, quitLabel string) uintptr {
+// The function pointers (traySettingsCB / trayRefreshCB / traySupportCB / trayQuitCB)
+// are defined in tray.m; they look up the registered Go callbacks via the
+// global table in tray.go (registerCallback / invokeCallback).
+func nativeCreateStatusItem(settingsLabel, refreshLabel, supportLabel, quitLabel string) uintptr {
 	cs := C.CString(settingsLabel)
 	cr := C.CString(refreshLabel)
+	csp := C.CString(supportLabel)
 	cq := C.CString(quitLabel)
 	defer C.free(unsafe.Pointer(cs))
 	defer C.free(unsafe.Pointer(cr))
+	defer C.free(unsafe.Pointer(csp))
 	defer C.free(unsafe.Pointer(cq))
 	return uintptr(C.createStatusItem(
-		cs, cr, cq,
+		cs, cr, csp, cq,
 		(*[0]byte)(C.traySettingsCB),
 		(*[0]byte)(C.trayRefreshCB),
+		(*[0]byte)(C.traySupportCB),
 		(*[0]byte)(C.trayQuitCB),
 	))
 }
 
 // nativeUpdateStatusItemMenu rebuilds the tray menu with fresh labels.
-func nativeUpdateStatusItemMenu(item uintptr, settingsLabel, refreshLabel, quitLabel string) {
+func nativeUpdateStatusItemMenu(item uintptr, settingsLabel, refreshLabel, supportLabel, quitLabel string) {
 	cs := C.CString(settingsLabel)
 	cr := C.CString(refreshLabel)
+	csp := C.CString(supportLabel)
 	cq := C.CString(quitLabel)
 	defer C.free(unsafe.Pointer(cs))
 	defer C.free(unsafe.Pointer(cr))
+	defer C.free(unsafe.Pointer(csp))
 	defer C.free(unsafe.Pointer(cq))
 	C.updateStatusItemMenu(
-		C.uintptr_t(item), cs, cr, cq,
+		C.uintptr_t(item), cs, cr, csp, cq,
 		(*[0]byte)(C.traySettingsCB),
 		(*[0]byte)(C.trayRefreshCB),
+		(*[0]byte)(C.traySupportCB),
 		(*[0]byte)(C.trayQuitCB),
 	)
+}
+
+// nativeOpenURL opens the URL in the default browser via NSWorkspace.
+func nativeOpenURL(urlStr string) {
+	cs := C.CString(urlStr)
+	defer C.free(unsafe.Pointer(cs))
+	C.openURLNative(cs)
 }
 
 // ── Main-thread dispatch ─────────────────────────────────────────────────────

@@ -2,6 +2,7 @@ package ui
 
 import (
 	"log"
+	"net/url"
 	"weatherwidget/assets"
 
 	"fyne.io/fyne/v2"
@@ -47,6 +48,10 @@ func (u *UIManager) SetupSystemTray(appDataDir string, onSettings func(), onRefr
 	// is called again after a locale change — no extra refresh logic needed.
 	settingsItem := fyne.NewMenuItem(u.t("tray.settings"), onSettings)
 	refreshItem := fyne.NewMenuItem(u.t("tray.refresh"), onRefresh)
+	supportURL, _ := url.Parse("https://easysmartapps.co.uk/contact")
+	supportItem := fyne.NewMenuItem(u.t("tray.support"), func() {
+		_ = u.app.OpenURL(supportURL)
+	})
 	quitItem := fyne.NewMenuItem(u.t("tray.quit"), onExit)
 	quitItem.IsQuit = true
 
@@ -60,6 +65,7 @@ func (u *UIManager) SetupSystemTray(appDataDir string, onSettings func(), onRefr
 		fyne.NewMenuItemSeparator(),
 		refreshItem,
 		settingsItem,
+		supportItem,
 		fyne.NewMenuItemSeparator(),
 		quitItem,
 	)

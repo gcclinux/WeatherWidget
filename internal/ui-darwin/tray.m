@@ -13,7 +13,7 @@
 #import "callbacks.h"
 
 // invokeCallback is exported from Go (tray.go).
-// index 0 = Settings, 1 = Quit, 2 = Refresh.
+// index 0 = Settings, 1 = Quit, 2 = Refresh, 3 = Support.
 // The menu actions call it directly, which pushes the corresponding Go closure
 // onto the main-thread work queue.
 extern void invokeCallback(int index);
@@ -25,6 +25,7 @@ extern void invokeCallback(int index);
 void traySettingsCB(void) { invokeCallback(0); }
 void trayQuitCB(void)     { invokeCallback(1); }
 void trayRefreshCB(void)  { invokeCallback(2); }
+void traySupportCB(void)  { invokeCallback(3); }
 
 
 // ── WWTrayTarget ─────────────────────────────────────────────────────────────
@@ -34,12 +35,14 @@ void trayRefreshCB(void)  { invokeCallback(2); }
 - (void)settingsAction:(id)sender;
 - (void)quitAction:(id)sender;
 - (void)refreshAction:(id)sender;
+- (void)supportAction:(id)sender;
 @end
 
 @implementation WWTrayTarget
 - (void)settingsAction:(id)sender { invokeCallback(0); }
 - (void)quitAction:(id)sender     { invokeCallback(1); }
 - (void)refreshAction:(id)sender  { invokeCallback(2); }
+- (void)supportAction:(id)sender  { invokeCallback(3); }
 @end
 
 
@@ -47,10 +50,12 @@ void trayRefreshCB(void)  { invokeCallback(2); }
 
 // buildMenu creates the NSMenu from the given labels and wires targets.
 static NSMenu *buildMenu(NSString *settingsLabel, NSString *refreshLabel,
-                          NSString *quitLabel, WWTrayTarget *target) {
+                          NSString *supportLabel, NSString *quitLabel,
+                          WWTrayTarget *target) {
     // Guard against nil titles — NSMenuItem throws on a nil title.
     if (!settingsLabel) settingsLabel = @"Settings";
     if (!refreshLabel)  refreshLabel  = @"Refresh";
+    if (!supportLabel)  supportLabel  = @"Support";
     if (!quitLabel)     quitLabel     = @"Quit";
 
     NSMenu *menu = [[NSMenu alloc] init];
@@ -69,6 +74,13 @@ static NSMenu *buildMenu(NSString *settingsLabel, NSString *refreshLabel,
         keyEquivalent:@","];
     settingsItem.target = target;
     [menu addItem:settingsItem];
+
+    NSMenuItem *supportItem = [[NSMenuItem alloc]
+        initWithTitle:supportLabel
+        action:@selector(supportAction:)
+        keyEquivalent:@""];
+    supportItem.target = target;
+    [menu addItem:supportItem];
 
     [menu addItem:[NSMenuItem separatorItem]];
 
@@ -125,12 +137,14 @@ static NSImage *statusItemIcon(void) {
 uintptr_t createStatusItem(
     const char *settingsLabel,
     const char *refreshLabel,
+    const char *supportLabel,
     const char *quitLabel,
     void (*onSettings)(void),
     void (*onRefresh)(void),
+    void (*onSupport)(void),
     void (*onQuit)(void)
 ) {
-    (void)onSettings; (void)onRefresh; (void)onQuit; // routing now goes through invokeCallback
+    (void)onSettings; (void)onRefresh; (void)onSupport; (void)onQuit; // routing now goes through invokeCallback
     __block uintptr_t handle = 0;
     run_on_main(^{
         NSStatusBar *bar = [NSStatusBar systemStatusBar];
@@ -145,8 +159,9 @@ uintptr_t createStatusItem(
 
         NSString *settLbl = [NSString stringWithUTF8String:settingsLabel ?: "Settings"];
         NSString *refrLbl = [NSString stringWithUTF8String:refreshLabel ?: "Refresh"];
+        NSString *suppLbl = [NSString stringWithUTF8String:supportLabel ?: "Support"];
         NSString *quitLbl = [NSString stringWithUTF8String:quitLabel ?: "Quit"];
-        item.menu = buildMenu(settLbl, refrLbl, quitLbl, target);
+        item.menu = buildMenu(settLbl, refrLbl, suppLbl, quitLbl, target);
 
         // Retain item so it survives ARC scope
         CFRetain((__bridge CFTypeRef)item);
@@ -159,19 +174,23 @@ void updateStatusItemMenu(
     uintptr_t itemHandle,
     const char *settingsLabel,
     const char *refreshLabel,
+    const char *supportLabel,
     const char *quitLabel,
     void (*onSettings)(void),
     void (*onRefresh)(void),
+    void (*onSupport)(void),
     void (*onQuit)(void)
 ) {
-    (void)onSettings; (void)onRefresh; (void)onQuit; // routing now goes through invokeCallback
+    (void)onSettings; (void)onRefresh; (void)onSupport; (void)onQuit; // routing now goes through invokeCallback
     NSString *settLbl0 = [NSString stringWithUTF8String:settingsLabel ?: "Settings"];
     NSString *refrLbl0 = [NSString stringWithUTF8String:refreshLabel ?: "Refresh"];
+    NSString *suppLbl0 = [NSString stringWithUTF8String:supportLabel ?: "Support"];
     NSString *quitLbl0 = [NSString stringWithUTF8String:quitLabel ?: "Quit"];
     dispatch_async(dispatch_get_main_queue(), ^{
         NSStatusItem *item = (__bridge NSStatusItem *)(void *)itemHandle;
         NSString *settLbl  = settLbl0;
         NSString *refrLbl  = refrLbl0;
+        NSString *suppLbl  = suppLbl0;
         NSString *quitLbl  = quitLbl0;
 
         // Retrieve the existing target from the first menu item
@@ -183,6 +202,17 @@ void updateStatusItemMenu(
             target = [[WWTrayTarget alloc] init];
             CFRetain((__bridge CFTypeRef)target);
         }
-        item.menu = buildMenu(settLbl, refrLbl, quitLbl, target);
+        item.menu = buildMenu(settLbl, refrLbl, suppLbl, quitLbl, target);
     });
+}
+
+void openURLNative(const char *urlStr) {
+    if (!urlStr) return;
+    @autoreleasepool {
+        NSString *s = [NSString stringWithUTF8String:urlStr];
+        NSURL *url = [NSURL URLWithString:s];
+        if (url) {
+            [[NSWorkspace sharedWorkspace] openURL:url];
+        }
+    }
 }

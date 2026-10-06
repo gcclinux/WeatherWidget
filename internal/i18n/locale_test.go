@@ -483,6 +483,8 @@ func TestEnGBCompleteness(t *testing.T) {
 		"tray.showWidget",
 		"tray.hideWidget",
 		"tray.settings",
+		"tray.refresh",
+		"tray.support",
 		"tray.quit",
 		"panel.placeholder.city",
 		"panel.placeholder.temp",

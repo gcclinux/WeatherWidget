@@ -13,3 +13,7 @@ void trayQuitCB(void);
 // trayRefreshCB is invoked when the user clicks "Refresh" in the tray menu.
 // Defined in tray.m; bridges to the Go onRefresh callback in the registry.
 void trayRefreshCB(void);
+
+// traySupportCB is invoked when the user clicks "Support" in the tray menu.
+// Defined in tray.m; bridges to the Go onSupport callback in the registry.
+void traySupportCB(void);

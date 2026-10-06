@@ -20,7 +20,7 @@ package uidarwin
 #import <stdlib.h>
 
 // invokeCallback is exported from this file so tray.m can call it.
-// index: 0 = onSettings, 1 = onQuit.
+// index: 0 = onSettings, 1 = onQuit, 2 = onRefresh, 3 = onSupport.
 extern void invokeCallback(int index);
 */
 import "C"
@@ -33,7 +33,8 @@ const (
 	cbIndexSettings = 0
 	cbIndexQuit     = 1
 	cbIndexRefresh  = 2
-	cbCount         = 3
+	cbIndexSupport  = 3
+	cbCount         = 4
 )
 
 var (
@@ -49,7 +50,7 @@ func registerCallback(index int, fn func()) {
 }
 
 // invokeCallback is called from C (tray.m → traySettingsCB / trayQuitCB /
-// trayRefreshCB). index: 0 = Settings, 1 = Quit, 2 = Refresh.
+// trayRefreshCB / traySupportCB). index: 0 = Settings, 1 = Quit, 2 = Refresh, 3 = Support.
 //
 //export invokeCallback
 func invokeCallback(index C.int) {
@@ -106,6 +107,7 @@ func setupTray(m *manager) {
 	registerCallback(cbIndexSettings, func() { m.openSettings() })
 	registerCallback(cbIndexQuit, func() { m.shutdown() })
 	registerCallback(cbIndexRefresh, func() { m.manualRefresh() })
+	registerCallback(cbIndexSupport, func() { openURL("https://easysmartapps.co.uk/contact") })
 
 	// Fallback labels in case the locale manager isn't loaded yet (tray is
 	// created before loadConfigAndLocale during launch).
@@ -117,12 +119,16 @@ func setupTray(m *manager) {
 	if refreshLabel == "" || refreshLabel == "tray.refresh" {
 		refreshLabel = "Refresh"
 	}
+	supportLabel := m.t("tray.support")
+	if supportLabel == "" || supportLabel == "tray.support" {
+		supportLabel = "Support"
+	}
 	quitLabel := m.t("tray.quit")
 	if quitLabel == "" || quitLabel == "tray.quit" {
 		quitLabel = "Quit"
 	}
 
-	handle := nativeCreateStatusItem(settingsLabel, refreshLabel, quitLabel)
+	handle := nativeCreateStatusItem(settingsLabel, refreshLabel, supportLabel, quitLabel)
 	m.trayItem = handle
 }
 
@@ -135,6 +141,11 @@ func updateTrayMenu(m *manager) {
 		m.trayItem,
 		m.t("tray.settings"),
 		m.t("tray.refresh"),
+		m.t("tray.support"),
 		m.t("tray.quit"),
 	)
+}
+
+func openURL(urlStr string) {
+	nativeOpenURL(urlStr)
 }

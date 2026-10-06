@@ -130,6 +130,7 @@
   "tray.hideWidget": "隐藏小组件",
   "tray.settings": "打开设置",
   "tray.refresh": "刷新",
+  "tray.support": "支持",
   "tray.quit": "退出程序",
   "panel.placeholder.city": "城市, 区域",
   "panel.placeholder.temp": "--°C",
