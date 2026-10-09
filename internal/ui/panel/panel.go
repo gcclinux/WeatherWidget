@@ -94,6 +94,57 @@ func (c *compactPaddingLayout) Layout(objects []fyne.CanvasObject, size fyne.Siz
 	}
 }
 
+// riseLayout keeps its single child's size but draws it dy pixels higher.
+type riseLayout struct {
+	dy float32
+}
+
+func (r *riseLayout) MinSize(objects []fyne.CanvasObject) fyne.Size {
+	return objects[0].MinSize()
+}
+
+func (r *riseLayout) Layout(objects []fyne.CanvasObject, size fyne.Size) {
+	objects[0].Resize(size)
+	objects[0].Move(fyne.NewPos(0, -r.dy))
+}
+
+// gapVBoxLayout stacks objects vertically with a fixed (possibly zero) gap,
+// instead of the theme padding used by a standard VBox.
+type gapVBoxLayout struct {
+	gap float32
+}
+
+func (g *gapVBoxLayout) MinSize(objects []fyne.CanvasObject) fyne.Size {
+	var w, h float32
+	n := 0
+	for _, o := range objects {
+		if !o.Visible() {
+			continue
+		}
+		s := o.MinSize()
+		w = fyne.Max(w, s.Width)
+		h += s.Height
+		n++
+	}
+	if n > 1 {
+		h += g.gap * float32(n-1)
+	}
+	return fyne.NewSize(w, h)
+}
+
+func (g *gapVBoxLayout) Layout(objects []fyne.CanvasObject, size fyne.Size) {
+	var y float32
+	for _, o := range objects {
+		if !o.Visible() {
+			continue
+		}
+		h := o.MinSize().Height
+		o.Resize(fyne.NewSize(size.Width, h))
+		o.Move(fyne.NewPos(0, y))
+		y += h + g.gap
+	}
+}
+
 // spacedHBoxLayout arranges objects horizontally with a fixed spacing between them.
 type spacedHBoxLayout struct {
 	spacing float32
@@ -385,7 +436,7 @@ func NewCityPanel(lm *i18n.LocaleManager) *CityPanel {
 	p.cityText.Alignment = fyne.TextAlignLeading
 
 	p.tempText = canvas.NewText(p.translate("panel.placeholder.temp", "--°C"), color.White)
-	p.tempText.TextSize = 44
+	p.tempText.TextSize = 36
 	p.tempText.TextStyle = fyne.TextStyle{Bold: true}
 	p.tempText.Alignment = fyne.TextAlignCenter
 
@@ -498,7 +549,8 @@ func (p *CityPanel) metricGrid() fyne.CanvasObject {
 // right metrics grid, plus the air-quality row along the bottom.
 func (p *CityPanel) buildLayout() fyne.CanvasObject {
 	// ── Left info block: icon on the left, info column on the right ──────────
-	p.iconRow = container.NewBorder(nil, nil, nil, p.errorIcon, container.NewCenter(p.iconWidget))
+	// Lift the weather icon by 20% of its height.
+	p.iconRow = container.NewBorder(nil, nil, nil, p.errorIcon, container.NewCenter(container.New(&riseLayout{dy: 19}, p.iconWidget)))
 
 	var infoColObjects []fyne.CanvasObject
 	if p.displayFields.ShowTime {
@@ -516,7 +568,7 @@ func (p *CityPanel) buildLayout() fyne.CanvasObject {
 	if p.displayFields.ShowDesc {
 		infoColObjects = append(infoColObjects, container.New(&overflowLeftLayout{}, p.descText))
 	}
-	infoCol := container.NewVBox(infoColObjects...)
+	infoCol := container.New(&gapVBoxLayout{gap: 0}, infoColObjects...)
 
 	var leftRowObjects []fyne.CanvasObject
 	if p.displayFields.ShowIcon {
@@ -580,7 +632,7 @@ func (p *CityPanel) buildLayout() fyne.CanvasObject {
 		contentObjects = append(contentObjects, p.cityText)
 	}
 	contentObjects = append(contentObjects, middle, bottom)
-	content := container.NewVBox(contentObjects...)
+	content := container.New(&gapVBoxLayout{gap: 2}, contentObjects...)
 
 	// Wrap content in a rounded, bordered card backed by a day/night image.
 	// Reuse existing image widget if already created (avoids re-decoding the
