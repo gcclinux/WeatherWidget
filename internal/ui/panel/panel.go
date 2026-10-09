@@ -44,6 +44,26 @@ func (f *fixedWidthLayout) Layout(objects []fyne.CanvasObject, size fyne.Size) {
 	}
 }
 
+// overflowLeftLayout centres its single child in the column but never reports
+// the child's width, so a wide "Feels Like" pill (long translations) cannot
+// widen the left block and push the metric tiles; if it is wider than the
+// column it is anchored to the column's right edge and grows leftwards.
+type overflowLeftLayout struct{}
+
+func (overflowLeftLayout) MinSize(objects []fyne.CanvasObject) fyne.Size {
+	return fyne.NewSize(0, objects[0].MinSize().Height)
+}
+
+func (overflowLeftLayout) Layout(objects []fyne.CanvasObject, size fyne.Size) {
+	s := objects[0].MinSize()
+	x := (size.Width - s.Width) / 2
+	if s.Width > size.Width {
+		x = size.Width - s.Width
+	}
+	objects[0].Resize(s)
+	objects[0].Move(fyne.NewPos(x, (size.Height-s.Height)/2))
+}
+
 // compactPaddingLayout provides reduced vertical padding for metric tiles,
 // giving a tighter cell height while maintaining horizontal padding.
 type compactPaddingLayout struct {
@@ -138,6 +158,9 @@ type CityPanel struct {
 	iconWidget *canvas.Image
 	iconRow    *fyne.Container
 	tempText   *canvas.Text
+	feelsText  *canvas.Text // "Feels 12°C" text inside the pill
+	feelsIcon  *canvas.Image
+	feelsPill  *canvas.Rectangle
 	descText   *canvas.Text
 	cityText   *canvas.Text
 	timeText   *canvas.Text
@@ -270,9 +293,19 @@ var metricBorderColor = color.NRGBA{R: 255, G: 255, B: 255, A: 36}
 // given emoji glyph, the metric name, and an (initially empty) value label.
 // Content is centered both horizontally and vertically within the cell.
 func newMetricTile(emoji, name string) *metricTileWidget {
-	emojiText := canvas.NewText(emoji, color.White)
-	emojiText.TextSize = 15
-
+	var emojiObj fyne.CanvasObject
+	if emoji == "💧" {
+		// The droplet emoji glyph renders tiny and gets clipped when enlarged,
+		// so draw it as an image instead.
+		img := canvas.NewImageFromImage(dropletImage(64))
+		img.FillMode = canvas.ImageFillContain
+		img.SetMinSize(fyne.NewSize(18, 20))
+		emojiObj = img
+	} else {
+		emojiText := canvas.NewText(emoji, color.White)
+		emojiText.TextSize = 15
+		emojiObj = emojiText
+	}
 	nameText := canvas.NewText(name, color.NRGBA{R: 221, G: 221, B: 221, A: 255})
 	nameText.TextSize = 12
 
@@ -281,7 +314,7 @@ func newMetricTile(emoji, name string) *metricTileWidget {
 	valueText.TextStyle = fyne.TextStyle{Bold: true}
 
 	// Center the header (emoji + name) and value text within the cell
-	header := container.NewHBox(emojiText, nameText)
+	header := container.NewHBox(emojiObj, nameText)
 	centeredHeader := container.NewCenter(header)
 	centeredValue := container.NewCenter(valueText)
 	content := container.NewVBox(centeredHeader, centeredValue)
@@ -304,6 +337,24 @@ func (p *CityPanel) setMetricValue(tile *metricTileWidget, value string) {
 	}
 	tile.value.Text = value
 	tile.value.Refresh()
+}
+
+// shortPollutionKeys maps each metric to its compact label key, used so long
+// translations don't stretch the card width.
+var shortPollutionKeys = map[weather.PollutionMetric]string{
+	weather.MetricAQI: "aqi", weather.MetricCO: "co", weather.MetricNO: "no",
+	weather.MetricNO2: "no2", weather.MetricO3: "o3", weather.MetricSO2: "so2",
+	weather.MetricNH3: "nh3", weather.MetricPM25: "pm25", weather.MetricPM10: "pm10",
+}
+
+// shortPollutionName returns the compact translated label for a pollution
+// metric, falling back to the full name.
+func (p *CityPanel) shortPollutionName(m weather.PollutionMetric) string {
+	full := weather.PollutionMetricName(m, p.lm)
+	if k, ok := shortPollutionKeys[m]; ok {
+		return p.translate("pollution.short."+k, full)
+	}
+	return full
 }
 
 // NewCityPanel creates a new CityPanel with placeholder content.
@@ -338,6 +389,18 @@ func NewCityPanel(lm *i18n.LocaleManager) *CityPanel {
 	p.tempText.TextStyle = fyne.TextStyle{Bold: true}
 	p.tempText.Alignment = fyne.TextAlignCenter
 
+	feelsColor := color.NRGBA{R: 0, G: 190, B: 255, A: 255}
+	p.feelsText = canvas.NewText(p.feelsLikeString(nil, config.TemperatureUnit("")), feelsColor)
+	p.feelsText.TextSize = 13
+	p.feelsText.TextStyle = fyne.TextStyle{Bold: true}
+	p.feelsIcon = canvas.NewImageFromResource(loadIconFromAssets("thermometer"))
+	p.feelsIcon.FillMode = canvas.ImageFillContain
+	p.feelsIcon.SetMinSize(fyne.NewSize(11, 20))
+	p.feelsPill = canvas.NewRectangle(color.Transparent)
+	p.feelsPill.StrokeColor = feelsColor
+	p.feelsPill.StrokeWidth = 1.5
+	p.feelsPill.CornerRadius = 11
+
 	p.descText = canvas.NewText(p.translate("panel.placeholder.desc", "--"), color.White)
 	p.descText.TextSize = 13
 	p.descText.TextStyle = fyne.TextStyle{Italic: true}
@@ -367,7 +430,7 @@ func NewCityPanel(lm *i18n.LocaleManager) *CityPanel {
 		icon.FillMode = canvas.ImageFillContain
 		icon.SetMinSize(fyne.NewSize(30, 30))
 
-		name := canvas.NewText(weather.PollutionMetricName(m, p.lm), color.NRGBA{R: 187, G: 187, B: 187, A: 255})
+		name := canvas.NewText(p.shortPollutionName(m), color.NRGBA{R: 187, G: 187, B: 187, A: 255})
 		name.TextSize = 10
 		name.Alignment = fyne.TextAlignCenter
 
@@ -427,7 +490,7 @@ func (p *CityPanel) metricGrid() fyne.CanvasObject {
 	gridWithWidth := container.New(&fixedWidthLayout{width: metricsGridWidth}, grid)
 	gridRightSpacer := canvas.NewRectangle(color.Transparent)
 	gridRightSpacer.SetMinSize(fyne.NewSize(6, 1))
-	return container.NewHBox(gridWithWidth, gridRightSpacer)
+	return container.NewBorder(nil, nil, nil, gridRightSpacer, gridWithWidth)
 }
 
 // buildLayout constructs the horizontal card: a left info block (weather icon
@@ -446,9 +509,12 @@ func (p *CityPanel) buildLayout() fyne.CanvasObject {
 	}
 	if p.displayFields.ShowTemp {
 		infoColObjects = append(infoColObjects, p.tempText)
+		pillContent := container.NewHBox(p.feelsIcon, p.feelsText)
+		pill := container.NewStack(p.feelsPill, container.New(&compactPaddingLayout{hPad: 10, vPad: 1}, pillContent))
+		infoColObjects = append(infoColObjects, container.New(&overflowLeftLayout{}, pill))
 	}
 	if p.displayFields.ShowDesc {
-		infoColObjects = append(infoColObjects, p.descText)
+		infoColObjects = append(infoColObjects, container.New(&overflowLeftLayout{}, p.descText))
 	}
 	infoCol := container.NewVBox(infoColObjects...)
 
@@ -456,7 +522,10 @@ func (p *CityPanel) buildLayout() fyne.CanvasObject {
 	if p.displayFields.ShowIcon {
 		leftRowObjects = append(leftRowObjects, container.NewCenter(p.iconRow))
 	}
-	leftRowObjects = append(leftRowObjects, container.NewCenter(infoCol))
+	// Nudge the time/temp/feels column towards the metric tiles.
+	infoShift := canvas.NewRectangle(color.Transparent)
+	infoShift.SetMinSize(fyne.NewSize(10, 1))
+	leftRowObjects = append(leftRowObjects, infoShift, container.NewCenter(infoCol))
 	leftBlock := container.NewHBox(leftRowObjects...)
 
 	// Give the left block a fixed width so the metrics grid always starts at
@@ -471,7 +540,7 @@ func (p *CityPanel) buildLayout() fyne.CanvasObject {
 	// Middle region: left block (icon + time/date/temp/condition) beside the metrics grid.
 	// The grid now starts at the same vertical level as the time/date/temp/condition,
 	// below the city name line.
-	middle := container.NewHBox(left, right)
+	middle := container.NewBorder(nil, nil, left, nil, right)
 
 	// ── Air-quality row (bottom) ─────────────────────────────────────────────
 	// AQI on the left (aligned with weather icon), other pollution icons on the right
@@ -708,6 +777,12 @@ func (p *CityPanel) Container() *fyne.Container {
 	return p.container
 }
 
+// feelsLikeString returns the translated "Feels Like" label followed by the
+// apparent temperature in the selected unit.
+func (p *CityPanel) feelsLikeString(v *float64, unit config.TemperatureUnit) string {
+	return p.translate("weather.feelsLike", "Feels Like") + " " + weather.FormatFeelsLike(v, unit)
+}
+
 // Update sets the panel content from the given weather data using the specified units and icon theme.
 func (p *CityPanel) Update(data *weather.WeatherData, tempUnit config.TemperatureUnit, windUnit config.WindSpeedUnit, iconTheme ...config.IconTheme) {
 	if data == nil {
@@ -729,6 +804,9 @@ func (p *CityPanel) Update(data *weather.WeatherData, tempUnit config.Temperatur
 	// Update labels.
 	p.tempText.Text = weather.FormatTemperature(data.Temperature, tempUnit)
 	p.tempText.Refresh()
+
+	p.feelsText.Text = p.feelsLikeString(data.FeelsLike, tempUnit)
+	p.feelsText.Refresh()
 
 	p.descText.Text = weather.FormatDescription(data.Description, p.lm)
 	p.descText.Refresh()
