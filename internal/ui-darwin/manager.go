@@ -102,11 +102,10 @@ func Run(appDataDir string, openSettings bool) {
 	// assertion times out and the app is killed. Even config file I/O + i18n
 	// embed parsing here was enough to blow the window when bundled.
 	//
-	// createTrayHook creates the status item synchronously inside initAndRun
-	// (before [app run]) — this is what keeps the accessory app alive.
+	// createTrayHook creates the status item after AppKit has entered its run
+	// loop, avoiding a synchronous Go/CGo callback during native startup.
 	createTrayHook = func() {
-		// Config/locale may not be loaded yet; setupTray tolerates a nil lm
-		// (labels fall back to keys, refreshed later via updateTrayMenu).
+		// Config/locale may not be loaded yet; setupTray tolerates a nil lm.
 		setupTray(m)
 	}
 
@@ -115,6 +114,7 @@ func Run(appDataDir string, openSettings bool) {
 	// blocks the Cocoa main thread or the launch handshake.
 	appReadyHook = func() {
 		go func() {
+			createTrayHook()
 			m.loadConfigAndLocale()
 			updateTrayMenu(m) // refresh tray labels now that locale is loaded
 			if err := m.start(openSettings); err != nil {
@@ -443,6 +443,12 @@ func (m *manager) updateCard(card uintptr, d *weather.WeatherData) {
 		dewDisp.Value, pressDisp.Value, uvDisp.Value,
 		isNight, opacityToAlpha(m.opacity),
 	)
+	feelsLikeLabel := "Feels Like"
+	if m.lm != nil && m.lm.T("weather.feelsLike") != "" {
+		feelsLikeLabel = m.lm.T("weather.feelsLike")
+	}
+	nativeSetCardFeelsLike(card, resolveEmbeddedAsset("icons/thermometer.png", assets.Icons),
+		feelsLikeLabel, weather.FormatFeelsLike(d.FeelsLike, tempUnit))
 
 	// Push the localized metric NAME words + AQI label so the tile labels follow
 	// the chosen UI language (values were sent above). "AQI" is a universal
@@ -883,9 +889,6 @@ func resolveAirIconPath(file string) string {
 	}
 	return resolveEmbeddedAsset("air/"+file, assets.AirIcons)
 }
-
-
-
 
 var (
 	assetCacheDir  string

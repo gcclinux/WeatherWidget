@@ -108,6 +108,10 @@ extern void updateCardData(
     double opacity
 );
 
+// setCardFeelsLike updates the thermometer/value shown in simple mode.
+extern void setCardFeelsLike(uintptr_t card, const char *iconPath, const char *label,
+    const char *value);
+
 // updateCardAQI sets the AQI label with an inline icon (pass "" label to hide).
 extern void updateCardAQI(uintptr_t card, const char *iconPath, const char *label);
 
@@ -452,6 +456,16 @@ func nativeUpdateStatusItemMenu(item uintptr, settingsLabel, refreshLabel, suppo
 		(*[0]byte)(C.traySupportCB),
 		(*[0]byte)(C.trayQuitCB),
 	)
+}
+
+func nativeSetCardFeelsLike(card uintptr, iconPath, label, value string) {
+	ci := C.CString(iconPath)
+	cl := C.CString(label)
+	cv := C.CString(value)
+	defer C.free(unsafe.Pointer(ci))
+	defer C.free(unsafe.Pointer(cl))
+	defer C.free(unsafe.Pointer(cv))
+	C.setCardFeelsLike(C.uintptr_t(card), ci, cl, cv)
 }
 
 // nativeOpenURL opens the URL in the default browser via NSWorkspace.

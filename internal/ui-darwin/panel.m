@@ -69,6 +69,62 @@ static NSTextField *subLbl(NSString *text, CGFloat size) {
     return f;
 }
 
+@interface WWVerticalLabel : NSView
+@property (nonatomic, copy) NSString *text;
+@property (nonatomic, strong) NSColor *textColor;
+@property (nonatomic) CGFloat fontSize;
+@end
+
+@implementation WWVerticalLabel
+
+- (instancetype)initWithText:(NSString *)text color:(NSColor *)color size:(CGFloat)size {
+    self = [super initWithFrame:NSZeroRect];
+    if (!self) return nil;
+    _text = [text copy];
+    _textColor = [color retain];
+    _fontSize = size;
+    self.translatesAutoresizingMaskIntoConstraints = NO;
+    return self;
+}
+
+- (NSSize)intrinsicContentSize {
+    NSFont *font = [NSFont boldSystemFontOfSize:_fontSize];
+    CGFloat lineHeight = font.ascender - font.descender + font.leading;
+    // Grow for long translations (e.g. Polish "Odczuwalna") so the rotated
+    // text doesn't overlap the value below; shorter labels keep 48pt.
+    CGFloat textWidth = ceil([_text sizeWithAttributes:@{ NSFontAttributeName: font }].width);
+    return NSMakeSize(lineHeight, MAX(48, textWidth + 2));
+}
+
+- (void)setText:(NSString *)text {
+    if (_text == text || [_text isEqualToString:text]) return;
+    [_text release];
+    _text = [text copy];
+    [self invalidateIntrinsicContentSize];
+    [self setNeedsDisplay:YES];
+}
+
+- (void)drawRect:(NSRect)rect {
+    NSFont *font = [NSFont boldSystemFontOfSize:_fontSize];
+    NSDictionary *attrs = @{ NSFontAttributeName: font, NSForegroundColorAttributeName: _textColor };
+    NSSize textSize = [_text sizeWithAttributes:attrs];
+    CGContextRef context = NSGraphicsContext.currentContext.CGContext;
+    CGContextSaveGState(context);
+    CGContextTranslateCTM(context, NSMidX(self.bounds), NSMidY(self.bounds));
+    CGContextRotateCTM(context, M_PI / 2.0);
+    [_text drawAtPoint:NSMakePoint(-textSize.width / 2.0, -textSize.height / 2.0)
+        withAttributes:attrs];
+    CGContextRestoreGState(context);
+}
+
+- (void)dealloc {
+    [_text release];
+    [_textColor release];
+    [super dealloc];
+}
+
+@end
+
 // simpleIconLineImage caches loaded air-quality icons by path so repeated
 // updates don't re-decode PNGs from disk each second.
 static NSImage *simpleIconLineImage(NSString *iconPath) {
@@ -279,6 +335,11 @@ static NSAttributedString *simpleLineAttr(NSString *iconPath, NSString *text, CG
 @property (nonatomic, strong) NSTextField *simpleAQILine;
 @property (nonatomic, strong) NSArray<NSTextField *> *simplePollLines;
 @property (nonatomic, strong) NSStackView *simpleContent; // holds the simple column
+@property (nonatomic, strong) NSImageView *feelsLikeThermIcon;
+@property (nonatomic, strong) WWVerticalLabel *feelsLikeLabel;
+@property (nonatomic, strong) NSTextField *feelsLikeText;
+@property (nonatomic, strong) NSStackView *simpleIconRow;
+@property (nonatomic, strong) NSStackView *feelsLikeBox;
 
 // State
 @property (nonatomic) BOOL isNight;
@@ -507,6 +568,7 @@ static void wwSetStr(NSString **slot, NSString *s) {
     }
 
     if (!simple) {
+        [_simpleIconRow setViews:@[] inGravity:NSStackViewGravityLeading];
         // Enhanced: metrics as a 3×2 grid beside the icon/info block.
         _leftBlock.orientation = NSUserInterfaceLayoutOrientationHorizontal;
         _infoCol.alignment = NSLayoutAttributeLeading;
@@ -538,6 +600,9 @@ static void wwSetStr(NSString **slot, NSString *s) {
         _rootStack.spacing = 8;
         [_rootStack setEdgeInsets:NSEdgeInsetsMake(12, 14, 12, 14)];
     } else {
+        [self setupFeelsLike];
+        [_simpleIconRow setViews:@[_iconView, _feelsLikeBox]
+                       inGravity:NSStackViewGravityLeading];
         // Simple: single centered column (classic widget), matching the GTK
         // simple view field order exactly:
         //   city → icon → time → date → temp → description →
@@ -546,7 +611,7 @@ static void wwSetStr(NSString **slot, NSString *s) {
         // Uses the dedicated simple-mode text labels (no boxes).
         NSMutableArray *views = [NSMutableArray array];
         [views addObject:_cityLbl];
-        [views addObject:_iconView];
+        [views addObject:_simpleIconRow];
         [views addObject:_timeLbl];
         [views addObject:_dateLbl];
         [views addObject:_tempLbl];
@@ -578,6 +643,43 @@ static void wwSetStr(NSString **slot, NSString *s) {
         [_simpleValues[i] release];
     }
     [super dealloc];
+}
+
+- (void)setupFeelsLike {
+    if (_feelsLikeBox) return;
+
+    _feelsLikeThermIcon = [[NSImageView alloc] init];
+    _feelsLikeThermIcon.imageScaling = NSImageScaleProportionallyUpOrDown;
+    _feelsLikeThermIcon.translatesAutoresizingMaskIntoConstraints = NO;
+    [NSLayoutConstraint activateConstraints:@[
+        [_feelsLikeThermIcon.widthAnchor constraintEqualToConstant:20],
+        [_feelsLikeThermIcon.heightAnchor constraintEqualToConstant:36],
+    ]];
+
+    _feelsLikeLabel = [[WWVerticalLabel alloc] initWithText:@"Feels Like"
+        color:[NSColor colorWithRed:0 green:0.75 blue:1 alpha:1] size:9];
+    _feelsLikeText = lbl(@"--", 16, YES);
+    _feelsLikeText.alignment = NSTextAlignmentCenter;
+
+    NSStackView *header = [NSStackView stackViewWithViews:@[
+        _feelsLikeThermIcon, _feelsLikeLabel
+    ]];
+    header.orientation = NSUserInterfaceLayoutOrientationHorizontal;
+    header.alignment = NSLayoutAttributeCenterY;
+    header.spacing = 2;
+    header.translatesAutoresizingMaskIntoConstraints = NO;
+
+    _feelsLikeBox = [NSStackView stackViewWithViews:@[header, _feelsLikeText]];
+    _feelsLikeBox.orientation = NSUserInterfaceLayoutOrientationVertical;
+    _feelsLikeBox.alignment = NSLayoutAttributeCenterX;
+    _feelsLikeBox.spacing = 1;
+    _feelsLikeBox.translatesAutoresizingMaskIntoConstraints = NO;
+
+    _simpleIconRow = [NSStackView stackViewWithViews:@[]];
+    _simpleIconRow.orientation = NSUserInterfaceLayoutOrientationHorizontal;
+    _simpleIconRow.alignment = NSLayoutAttributeCenterY;
+    _simpleIconRow.spacing = 4;
+    _simpleIconRow.translatesAutoresizingMaskIntoConstraints = NO;
 }
 
 // refreshSimpleMetricLine re-renders simple-mode metric line i as
@@ -677,6 +779,15 @@ static void wwSetStr(NSString **slot, NSString *s) {
     [self applyIconNS:iconPath];
 }
 
+- (void)setFeelsLikeNS:(NSString *)value label:(NSString *)label iconPath:(NSString *)iconPath {
+    if (iconPath.length > 0) {
+        NSImage *img = simpleIconLineImage(iconPath);
+        if (img) _feelsLikeThermIcon.image = img;
+    }
+    if (label.length > 0) _feelsLikeLabel.text = [label stringByReplacingOccurrencesOfString:@" " withString:@""];
+    if (value.length > 0) _feelsLikeText.stringValue = value;
+}
+
 - (void)setAQINS:(NSString *)label iconPath:(NSString *)iconPath {
     NSString *s = label.length > 0 ? label : nil;
     if (s) {
@@ -773,6 +884,7 @@ static NSString *pollSlotName(int slot) {
     _cityLbl.hidden            = !(mask & DFCity);
     _iconView.hidden           = !(mask & DFIcon);
     _tempLbl.hidden            = !(mask & DFTemp);
+    _feelsLikeBox.hidden       = !(mask & DFTemp);
     _descLbl.hidden            = !(mask & DFDesc);
     _timeLbl.hidden            = !(mask & DFTime);
     _dateLbl.hidden            = !(mask & DFDate);
@@ -969,6 +1081,17 @@ void updateCardData(
               humid:nHumid wind:nWind windGust:nGust
               dewPt:nDew press:nPress uv:nUV
               isNight:(BOOL)isNight opacity:opacity];
+    });
+}
+
+void setCardFeelsLike(uintptr_t cardHandle, const char *iconPath, const char *label,
+                      const char *value) {
+    NSString *nIcon = nsFromC(iconPath);
+    NSString *nLabel = nsFromC(label);
+    NSString *nValue = nsFromC(value);
+    dispatch_async(dispatch_get_main_queue(), ^{
+        [(__bridge WWCityCardView *)(void *)cardHandle
+            setFeelsLikeNS:nValue label:nLabel iconPath:nIcon];
     });
 }
 

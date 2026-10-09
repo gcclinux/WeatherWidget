@@ -34,10 +34,6 @@ extern void goWorkCallback(void);
 // window and tray at the correct point in the Cocoa launch lifecycle.
 extern void goAppReady(void);
 
-// goCreateTray is called synchronously before [app run] to create the status
-// item while still on the main thread during launch.
-extern void goCreateTray(void);
-
 // WWAppDelegate signals Go once AppKit has finished launching.
 @interface WWAppDelegate : NSObject <NSApplicationDelegate>
 @end
@@ -47,14 +43,12 @@ extern void goCreateTray(void);
 }
 @end
 
-// initAndRun mirrors the proven caseymrm/menuet startup sequence EXACTLY:
-// autorelease pool → sharedApplication → delegate → Accessory policy →
-// create the status item synchronously → install the Go-work timer → [app run].
+// initAndRun initialises AppKit, installs the Go-work timer, and enters
+// [app run]. Application startup is performed from the launch callback after
+// AppKit is running, avoiding Go/CGo re-entrancy before the run loop exists.
 //
 // Key lessons that cost many iterations:
 //   • Set Accessory ONCE — do not toggle Regular↔Accessory (confuses RunningBoard).
-//   • Create the status item synchronously BEFORE [app run] — it's what keeps
-//     an accessory app alive past RunningBoard's ~6s launch assertion.
 //   • Do NOT call finishLaunching manually, disableAutomaticTermination, or
 //     pump events manually — [app run] handles the whole lifecycle.
 static void initAndRun(void) {
@@ -67,11 +61,6 @@ static void initAndRun(void) {
     [app setDelegate:delegate];
 
     [app setActivationPolicy:NSApplicationActivationPolicyAccessory];
-
-    // Create the status item synchronously (in Go via goCreateTray → setupTray)
-    // before the run loop. This keeps the accessory app alive past RunningBoard's
-    // launch assertion.
-    goCreateTray();
 
     // Repeating main-queue timer to drain Go work (weather updates, clock ticks,
     // window show). Serviced by the CFRunLoop that [app run] drives.
