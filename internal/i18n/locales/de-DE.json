@@ -146,6 +146,7 @@
   "weather.dewPoint": "Taupunkt",
   "weather.pressure": "Luftdruck",
   "weather.uvIndex": "UV-Index",
+  "weather.feelsLike": "Gefühlt",
   "pollution.aqi": "Luftqualitätsindex",
   "pollution.co": "Kohlenmonoxid",
   "pollution.no": "Stickstoffmonoxid",

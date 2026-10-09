@@ -146,6 +146,7 @@
   "weather.dewPoint": "Dew Point",
   "weather.pressure": "Pressure",
   "weather.uvIndex": "UV Index",
+  "weather.feelsLike": "Feels Like",
   "pollution.aqi": "Air Quality Index",
   "pollution.co": "Carbon Monoxide",
   "pollution.no": "Nitric Oxide",

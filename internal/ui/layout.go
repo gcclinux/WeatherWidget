@@ -16,14 +16,14 @@ const PanelHeight = 260
 // and the right metrics grid. The left block dominates, so the height estimate
 // sums the visible left-block elements plus the air-quality row.
 const (
-	heightCity    = 26 // location line + spacing
+	heightCity    = 26  // location line + spacing
 	heightIcon    = 100 // weather icon (96) + spacing
-	heightTemp    = 52 // large temperature text + spacing
-	heightDesc    = 20 // condition text + spacing
-	heightTime    = 30 // time text + spacing
-	heightDate    = 20 // date text + spacing
-	heightAirRow  = 54 // air-quality icon + value row
-	heightPadding = 40 // card + content padding, border, inter-card gap (top + bottom)
+	heightTemp    = 52  // large temperature text + spacing
+	heightDesc    = 20  // condition text + spacing
+	heightTime    = 30  // time text + spacing
+	heightDate    = 20  // date text + spacing
+	heightAirRow  = 54  // air-quality icon + value row
+	heightPadding = 40  // card + content padding, border, inter-card gap (top + bottom)
 )
 
 // CalculateLayout computes the widget dimensions for the given number of city cards.
@@ -114,17 +114,18 @@ const SimplePanelHeight = 185
 
 // Simple element height contributions in dip (approximate).
 const (
-	simpleHeightCity      = 24 // city name text + spacing
-	simpleHeightIcon      = 70 // icon (64) + spacing
-	simpleHeightTemp      = 48 // large temperature text + spacing
-	simpleHeightDesc      = 18 // description text + spacing
-	simpleHeightHumidity  = 18 // humidity row + spacing
-	simpleHeightWindRow   = 18 // wind speed + direction row + spacing
-	simpleHeightTime      = 26 // time text
-	simpleHeightDate      = 18 // date text
-	simpleHeightSeparator = 8  // separator line + spacing
-	simpleHeightPadding   = 16 // container padding (top + bottom)
-	simpleHeightSpacers   = 10 // spacers between sections
+	simpleHeightCity         = 24 // city name text + spacing
+	simpleHeightIcon         = 70 // icon (64) + spacing; also covers icon+feels-like side-by-side row
+	simpleHeightFeelsLike    = 65 // feels-like section height when shown without the weather icon
+	simpleHeightTemp         = 48 // large temperature text + spacing
+	simpleHeightDesc         = 18 // description text + spacing
+	simpleHeightHumidity     = 18 // humidity row + spacing
+	simpleHeightWindRow      = 18 // wind speed + direction row + spacing
+	simpleHeightTime         = 26 // time text
+	simpleHeightDate         = 18 // date text
+	simpleHeightSeparator    = 8  // separator line + spacing
+	simpleHeightPadding      = 16 // container padding (top + bottom)
+	simpleHeightSpacers      = 10 // spacers between sections
 	simpleHeightInfoRow      = 18 // generic info row height (wind gust, dew point, pressure, UV, wind dir)
 	simpleHeightPollutionRow = 18 // pollution row height
 )
@@ -195,6 +196,10 @@ func CalculateSimpleLayoutWithPollutionRows(cityCount int, df *config.DisplayFie
 	}
 	if df.ShowIcon {
 		h += simpleHeightIcon
+	} else if df.ShowTemp {
+		// Feels-like section is rendered in the icon row position when the
+		// weather icon is hidden but temperature (and thus feels-like) is on.
+		h += simpleHeightFeelsLike
 	}
 	if df.ShowTemp {
 		h += simpleHeightTemp

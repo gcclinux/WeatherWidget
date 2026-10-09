@@ -60,13 +60,14 @@ type WeatherData struct {
 	IconCode      string    `json:"iconCode"`    // Maps to embedded icon asset
 	LocalTime     time.Time `json:"localTime"`   // City's local timezone
 	FetchedAt     time.Time `json:"fetchedAt"`
-	Humidity      int       `json:"humidity"`      // Percentage (0–100)
-	WindSpeed     float64   `json:"windSpeed"`     // km/h
-	WindDirection int       `json:"windDirection"` // Degrees (0–360)
-	WindGust      float64   `json:"windGust"`      // km/h; 0 if not available
-	DewPoint      float64   `json:"dewPoint"`      // Celsius; 0 if not available
-	Pressure      float64   `json:"pressure"`      // hPa; 0 if not available
-	UVIndex       float64   `json:"uvIndex"`       // 0–11+; 0 if not available
+	Humidity      int       `json:"humidity"`            // Percentage (0–100)
+	WindSpeed     float64   `json:"windSpeed"`           // km/h
+	WindDirection int       `json:"windDirection"`       // Degrees (0–360)
+	WindGust      float64   `json:"windGust"`            // km/h; 0 if not available
+	DewPoint      float64   `json:"dewPoint"`            // Celsius; 0 if not available
+	Pressure      float64   `json:"pressure"`            // hPa; 0 if not available
+	UVIndex       float64   `json:"uvIndex"`             // 0–11+; 0 if not available
+	FeelsLike     *float64  `json:"feelsLike,omitempty"` // Celsius apparent temperature; nil if not available
 
 	// Air-quality / pollution values. nil = not available (row omitted).
 	// Populated by fetchEWW when the EWW pollution call succeeds; nil when

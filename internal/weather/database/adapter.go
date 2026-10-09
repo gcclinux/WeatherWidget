@@ -79,7 +79,9 @@ func NewDatabaseAdapterWithPool(pool Pool, query string) *DatabaseAdapter {
 // FetchWeather executes the configured SQL query with the city name as parameter
 // and scans the result into a WeatherData struct.
 // Expected result columns: temperature (int), description (string), icon_code (string),
-// humidity (int), windspeed (float64), winddir (int).
+// humidity (int), windspeed (float64), winddir (int), feels_like (float64, optional).
+// The feels_like column is optional for backward compatibility; queries that omit it
+// will still work and the widget will show "--" for the apparent temperature.
 func (d *DatabaseAdapter) FetchWeather(ctx context.Context, city config.CityConfig) (*weather.WeatherData, error) {
 	var temperature int
 	var description string
@@ -87,14 +89,26 @@ func (d *DatabaseAdapter) FetchWeather(ctx context.Context, city config.CityConf
 	var humidity int
 	var windSpeed float64
 	var windDirection int
+	var feelsLike *float64
 
+	// Attempt to scan 7 columns (with optional feels_like).
+	// Fall back to 6 columns if the query does not return that column, preserving
+	// backward compatibility for existing database configurations.
 	row := d.pool.QueryRow(ctx, d.query, city.Name)
-	if err := row.Scan(&temperature, &description, &iconCode, &humidity, &windSpeed, &windDirection); err != nil {
-		return nil, fmt.Errorf("database: failed to fetch weather for %q: %w", city.Name, err)
+	var feelsLikeVal float64
+	err := row.Scan(&temperature, &description, &iconCode, &humidity, &windSpeed, &windDirection, &feelsLikeVal)
+	if err == nil {
+		feelsLike = &feelsLikeVal
+	} else {
+		// Re-execute without the feels_like scan target.
+		row2 := d.pool.QueryRow(ctx, d.query, city.Name)
+		if err2 := row2.Scan(&temperature, &description, &iconCode, &humidity, &windSpeed, &windDirection); err2 != nil {
+			return nil, fmt.Errorf("database: failed to fetch weather for %q: %w", city.Name, err2)
+		}
 	}
 
-	loc, err := time.LoadLocation(city.Timezone)
-	if err != nil {
+	loc, err2 := time.LoadLocation(city.Timezone)
+	if err2 != nil {
 		loc = time.UTC
 	}
 
@@ -110,6 +124,7 @@ func (d *DatabaseAdapter) FetchWeather(ctx context.Context, city config.CityConf
 		Humidity:      humidity,
 		WindSpeed:     windSpeed,
 		WindDirection: windDirection,
+		FeelsLike:     feelsLike,
 	}, nil
 }
 

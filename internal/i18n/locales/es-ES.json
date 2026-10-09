@@ -146,6 +146,7 @@
   "weather.dewPoint": "Punto de Rocío",
   "weather.pressure": "Presión",
   "weather.uvIndex": "Índice UV",
+  "weather.feelsLike": "Sensación",
   "pollution.aqi": "Índice de Calidad del Aire",
   "pollution.co": "Monóxido de Carbono",
   "pollution.no": "Monóxido de Nitrógeno",

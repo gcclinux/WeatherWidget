@@ -146,6 +146,7 @@
   "weather.dewPoint": "Dauwpunt",
   "weather.pressure": "Luchtdruk",
   "weather.uvIndex": "UV-index",
+  "weather.feelsLike": "Gevoeld",
   "pollution.aqi": "Luchtkwaliteitsindex",
   "pollution.co": "Koolmonoxide",
   "pollution.no": "Stikstofmonoxide",

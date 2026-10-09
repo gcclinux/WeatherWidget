@@ -146,6 +146,7 @@
   "weather.dewPoint": "Point de Rosée",
   "weather.pressure": "Pression",
   "weather.uvIndex": "Indice UV",
+  "weather.feelsLike": "Ressenti",
   "pollution.aqi": "Indice de Qualité de l'Air",
   "pollution.co": "Monoxyde de Carbone",
   "pollution.no": "Monoxyde d'Azote",

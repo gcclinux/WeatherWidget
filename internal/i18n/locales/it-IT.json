@@ -146,6 +146,7 @@
   "weather.dewPoint": "Punto di Rugiada",
   "weather.pressure": "Pressione",
   "weather.uvIndex": "Indice UV",
+  "weather.feelsLike": "Percepita",
   "pollution.aqi": "Indice di Qualità dell'Aria",
   "pollution.co": "Monossido di Carbonio",
   "pollution.no": "Monossido di Azoto",

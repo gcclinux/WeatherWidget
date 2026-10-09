@@ -4,12 +4,17 @@ import (
 	"fmt"
 	"image"
 	"image/color"
+	"os"
+	"strings"
 	"sync"
 	"time"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
+	"golang.org/x/image/font"
+	"golang.org/x/image/font/opentype"
+	"golang.org/x/image/math/fixed"
 
 	"weatherwidget/assets"
 	"weatherwidget/internal/config"
@@ -49,6 +54,13 @@ type SimpleCityPanel struct {
 	separatorRow  *fyne.Container
 	errorIcon     *canvas.Image
 
+	// Feels-like temperature section — shown alongside the weather icon
+	// whenever Temperature (ShowTemp) is enabled in Panel Display settings.
+	feelsLikeThermIcon *canvas.Image   // thermometer image (assets/icons/thermometer.png)
+	feelsLikeLabel     *canvas.Image   // rotated label image reading bottom-to-top
+	feelsLikeText      *canvas.Text    // formatted apparent temperature value
+	feelsLikeBox       *fyne.Container // container holding the thermometer, label, and value
+
 	cardBg         *canvas.Rectangle
 	cornerMask     fyne.CanvasObject
 	innerContainer *fyne.Container
@@ -58,7 +70,7 @@ type SimpleCityPanel struct {
 	pollutionBox    *fyne.Container
 	pollutionFields *config.PollutionFields
 
-	lastData      *weather.WeatherData  // cached for re-render on unit change
+	lastData      *weather.WeatherData // cached for re-render on unit change
 	lastTempUnit  config.TemperatureUnit
 	lastWindUnit  config.WindSpeedUnit
 	lastIconTheme config.IconTheme
@@ -75,6 +87,10 @@ var (
 	simpleLightThemeTextColor color.Color = color.NRGBA{R: 24, G: 24, B: 28, A: 255}
 	simpleDarkThemeSepColor   color.Color = color.NRGBA{R: 255, G: 255, B: 255, A: 60}
 	simpleLightThemeSepColor  color.Color = color.NRGBA{R: 0, G: 0, B: 0, A: 50}
+
+	// feelsLikeCyan is the fixed accent colour used for the "FEELS LIKE" label —
+	// it never changes with the OS light/dark theme.
+	feelsLikeCyanColor color.Color = color.NRGBA{R: 0, G: 190, B: 255, A: 255}
 )
 
 // currentSimpleTextColor returns the text color for Simple View based on the OS theme.
@@ -179,6 +195,14 @@ func (p *SimpleCityPanel) updateTheme() {
 		p.windDirText.Refresh()
 	}
 
+	// Feels-like label and value:
+	// • Label lines ("FEELS LIKE") stay cyan regardless of OS theme.
+	// • Temperature value follows the theme text colour.
+	if p.feelsLikeText != nil {
+		p.feelsLikeText.Color = textColor
+		p.feelsLikeText.Refresh()
+	}
+
 	for _, cell := range p.pollutionCells {
 		if cell != nil && cell.value != nil {
 			cell.value.Color = textColor
@@ -214,6 +238,16 @@ func (p *SimpleCityPanel) translate(key, fallback string) string {
 		return p.lm.T(key)
 	}
 	return fallback
+}
+
+// activeLocale returns the panel's current locale code, or "en-GB" when no
+// LocaleManager is set (e.g. in tests). Used to pick a script-appropriate font
+// for the rotated feels-like label.
+func (p *SimpleCityPanel) activeLocale() string {
+	if p.lm != nil {
+		return p.lm.ActiveLocale()
+	}
+	return "en-GB"
 }
 
 // updateIcon updates the panel's icon widget, supporting animated motion icons.
@@ -339,6 +373,255 @@ func (t *tightVBoxLayout) Layout(objects []fyne.CanvasObject, containerSize fyne
 	}
 }
 
+// iconFeelsLikeLayout arranges three objects: [weatherIcon, feelsLikeBox, errorIcon].
+// The weather icon and feels-like section are placed side by side with a small gap,
+// centred horizontally within the container. The error icon is positioned trailing.
+type iconFeelsLikeLayout struct {
+	gap float32 // gap between weather icon and feels-like section
+}
+
+func (l *iconFeelsLikeLayout) MinSize(objects []fyne.CanvasObject) fyne.Size {
+	if len(objects) < 2 {
+		return fyne.NewSize(0, 0)
+	}
+	iconSize := objects[0].MinSize()
+	feelsSize := objects[1].MinSize()
+	w := iconSize.Width + l.gap + feelsSize.Width
+	h := max(iconSize.Height, feelsSize.Height)
+	return fyne.NewSize(w, h)
+}
+
+func (l *iconFeelsLikeLayout) Layout(objects []fyne.CanvasObject, size fyne.Size) {
+	if len(objects) < 2 {
+		return
+	}
+	icon := objects[0]
+	feels := objects[1]
+
+	iconSize := icon.MinSize()
+	feelsSize := feels.MinSize()
+
+	// Total width of icon + gap + feels-like
+	totalW := iconSize.Width + l.gap + feelsSize.Width
+	// Centre the pair horizontally
+	startX := (size.Width - totalW) / 2
+
+	// Position weather icon
+	iconY := (size.Height - iconSize.Height) / 2
+	icon.Move(fyne.NewPos(startX, iconY))
+	icon.Resize(iconSize)
+
+	// Position feels-like section right next to the icon with minimal gap
+	feelsX := startX + iconSize.Width + l.gap
+	feelsY := (size.Height - feelsSize.Height) / 2
+	feels.Move(fyne.NewPos(feelsX, feelsY))
+	feels.Resize(feelsSize)
+
+	// Position error icon at trailing edge if present
+	if len(objects) > 2 && objects[2] != nil {
+		errIcon := objects[2]
+		errSize := errIcon.MinSize()
+		errIcon.Move(fyne.NewPos(size.Width-errSize.Width, 0))
+		errIcon.Resize(errSize)
+	}
+}
+
+// feelsLikeHeaderLayout arranges two objects: [thermometer, rotatedLabelImage].
+// The thermometer sits on the left; the rotated label image is positioned to
+// the right, reading bottom-to-top.
+type feelsLikeHeaderLayout struct{}
+
+func (f *feelsLikeHeaderLayout) MinSize(objects []fyne.CanvasObject) fyne.Size {
+	if len(objects) < 2 {
+		return fyne.NewSize(0, 0)
+	}
+	thermSize := objects[0].MinSize()
+	labelSize := objects[1].MinSize()
+	return fyne.NewSize(thermSize.Width+labelSize.Width+2, max(thermSize.Height, labelSize.Height))
+}
+
+func (f *feelsLikeHeaderLayout) Layout(objects []fyne.CanvasObject, size fyne.Size) {
+	if len(objects) < 2 {
+		return
+	}
+	therm := objects[0]
+	label := objects[1]
+
+	thermSize := therm.MinSize()
+	labelSize := label.MinSize()
+
+	// Shift only the thermometer downward so its starting point sits closer to
+	// the feels-like temperature value below it. The label stays centered.
+	const thermDownwardOffset = 8
+
+	// Position thermometer on the left, nudged down from center
+	thermY := (size.Height-thermSize.Height)/2 + thermDownwardOffset
+	therm.Move(fyne.NewPos(0, thermY))
+	therm.Resize(thermSize)
+
+	// Position rotated label image to the right of thermometer, vertically centered
+	labelX := thermSize.Width + 2
+	labelY := (size.Height - labelSize.Height) / 2
+	label.Move(fyne.NewPos(labelX, labelY))
+	label.Resize(labelSize)
+}
+
+// newRotatedLabel renders text to an image, rotates it 90° counter-clockwise,
+// and returns it as a canvas.Image. The text reads bottom-to-top.
+// The locale selects a font face with the correct script coverage (e.g. Tamil
+// or CJK) so non-Latin "Feels Like" translations render with real glyphs
+// instead of tofu boxes.
+func newRotatedLabel(text string, col color.Color, fontSize float32, locale string) *canvas.Image {
+	// Load bold font face with glyph coverage for the active locale's script.
+	face := loadBoldFontFace(fontSize, locale)
+	if face == nil {
+		// Return empty image if font fails to load
+		img := image.NewRGBA(image.Rect(0, 0, 1, 1))
+		result := canvas.NewImageFromImage(img)
+		result.SetMinSize(fyne.NewSize(1, 1))
+		return result
+	}
+
+	// Measure the text dimensions
+	bounds, _ := font.BoundString(face, text)
+	textWidth := (bounds.Max.X - bounds.Min.X).Ceil()
+
+	// Add padding
+	padding := 4
+	imgWidth := textWidth + padding*2
+	imgHeight := int(fontSize) + padding*2
+
+	// After the 90° rotation, the drawn image width becomes the label's height.
+	// Short translations (e.g. Chinese "体感", only two characters) would produce
+	// a very short label, letting the temperature value sit right against the
+	// thermometer. Reserve a minimum drawn width so every locale yields a
+	// consistent label height, keeping the value a steady distance below the
+	// thermometer. The text stays left-aligned (bottom after rotation) so the
+	// extra space is added at the top, pushing the value down.
+	const minLabelLength = 42 // ~ matches the thermometer height (36px) plus margin
+	if imgWidth < minLabelLength {
+		imgWidth = minLabelLength
+	}
+
+	// Create image and draw text
+	img := image.NewRGBA(image.Rect(0, 0, imgWidth, imgHeight))
+	d := &font.Drawer{
+		Dst:  img,
+		Src:  image.NewUniform(col),
+		Face: face,
+		Dot:  fixed.Point26_6{X: fixed.I(padding), Y: fixed.I(int(fontSize) + padding/2)},
+	}
+	d.DrawString(text)
+
+	// Rotate 90° counter-clockwise (text reads bottom-to-top)
+	rotated := rotateImage90CCW(img)
+
+	// Create canvas.Image from the rotated image
+	result := canvas.NewImageFromImage(rotated)
+	result.FillMode = canvas.ImageFillOriginal
+	result.SetMinSize(fyne.NewSize(float32(rotated.Bounds().Dx()), float32(rotated.Bounds().Dy())))
+	return result
+}
+
+// loadBoldFontFace returns a bold font.Face at the specified size with glyph
+// coverage appropriate for the given locale's script. Latin/Western locales use
+// Segoe UI Bold; Tamil uses Noto Sans Tamil Bold; Chinese/Japanese use a CJK
+// fallback font. This mirrors the script-based font selection in theme.go so the
+// rotated "Feels Like" label renders real glyphs instead of tofu boxes.
+//
+// It falls back through a prioritized list of embedded assets and common system
+// font paths, returning nil only if no usable font can be loaded or parsed.
+func loadBoldFontFace(size float32, locale string) font.Face {
+	data := loadBoldFontDataForLocale(locale)
+	if data == nil {
+		return nil
+	}
+
+	f, err := opentype.Parse(data)
+	if err != nil {
+		return nil
+	}
+
+	face, err := opentype.NewFace(f, &opentype.FaceOptions{
+		Size:    float64(size),
+		DPI:     72,
+		Hinting: font.HintingFull,
+	})
+	if err != nil {
+		return nil
+	}
+
+	return face
+}
+
+// loadBoldFontDataForLocale returns raw bold font bytes with the right script
+// coverage for the locale, trying embedded assets first and then system fonts.
+// Note: opentype.Parse (used by the caller) supports single-font .ttf/.otf but
+// not TrueType/OpenType collections (.ttc). We therefore list .ttf fallbacks
+// for CJK where available and tolerate nil when only .ttc fonts exist, letting
+// the caller handle the empty case gracefully.
+func loadBoldFontDataForLocale(locale string) []byte {
+	switch {
+	case strings.HasPrefix(locale, "ta"):
+		// Tamil script
+		return loadFirstAvailableFontData(
+			"fonts/notosanstamilb.ttf",
+			"fonts/notosanstamil.ttf",
+			"/usr/share/fonts/truetype/noto/NotoSansTamil-Bold.ttf",
+			"/usr/share/fonts/truetype/noto/NotoSansTamilUI-Bold.ttf",
+			`C:\Windows\Fonts\NirmalaB.ttf`,
+			`C:\Windows\Fonts\Nirmala.ttf`,
+		)
+	case strings.HasPrefix(locale, "zh"), strings.HasPrefix(locale, "ja"):
+		// Chinese / Japanese (CJK) script
+		return loadFirstAvailableFontData(
+			"fonts/droidsansfallback.ttf",
+			"/usr/share/fonts/truetype/droid/DroidSansFallbackFull.ttf",
+			"/usr/share/fonts/truetype/wqy/wqy-microhei.ttf",
+		)
+	default:
+		// Latin / Western languages: Segoe UI Bold
+		return loadFirstAvailableFontData("fonts/segoeuib.ttf")
+	}
+}
+
+// loadFirstAvailableFontData tries each path in order: embedded asset paths
+// (those not starting with a drive letter or '/') are read from assets.Fonts;
+// absolute paths are read from the OS filesystem. Returns the first non-empty
+// result, or nil if none are available.
+func loadFirstAvailableFontData(paths ...string) []byte {
+	for _, p := range paths {
+		if p == "" {
+			continue
+		}
+		if strings.HasPrefix(p, "fonts/") {
+			if data, err := assets.Fonts.ReadFile(p); err == nil && len(data) > 0 {
+				return data
+			}
+			continue
+		}
+		if data, err := os.ReadFile(p); err == nil && len(data) > 0 {
+			return data
+		}
+	}
+	return nil
+}
+
+// rotateImage90CCW rotates an image 90 degrees counter-clockwise.
+func rotateImage90CCW(src image.Image) image.Image {
+	srcBounds := src.Bounds()
+	w, h := srcBounds.Dx(), srcBounds.Dy()
+	// After CCW rotation: new width = old height, new height = old width
+	dst := image.NewRGBA(image.Rect(0, 0, h, w))
+	for y := 0; y < h; y++ {
+		for x := 0; x < w; x++ {
+			// CCW rotation: (x, y) -> (y, w-1-x)
+			dst.Set(y, w-1-x, src.At(srcBounds.Min.X+x, srcBounds.Min.Y+y))
+		}
+	}
+	return dst
+}
+
 // NewSimpleCityPanel creates a new SimpleCityPanel with placeholder content.
 func NewSimpleCityPanel(lm *i18n.LocaleManager) *SimpleCityPanel {
 	p := &SimpleCityPanel{
@@ -358,6 +641,25 @@ func NewSimpleCityPanel(lm *i18n.LocaleManager) *SimpleCityPanel {
 	p.errorIcon.FillMode = canvas.ImageFillContain
 	p.errorIcon.SetMinSize(fyne.NewSize(16, 16))
 	p.errorIcon.Hide()
+
+	// Feels-like temperature section.
+	// The thermometer uses the embedded assets/icons/thermometer.png image.
+	p.feelsLikeThermIcon = canvas.NewImageFromResource(loadIconFromAssets("thermometer"))
+	p.feelsLikeThermIcon.FillMode = canvas.ImageFillContain
+	p.feelsLikeThermIcon.SetMinSize(fyne.NewSize(20.16, 36))
+
+	// The label is the full translated phrase (e.g. "Odczuwalna", "Sensação", "Feels Like")
+	// rendered as a rotated image reading bottom-to-top next to the thermometer.
+	// Uses Segoe UI Bold font, title case (not all caps).
+	fullFeelsLabel := p.translate("weather.feelsLike", "Feels Like")
+	// Remove spaces for cleaner vertical display (e.g. "Feels Like" -> "FeelsLike")
+	fullFeelsLabel = strings.ReplaceAll(fullFeelsLabel, " ", "")
+	p.feelsLikeLabel = newRotatedLabel(fullFeelsLabel, feelsLikeCyanColor, 11, p.activeLocale())
+
+	p.feelsLikeText = canvas.NewText("--", currentSimpleTextColor())
+	p.feelsLikeText.TextSize = 18
+	p.feelsLikeText.TextStyle = fyne.TextStyle{Bold: true}
+	p.feelsLikeText.Alignment = fyne.TextAlignCenter
 
 	// Labels with appealing typography (matching original commit f94faa19).
 	textColor := currentSimpleTextColor()
@@ -467,9 +769,41 @@ func (p *SimpleCityPanel) buildLayout() fyne.CanvasObject {
 		objects = append(objects, p.cityText)
 	}
 
-	p.iconRow = container.NewBorder(nil, nil, nil, nil, container.NewCenter(p.iconWidget), p.errorIcon)
+	// Rebuild the feels-like VBox each time the layout is reconstructed so
+	// container membership stays consistent after ApplyDisplayFields calls.
+	// Layout: thermometer on the left, vertical label to the right of it,
+	// temperature value centered below both.
+	thermAndLabel := container.New(&feelsLikeHeaderLayout{},
+		p.feelsLikeThermIcon,
+		p.feelsLikeLabel,
+	)
+	p.feelsLikeBox = container.New(&tightVBoxLayout{},
+		container.NewCenter(thermAndLabel),
+		container.NewCenter(p.feelsLikeText),
+	)
 
-	if p.displayFields.ShowIcon {
+	showFeelsLike := p.displayFields.ShowTemp
+
+	if p.displayFields.ShowIcon && showFeelsLike {
+		// Weather icon on the left, feels-like section on the right, with minimal gap.
+		// Use HBox with the icon pushed toward the feels-like section.
+		p.iconWidget.SetMinSize(fyne.NewSize(52, 52))
+		p.iconRow = container.New(&iconFeelsLikeLayout{gap: 4},
+			p.iconWidget,
+			p.feelsLikeBox,
+			p.errorIcon,
+		)
+		objects = append(objects, p.iconRow)
+	} else if p.displayFields.ShowIcon {
+		// Icon only — full size, centred (no feels-like).
+		p.iconWidget.SetMinSize(fyne.NewSize(64, 64))
+		p.iconRow = container.NewBorder(nil, nil, nil, nil,
+			container.NewCenter(p.iconWidget), p.errorIcon)
+		objects = append(objects, p.iconRow)
+	} else if showFeelsLike {
+		// Feels-like only — icon is hidden but temperature is shown.
+		p.iconRow = container.NewBorder(nil, nil, nil, p.errorIcon,
+			container.NewCenter(p.feelsLikeBox))
 		objects = append(objects, p.iconRow)
 	}
 
@@ -654,6 +988,10 @@ func (p *SimpleCityPanel) Update(data *weather.WeatherData, tempUnit config.Temp
 	// Update labels.
 	p.tempText.Text = weather.FormatTemperature(data.Temperature, tempUnit)
 	p.tempText.Refresh()
+
+	// Update feels-like temperature (shown alongside the weather icon).
+	p.feelsLikeText.Text = weather.FormatFeelsLike(data.FeelsLike, tempUnit)
+	p.feelsLikeText.Refresh()
 
 	p.descText.Text = weather.FormatDescription(data.Description, p.lm)
 	p.descText.Refresh()

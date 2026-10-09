@@ -87,10 +87,11 @@ type owmResponse struct {
 	Name     string `json:"name"`
 	Timezone int    `json:"timezone"` // offset in seconds from UTC
 	Main     struct {
-		Temp     float64 `json:"temp"`
-		Humidity int     `json:"humidity"`
-		DewPoint float64 `json:"dew_point"`
-		Pressure float64 `json:"pressure"` // hPa
+		Temp      float64 `json:"temp"`
+		FeelsLike float64 `json:"feels_like"`
+		Humidity  int     `json:"humidity"`
+		DewPoint  float64 `json:"dew_point"`
+		Pressure  float64 `json:"pressure"` // hPa
 	} `json:"main"`
 	Wind struct {
 		Speed float64 `json:"speed"` // m/s
@@ -187,6 +188,7 @@ func (r *RemoteAPIAdapter) fetchOWM(ctx context.Context, city config.CityConfig)
 		DewPoint:      owm.Main.DewPoint,
 		Pressure:      owm.Main.Pressure,
 		UVIndex:       owm.Uvi,
+		FeelsLike:     floatPtr(owm.Main.FeelsLike),
 	}, nil
 }
 
@@ -450,6 +452,7 @@ func mapWUConditionToIcon(code int) string {
 // ewwResponse represents the relevant fields from the EasyWeatherWidget API.
 type ewwResponse struct {
 	Temp         float64 `json:"Temp"`
+	FeelsLike    float64 `json:"FeelsLike"`
 	Neighborhood string  `json:"Neighborhood"`
 	Country      string  `json:"Country"`
 	FreeText     string  `json:"FreeText"`
@@ -547,6 +550,7 @@ func (r *RemoteAPIAdapter) fetchEWW(ctx context.Context, city config.CityConfig)
 		DewPoint:      eww.DewPt,
 		Pressure:      eww.Pressure,
 		UVIndex:       eww.UV,
+		FeelsLike:     floatPtr(eww.FeelsLike),
 	}
 
 	// Best-effort pollution fetch for the same city. A pollution failure never

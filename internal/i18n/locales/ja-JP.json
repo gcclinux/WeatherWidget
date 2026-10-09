@@ -147,6 +147,7 @@
   "weather.dewPoint": "露点温度",
   "weather.pressure": "気圧",
   "weather.uvIndex": "UVインデックス",
+  "weather.feelsLike": "体感温度",
   "pollution.aqi": "大気質指数",
   "pollution.co": "一酸化炭素",
   "pollution.no": "一酸化窒素",

@@ -25,6 +25,16 @@ func FormatTemperature(temp int, unit config.TemperatureUnit) string {
 	}
 }
 
+// FormatFeelsLike returns a temperature string for the given Celsius feels-like pointer.
+// The float64 value is rounded to the nearest integer using the same algorithm as
+// FormatTemperature. Returns "--" when feelsLike is nil (data not available).
+func FormatFeelsLike(feelsLike *float64, unit config.TemperatureUnit) string {
+	if feelsLike == nil {
+		return "--"
+	}
+	return FormatTemperature(int(math.Round(*feelsLike)), unit)
+}
+
 // convertToFahrenheit converts an integer Celsius value to Fahrenheit
 // using the formula F = round(C × 1.8 + 32).
 func convertToFahrenheit(celsius int) int {

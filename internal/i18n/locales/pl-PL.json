@@ -146,6 +146,7 @@
   "weather.dewPoint": "Punkt Rosy",
   "weather.pressure": "Ciśnienie",
   "weather.uvIndex": "Indeks UV",
+  "weather.feelsLike": "Odczuwalna",
   "pollution.aqi": "Indeks Jakości Powietrza",
   "pollution.co": "Tlenek Węgla",
   "pollution.no": "Tlenek Azotu",
