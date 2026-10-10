@@ -3,7 +3,11 @@
 # scripts/build-linux.sh — Build WeatherWidget binaries and packages for Linux (.bin, .deb, .rpm, .AppImage)
 #
 # Usage:
-#   ./scripts/build-linux.sh [bin|deb|rpm|appimage|all]
+#   ./scripts/build-linux.sh [--clean] [bin|deb|rpm|appimage|all]
+#
+# Options:
+#   --clean   Remove previous build output (keeping the cached appimagetool)
+#             and force a full rebuild of Go packages.
 #
 
 set -euo pipefail
@@ -42,6 +46,8 @@ else
     GO_CMD="go"
 fi
 
+GO_BUILD_FLAGS=""
+
 GTK_BIN_OUTPUT="$BUILD_DIR/${APP_NAME}-gtk_${APP_VERSION}_${DEB_ARCH}.bin"
 
 build_gtk_bin() {
@@ -58,7 +64,7 @@ build_gtk_bin() {
     fi
     # Suppress deprecation warnings from gotk3 and appindicator C headers.
     CGO_CFLAGS="${CGO_CFLAGS:-} -Wno-deprecated-declarations" \
-    $GO_CMD build -p 1 \
+    $GO_CMD build -p 1 $GO_BUILD_FLAGS \
         -ldflags="-s -w -X main.version=$APP_VERSION" \
         -o "$GTK_BIN_OUTPUT" \
         "$PROJECT_ROOT/cmd/weatherwidget-gtk/"
@@ -328,8 +334,26 @@ APPRUN
     echo "    Created: $output"
 }
 
+clean_build() {
+    echo "==> Cleaning previous build output in: $BUILD_DIR"
+    find "$BUILD_DIR" -mindepth 1 -maxdepth 1 ! -name appimagetool -exec rm -rf {} +
+    GO_BUILD_FLAGS="-a"
+}
+
 main() {
-    local target="${1:-all}"
+    local target="all"
+    local clean=0
+    local arg
+    for arg in "$@"; do
+        case "$arg" in
+            --clean) clean=1 ;;
+            *) target="$arg" ;;
+        esac
+    done
+
+    if [ "$clean" -eq 1 ]; then
+        clean_build
+    fi
 
     case "$target" in
         bin)
@@ -354,7 +378,7 @@ main() {
             build_appimage
             ;;
         *)
-            echo "Usage: $0 [bin|deb|rpm|appimage|all]"
+            echo "Usage: $0 [--clean] [bin|deb|rpm|appimage|all]"
             exit 1
             ;;
     esac

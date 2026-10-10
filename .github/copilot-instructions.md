@@ -1,0 +1,2 @@
+- Never run `git commit`, `git push`, or create PRs/branches on remote. I do these manually.
+- You may edit files and run read-only git commands (status, diff, log).

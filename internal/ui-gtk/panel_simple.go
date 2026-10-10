@@ -35,24 +35,30 @@ type simplePollutionRowWidgets struct {
 // none of the enhanced panel's tile/grid machinery so the two views stay
 // independent.
 type simpleCityPanel struct {
-	root        *gtk.Box // top-level card box (vertical), packed side-by-side
-	nameBox     *gtk.Box // vertical: city name + icon
-	icon        *gtk.Image
-	iconBg      *gtk.EventBox // tinted background wrapper behind the weather icon
-	cityLbl     *gtk.Label
-	timeLbl     *gtk.Label
-	dateLbl     *gtk.Label
-	tempLbl     *gtk.Label
-	descLbl     *gtk.Label
-	humidLbl    *gtk.Label
-	windLbl     *gtk.Label
-	windRowBox  *gtk.Box
-	windGustLbl *gtk.Label
-	dewPointLbl *gtk.Label
-	pressureLbl *gtk.Label
-	uvIndexLbl  *gtk.Label
-	windDirLbl  *gtk.Label
-	errorLbl    *gtk.Label
+	root    *gtk.Box // top-level card box (vertical), packed side-by-side
+	nameBox *gtk.Box // vertical: city name + icon
+	icon    *gtk.Image
+	iconBg  *gtk.EventBox // tinted background wrapper behind the weather icon
+	iconRow *gtk.Box      // horizontal: weather icon + feels-like block
+
+	feelsBox     *gtk.Box // vertical: thermometer + rotated label, then value
+	feelsIcon    *gtk.Image
+	feelsTextLbl *gtk.Label
+	feelsValLbl  *gtk.Label
+	cityLbl      *gtk.Label
+	timeLbl      *gtk.Label
+	dateLbl      *gtk.Label
+	tempLbl      *gtk.Label
+	descLbl      *gtk.Label
+	humidLbl     *gtk.Label
+	windLbl      *gtk.Label
+	windRowBox   *gtk.Box
+	windGustLbl  *gtk.Label
+	dewPointLbl  *gtk.Label
+	pressureLbl  *gtk.Label
+	uvIndexLbl   *gtk.Label
+	windDirLbl   *gtk.Label
+	errorLbl     *gtk.Label
 
 	pollutionBox  *gtk.Box
 	pollutionRows map[weather.PollutionMetric]*simplePollutionRowWidgets
@@ -141,7 +147,54 @@ func newSimpleCityPanel(city, region, timezone string, lm *i18n.LocaleManager) (
 	p.iconBg = iconBg
 
 	nameBox.PackStart(cityLbl, false, false, 0)
-	nameBox.PackStart(iconBg, false, false, 0)
+	// Icon row: weather icon with the Feels Like block (thermometer, sideways
+	// label, value) to its right, matching the Windows/macOS simple view.
+	iconRow, err := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 4)
+	if err != nil {
+		return nil, err
+	}
+	iconRow.SetHAlign(gtk.ALIGN_CENTER)
+	p.iconRow = iconRow
+	iconRow.PackStart(iconBg, false, false, 0)
+
+	feelsBox, err := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 1)
+	if err != nil {
+		return nil, err
+	}
+	feelsBox.SetVAlign(gtk.ALIGN_CENTER)
+	p.feelsBox = feelsBox
+
+	feelsHeader, err := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 2)
+	if err != nil {
+		return nil, err
+	}
+	feelsHeader.SetHAlign(gtk.ALIGN_CENTER)
+	p.feelsIcon, _ = gtk.ImageNew()
+	p.feelsIcon.SetVAlign(gtk.ALIGN_CENTER) // don't stretch to the label's height
+	p.feelsTextLbl, err = gtk.LabelNew("")
+	if err != nil {
+		return nil, err
+	}
+	p.feelsTextLbl.SetAngle(90) // rotated glyphs reading bottom-to-top
+	p.feelsTextLbl.SetVAlign(gtk.ALIGN_CENTER)
+	p.feelsTextLbl.SetSizeRequest(-1, 64) // equal height so values align across languages
+	sc, _ = p.feelsTextLbl.GetStyleContext()
+	sc.AddClass("simple-feels-label")
+	feelsHeader.PackStart(p.feelsIcon, false, false, 0)
+	feelsHeader.PackStart(p.feelsTextLbl, false, false, 0)
+
+	p.feelsValLbl, err = gtk.LabelNew("--")
+	if err != nil {
+		return nil, err
+	}
+	p.feelsValLbl.SetHAlign(gtk.ALIGN_CENTER)
+	sc, _ = p.feelsValLbl.GetStyleContext()
+	sc.AddClass("simple-feels-value")
+	feelsBox.PackStart(feelsHeader, false, false, 0)
+	feelsBox.PackStart(p.feelsValLbl, false, false, 0)
+	iconRow.PackStart(feelsBox, false, false, 0)
+
+	nameBox.PackStart(iconRow, false, false, 0)
 	root.PackStart(nameBox, false, false, 0)
 
 	// ── Time ────────────────────────────────────────────────────────────────
@@ -375,6 +428,8 @@ func (p *simpleCityPanel) update(d *weather.WeatherData, tempUnit config.Tempera
 	p.uvIndexLbl.SetText(fmt.Sprintf("%s %s %s", uv.Emoji, uv.Name, uv.Value))
 	p.windDirLbl.SetText("")
 
+	p.updateFeelsLike(d, tempUnit)
+
 	// Load weather icon at the current icon size.
 	theme := config.IconThemeNew
 	if len(iconTheme) > 0 && iconTheme[0] != "" {
@@ -386,6 +441,61 @@ func (p *simpleCityPanel) update(d *weather.WeatherData, tempUnit config.Tempera
 	// Refresh pollution rows using the panel's current metric selection and the
 	// freshly stored data. PlanPollutionRows falls back to defaults when nil.
 	p.applyPollutionRows(p.pollutionFields)
+}
+
+// updateFeelsLike refreshes the localized label, thermometer and value.
+func (p *simpleCityPanel) updateFeelsLike(d *weather.WeatherData, tempUnit config.TemperatureUnit) {
+	label := "Feels Like"
+	if p.lm != nil {
+		if t := p.lm.T("weather.feelsLike"); t != "" {
+			label = t
+		}
+	}
+	p.feelsTextLbl.SetText(strings.ReplaceAll(label, " ", ""))
+	p.feelsValLbl.SetText(weather.FormatFeelsLike(d.FeelsLike, tempUnit))
+	p.loadFeelsIcon(feelsThermHeight)
+}
+
+// feelsThermHeight is the pixel height of the Feels Like thermometer icon.
+const feelsThermHeight = 36
+
+// loadFeelsIcon loads assets/icons/thermometer.png scaled to the given height.
+func (p *simpleCityPanel) loadFeelsIcon(height int) {
+	data, err := assets.Icons.ReadFile("icons/thermometer.png")
+	if err != nil {
+		p.feelsIcon.Clear()
+		return
+	}
+	loader, err := gdk.PixbufLoaderNew()
+	if err != nil {
+		return
+	}
+	if _, err := loader.Write(data); err != nil {
+		return
+	}
+	if err := loader.Close(); err != nil {
+		return
+	}
+	pb, err := loader.GetPixbuf()
+	if err != nil || pb == nil || pb.GetHeight() == 0 {
+		p.feelsIcon.Clear()
+		return
+	}
+	w := pb.GetWidth() * height / pb.GetHeight()
+	if w < 1 {
+		w = 1
+	}
+	scaled, err := pb.ScaleSimple(w, height, gdk.INTERP_BILINEAR)
+	if err != nil || scaled == nil {
+		return
+	}
+	if p.tintAlpha > 0 {
+		scaled = compositeOverTint(scaled, p.tintAlpha)
+		w += tintPadding * 2
+		height += tintPadding * 2
+	}
+	p.feelsIcon.SetFromPixbuf(scaled)
+	p.feelsIcon.SetSizeRequest(w, height)
 }
 
 // applyPollutionRows updates the pollution metric rows to reflect the given
@@ -441,6 +551,9 @@ func (p *simpleCityPanel) setTintAlpha(alpha float64) {
 	if p.lastIconCode != "" {
 		p.loadIcon(p.lastIconCode, p.iconSize)
 	}
+	if p.lastData != nil {
+		p.loadFeelsIcon(feelsThermHeight)
+	}
 	// Reload pollution icons for all visible rows so they re-composite too.
 	if p.lastData != nil {
 		p.applyPollutionRows(p.pollutionFields)
@@ -462,6 +575,7 @@ func (p *simpleCityPanel) applyDisplayFields(df *config.DisplayFields) {
 	setVisible(p.nameBox, df.ShowCity || df.ShowIcon)
 	setVisible(p.cityLbl, df.ShowCity)
 	setVisible(p.iconBg, df.ShowIcon)
+	setVisible(p.feelsBox, df.ShowTemp)
 	setVisible(p.tempLbl, df.ShowTemp)
 	setVisible(p.descLbl, df.ShowDesc)
 	setVisible(p.humidLbl, df.ShowHumidity)
@@ -483,6 +597,7 @@ func (p *simpleCityPanel) loadIcon(iconCode string, size int) {
 		size = 96
 	}
 	p.lastIconCode = iconCode // remember for live resize
+	p.icon.SetMarginTop(0)
 	clean := strings.TrimPrefix(iconCode, "icons/")
 	clean = strings.TrimPrefix(clean, "/")
 
@@ -589,6 +704,12 @@ func (p *simpleCityPanel) loadIcon(iconCode string, size int) {
 	p.icon.SetFromPixbuf(scaled)
 	// Use actual scaled dimensions to avoid transparent stripes around non-square icons.
 	p.icon.SetSizeRequest(targetW, targetH)
+	// Non-square icons (e.g. the full moon) are shorter than the square ones;
+	// add the missing height above so every card's text rows stay aligned.
+	if targetH < size {
+		// The extra ~2% (rounded) fine-tunes the alignment with the other cards.
+		p.icon.SetMarginTop(size - targetH + (size*2+50)/100)
+	}
 	p.icon.SetVAlign(gtk.ALIGN_CENTER)
 }
 

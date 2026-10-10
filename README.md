@@ -13,6 +13,7 @@ Features:
 - - City Name
 - - Weather Icon
 - - Temperature
+- - Feel's Like Temp
 - - Description
 - - Humidity 
 -- Wind Speed (km/h, mph, knots)

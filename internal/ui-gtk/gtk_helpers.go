@@ -307,12 +307,23 @@ window {
     font-size: %dpx;
     color: #eeeeee;
 }
+.simple-feels-label {
+    font-size: %dpx;
+    font-weight: bold;
+    color: #00bfff;
+}
+.simple-feels-value {
+    font-size: %dpx;
+    font-weight: bold;
+    color: white;
+}
 `, fsCityTime, fsTempIcon, fsConditions, fsTime, fsConditions, fsConditions,
 		lineCSS, tileFillCSS, lineCSS,
 		fsConditions+2, fsConditions, fsConditions+2,
 		sepCSS,
 		fsConditions-1, fsConditions,
-		fsCityTime, fsTime, fsConditions, fsTempIcon, fsConditions, fsConditions)
+		fsCityTime, fsTime, fsConditions, fsTempIcon, fsConditions, fsConditions,
+		fsConditions, fsConditions+4)
 }
 
 // applyCSSToScreen loads the given CSS string into the default screen's
