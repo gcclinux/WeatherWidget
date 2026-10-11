@@ -84,6 +84,10 @@ type cityPanel struct {
 	tempLbl *gtk.Label
 	descLbl *gtk.Label
 
+	feelsPill *gtk.Box
+	feelsIcon *gtk.Image
+	feelsLbl  *gtk.Label
+
 	// Weather metric tiles (right-hand grid). Each tile shows an emoji, the
 	// metric name, and its value. The value labels are updated in update().
 	humidTile, windTile, windGustTile  *metricTile
@@ -128,7 +132,7 @@ func newCityPanel(city, region, timezone string, lm *i18n.LocaleManager) (*cityP
 	p := &cityPanel{city: city, region: region, timezone: timezone, lm: lm}
 
 	// Root box — the card. Vertical: top info region, separator, air row.
-	root, err := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 8)
+	root, err := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 2)
 	if err != nil {
 		return nil, err
 	}
@@ -203,7 +207,7 @@ func newCityPanel(city, region, timezone string, lm *i18n.LocaleManager) (*cityP
 	if err != nil {
 		return nil, err
 	}
-	timeLbl.SetHAlign(gtk.ALIGN_START)
+	timeLbl.SetHAlign(gtk.ALIGN_CENTER)
 	sc, _ = timeLbl.GetStyleContext()
 	sc.AddClass("time-label")
 	p.timeLbl = timeLbl
@@ -213,7 +217,7 @@ func newCityPanel(city, region, timezone string, lm *i18n.LocaleManager) (*cityP
 	if err != nil {
 		return nil, err
 	}
-	dateLbl.SetHAlign(gtk.ALIGN_START)
+	dateLbl.SetHAlign(gtk.ALIGN_CENTER)
 	sc, _ = dateLbl.GetStyleContext()
 	sc.AddClass("date-label")
 	p.dateLbl = dateLbl
@@ -223,18 +227,40 @@ func newCityPanel(city, region, timezone string, lm *i18n.LocaleManager) (*cityP
 	if err != nil {
 		return nil, err
 	}
-	tempLbl.SetHAlign(gtk.ALIGN_START)
+	tempLbl.SetHAlign(gtk.ALIGN_CENTER)
 	sc, _ = tempLbl.GetStyleContext()
 	sc.AddClass("temp-label")
 	p.tempLbl = tempLbl
 	infoCol.PackStart(tempLbl, false, false, 0)
 
+	// Feels Like pill, right-aligned with the time block.
+	pill, err := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 4)
+	if err != nil {
+		return nil, err
+	}
+	pill.SetHAlign(gtk.ALIGN_CENTER)
+	sc, _ = pill.GetStyleContext()
+	sc.AddClass("feels-pill")
+	p.feelsIcon, _ = gtk.ImageNew()
+	p.feelsIcon.SetVAlign(gtk.ALIGN_CENTER)
+	p.feelsLbl, err = gtk.LabelNew("")
+	if err != nil {
+		return nil, err
+	}
+	sc, _ = p.feelsLbl.GetStyleContext()
+	sc.AddClass("feels-pill-label")
+	pill.PackStart(p.feelsIcon, false, false, 0)
+	pill.PackStart(p.feelsLbl, false, false, 0)
+	p.feelsPill = pill
+	infoCol.PackStart(pill, false, false, 0)
+
 	descLbl, err := gtk.LabelNew("")
 	if err != nil {
 		return nil, err
 	}
-	descLbl.SetHAlign(gtk.ALIGN_START)
+	descLbl.SetHAlign(gtk.ALIGN_CENTER)
 	descLbl.SetLineWrap(true)
+	descLbl.SetJustify(gtk.JUSTIFY_CENTER)
 	sc, _ = descLbl.GetStyleContext()
 	sc.AddClass("desc-label")
 	p.descLbl = descLbl
@@ -330,13 +356,15 @@ func newCityPanel(city, region, timezone string, lm *i18n.LocaleManager) (*cityP
 		tileIcon.SetHAlign(gtk.ALIGN_CENTER)
 		tile.PackStart(tileIcon, false, false, 0)
 
-		tileName, err := gtk.LabelNew(weather.PollutionMetricName(metric, p.lm))
+		tileName, err := gtk.LabelNew(p.shortPollutionName(metric))
 		if err != nil {
 			return nil, err
 		}
 		tileName.SetHAlign(gtk.ALIGN_CENTER)
 		tileName.SetJustify(gtk.JUSTIFY_CENTER)
 		tileName.SetLineWrap(true)
+		tileName.SetWidthChars(13) // fixed 13-char width so long translations wrap instead of widening the tile
+		tileName.SetMaxWidthChars(13)
 		tileName.SetLineWrapMode(2) // PANGO_WRAP_WORD_CHAR
 		sc, _ = tileName.GetStyleContext()
 		sc.AddClass("air-name")
@@ -400,20 +428,33 @@ const cardWidth = 380
 // given emoji glyph, the metric name, and an (initially empty) value label.
 // The emoji and name sit on the top row; the value is shown in bold below.
 func (p *cityPanel) newMetricTile(emoji, name string) (*metricTile, error) {
+	outer, err := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 0)
+	if err != nil {
+		return nil, err
+	}
 	box, err := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 2)
 	if err != nil {
 		return nil, err
 	}
-	box.SetHExpand(true)
-	sc, _ := box.GetStyleContext()
+	box.SetVAlign(gtk.ALIGN_CENTER)
+	outer.PackStart(box, true, false, 0)
+	outer.SetHExpand(true)
+	sc, _ := outer.GetStyleContext()
 	sc.AddClass("metric-tile")
+	// All tiles across every city panel share the width of the widest one.
+	if metricTileSizeGroup == nil {
+		metricTileSizeGroup, _ = gtk.SizeGroupNew(gtk.SIZE_GROUP_HORIZONTAL)
+	}
+	if metricTileSizeGroup != nil {
+		metricTileSizeGroup.AddWidget(outer)
+	}
 
 	// Header row: emoji + name.
 	header, err := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 6)
 	if err != nil {
 		return nil, err
 	}
-	header.SetHAlign(gtk.ALIGN_START)
+	header.SetHAlign(gtk.ALIGN_CENTER)
 	box.PackStart(header, false, false, 0)
 
 	emojiLbl, err := gtk.LabelNew(emoji)
@@ -437,13 +478,16 @@ func (p *cityPanel) newMetricTile(emoji, name string) (*metricTile, error) {
 	if err != nil {
 		return nil, err
 	}
-	valueLbl.SetHAlign(gtk.ALIGN_START)
+	valueLbl.SetHAlign(gtk.ALIGN_CENTER)
 	sc, _ = valueLbl.GetStyleContext()
 	sc.AddClass("metric-value")
 	box.PackStart(valueLbl, false, false, 0)
 
-	return &metricTile{box: box, name: nameLbl, value: valueLbl}, nil
+	return &metricTile{box: outer, name: nameLbl, value: valueLbl}, nil
 }
+
+// metricTileSizeGroup keeps every metric tile the same width across panels.
+var metricTileSizeGroup *gtk.SizeGroup
 
 // metricGridEntry pairs a metric tile with the display-field flag controlling
 // its visibility, for laying out the 3×2 metrics grid.
@@ -506,6 +550,7 @@ func (p *cityPanel) update(d *weather.WeatherData, tempUnit config.TemperatureUn
 	p.cityLbl.SetText("📍 " + d.CityName + ", " + d.Region)
 	p.tempLbl.SetText(weather.FormatTemperature(d.Temperature, tempUnit))
 	p.descLbl.SetText(weather.FormatDescription(d.Description, p.lm))
+	p.updateFeelsLike(d, tempUnit)
 
 	// Weather metric tiles — set the value labels (names are fixed).
 	p.humidTile.value.SetText(weather.HumidityDisplay(d.Humidity, p.lm).Value)
@@ -626,6 +671,7 @@ func (p *cityPanel) applyDisplayFields(df *config.DisplayFields) {
 	setVisible(p.timeLbl, df.ShowTime)
 	setVisible(p.dateLbl, df.ShowDate)
 	setVisible(p.tempLbl, df.ShowTemp)
+	setVisible(p.feelsPill, df.ShowTemp)
 	setVisible(p.descLbl, df.ShowDesc)
 
 	// Right metrics grid: attach only the visible tiles.
@@ -958,4 +1004,71 @@ func (p *cityPanel) refreshClock() {
 		p.timeLbl.SetText(timeStr)
 		p.dateLbl.SetText(dateStr)
 	})
+}
+
+// feelsPillIconHeight is the pixel height of the pill's thermometer icon.
+const feelsPillIconHeight = 18
+
+// updateFeelsLike refreshes the localized "Feels Like" pill.
+func (p *cityPanel) updateFeelsLike(d *weather.WeatherData, tempUnit config.TemperatureUnit) {
+	label := "Feels Like"
+	if p.lm != nil {
+		if t := p.lm.T("weather.feelsLike"); t != "" {
+			label = t
+		}
+	}
+	p.feelsLbl.SetText(label + " " + weather.FormatFeelsLike(d.FeelsLike, tempUnit))
+	p.loadFeelsIcon(feelsPillIconHeight)
+}
+
+// loadFeelsIcon loads assets/icons/thermometer.png scaled to the given height.
+func (p *cityPanel) loadFeelsIcon(height int) {
+	data, err := assets.Icons.ReadFile("icons/thermometer.png")
+	if err != nil {
+		p.feelsIcon.Clear()
+		return
+	}
+	loader, err := gdk.PixbufLoaderNew()
+	if err != nil {
+		return
+	}
+	if _, err := loader.Write(data); err != nil {
+		return
+	}
+	if err := loader.Close(); err != nil {
+		return
+	}
+	pb, err := loader.GetPixbuf()
+	if err != nil || pb == nil || pb.GetHeight() == 0 {
+		p.feelsIcon.Clear()
+		return
+	}
+	w := pb.GetWidth() * height / pb.GetHeight()
+	if w < 1 {
+		w = 1
+	}
+	scaled, err := pb.ScaleSimple(w, height, gdk.INTERP_BILINEAR)
+	if err != nil || scaled == nil {
+		return
+	}
+	p.feelsIcon.SetFromPixbuf(scaled)
+	p.feelsIcon.SetSizeRequest(w, height)
+}
+
+// shortPollutionKeys maps each metric to its compact label key so long
+// translations don't stretch the pollution row.
+var shortPollutionKeys = map[weather.PollutionMetric]string{
+	weather.MetricAQI: "aqi", weather.MetricCO: "co", weather.MetricNO: "no",
+	weather.MetricNO2: "no2", weather.MetricO3: "o3", weather.MetricSO2: "so2",
+	weather.MetricNH3: "nh3", weather.MetricPM25: "pm25", weather.MetricPM10: "pm10",
+}
+
+// shortPollutionName returns the compact translated label for a pollution
+// metric, falling back to the full name.
+func (p *cityPanel) shortPollutionName(m weather.PollutionMetric) string {
+	full := weather.PollutionMetricName(m, p.lm)
+	if k, ok := shortPollutionKeys[m]; ok && p.lm != nil {
+		return p.lm.T("pollution.short." + k)
+	}
+	return full
 }

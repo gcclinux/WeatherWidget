@@ -183,7 +183,7 @@ window {
        avoid double-tinting. */
     background-color: transparent;
     border-radius: 16px;
-    padding: 12px 14px;
+    padding: 8px 14px;
     margin: 2px;
     color: white;
 }
@@ -230,7 +230,7 @@ window {
 .metric-tile {
     background-color: %s;
     border: 1px solid %s;
-    padding: 6px 10px;
+    padding: 4px 10px;
 }
 .metric-emoji {
     font-size: %dpx;
@@ -248,7 +248,7 @@ window {
 .card-separator {
     background-color: %s;
     min-height: 1px;
-    margin: 6px 0;
+    margin: 6px 0 2px 0;
 }
 /* Air-quality tiles along the bottom of the card. */
 .air-tile {
@@ -317,13 +317,24 @@ window {
     font-weight: bold;
     color: white;
 }
+.feels-pill {
+    background-color: rgba(0, 191, 255, 0.18);
+    border: 1px solid #00bfff;
+    border-radius: 999px;
+    padding: 0px 8px;
+}
+.feels-pill-label {
+    font-size: %dpx;
+    font-weight: bold;
+    color: #00bfff;
+}
 `, fsCityTime, fsTempIcon, fsConditions, fsTime, fsConditions, fsConditions,
 		lineCSS, tileFillCSS, lineCSS,
 		fsConditions+2, fsConditions, fsConditions+2,
 		sepCSS,
 		fsConditions-1, fsConditions,
 		fsCityTime, fsTime, fsConditions, fsTempIcon, fsConditions, fsConditions,
-		fsConditions, fsConditions+4)
+		fsConditions, fsConditions+4, fsConditions)
 }
 
 // applyCSSToScreen loads the given CSS string into the default screen's
