@@ -532,6 +532,13 @@ func (m *manager) applyCardMetricNames(card uintptr) {
 	for slot, metric := range slotMetrics {
 		nativeSetCardPollutantName(card, slot, weather.PollutionMetricName(metric, m.lm))
 	}
+
+	feelsLikeLabel := "Feels Like"
+	if m.lm != nil && m.lm.T("weather.feelsLike") != "" {
+		feelsLikeLabel = m.lm.T("weather.feelsLike")
+	}
+	nativeSetCardFeelsLike(card, resolveEmbeddedAsset("icons/thermometer.png", assets.Icons),
+		feelsLikeLabel, "")
 }
 
 // ── Position management ───────────────────────────────────────────────────────
@@ -563,7 +570,7 @@ func (m *manager) cornerToXY(corner string, monitorIndex int) (int, int) {
 		count = 1
 	}
 	const (
-		cardW = 531  // ~15% narrower enhanced card (kEnhancedCardW 506 + padding)
+		cardW = 585  // enhanced card (kEnhancedCardW 560 + padding)
 		cardH = 226  // typical enhanced card height
 		gap   = 6
 	)

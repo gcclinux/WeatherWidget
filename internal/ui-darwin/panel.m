@@ -26,10 +26,8 @@
 static const CGFloat kCardRadius = 16.0;
 static const int kPollSlots = 8;    // CO NO NO2 O3 SO2 NH3 PM2.5 PM10
 
-// Card layout widths (shared by the card view and the container helpers).
-// Both card widths were reduced ~15% per request to make the widget narrower:
-// simple 210 → 178, enhanced 600 → 506.
-static const CGFloat kEnhancedCardW = 506;
+// Enhanced card width gives sufficient buffer gap past the metrics grid on the right.
+static const CGFloat kEnhancedCardW = 560;
 static const CGFloat kSimpleCardW   = 178;
 static const CGFloat kCardGap       = 8;
 static const CGFloat kCardPad       = 10;
@@ -183,7 +181,9 @@ static NSAttributedString *simpleLineAttr(NSString *iconPath, NSString *text, CG
 
 // ── Metric tile ───────────────────────────────────────────────────────────────
 
-@interface WWMetricTile : NSView
+@interface WWMetricTile : NSView {
+    NSStackView *_stack;
+}
 @property (nonatomic, strong) NSTextField *emojiLbl;
 @property (nonatomic, strong) NSTextField *nameLbl;
 @property (nonatomic, strong) NSTextField *valueLbl;
@@ -203,28 +203,36 @@ static NSAttributedString *simpleLineAttr(NSString *iconPath, NSString *text, CG
 
     _emojiLbl = lbl(emoji, 11, NO);
     _nameLbl  = subLbl(name, 9);
+    _nameLbl.alignment = NSTextAlignmentCenter;
     _valueLbl = lbl(@"--",   11, YES);
+    _valueLbl.alignment = NSTextAlignmentCenter;
 
-    // Header row: emoji + name
+    // Header row: emoji + name (horizontally centered)
     NSStackView *header = [NSStackView stackViewWithViews:@[_emojiLbl, _nameLbl]];
     header.orientation = NSUserInterfaceLayoutOrientationHorizontal;
     header.spacing = 3;
+    header.alignment = NSLayoutAttributeCenterY;
     header.translatesAutoresizingMaskIntoConstraints = NO;
 
-    NSStackView *stack = [NSStackView stackViewWithViews:@[header, _valueLbl]];
-    stack.orientation = NSUserInterfaceLayoutOrientationVertical;
-    stack.spacing = 2;
-    stack.alignment = NSLayoutAttributeLeading;
-    stack.translatesAutoresizingMaskIntoConstraints = NO;
-    [self addSubview:stack];
+    _stack = [NSStackView stackViewWithViews:@[header, _valueLbl]];
+    _stack.orientation = NSUserInterfaceLayoutOrientationVertical;
+    _stack.spacing = 2;
+    _stack.alignment = NSLayoutAttributeCenterX;
+    _stack.translatesAutoresizingMaskIntoConstraints = NO;
+    [self addSubview:_stack];
 
     [NSLayoutConstraint activateConstraints:@[
-        [stack.leadingAnchor  constraintEqualToAnchor:self.leadingAnchor  constant:6],
-        [stack.trailingAnchor constraintEqualToAnchor:self.trailingAnchor constant:-4],
-        [stack.topAnchor      constraintEqualToAnchor:self.topAnchor      constant:5],
-        [stack.bottomAnchor   constraintEqualToAnchor:self.bottomAnchor   constant:-5],
+        [self.heightAnchor constraintEqualToConstant:54],
+        [_stack.centerXAnchor  constraintEqualToAnchor:self.centerXAnchor],
+        [_stack.centerYAnchor  constraintEqualToAnchor:self.centerYAnchor],
+        [_stack.leadingAnchor  constraintGreaterThanOrEqualToAnchor:self.leadingAnchor constant:2],
+        [_stack.trailingAnchor constraintLessThanOrEqualToAnchor:self.trailingAnchor constant:-2],
     ]];
     return self;
+}
+
+- (NSSize)intrinsicContentSize {
+    return NSMakeSize(104, 54);
 }
 
 @end
@@ -263,7 +271,7 @@ static NSAttributedString *simpleLineAttr(NSString *iconPath, NSString *text, CG
     _nameLbl.cell.wraps = YES;
     _nameLbl.lineBreakMode = NSLineBreakByWordWrapping;
     _nameLbl.maximumNumberOfLines = 2;
-    _nameLbl.preferredMaxLayoutWidth = 58;
+    _nameLbl.preferredMaxLayoutWidth = 72;
     _valueLbl = lbl(@"", 10, YES);
     _valueLbl.alignment = NSTextAlignmentCenter;
 
@@ -277,12 +285,74 @@ static NSAttributedString *simpleLineAttr(NSString *iconPath, NSString *text, CG
     [NSLayoutConstraint activateConstraints:@[
         [_iconView.widthAnchor  constraintEqualToConstant:26],
         [_iconView.heightAnchor constraintEqualToConstant:26],
-        [stack.leadingAnchor  constraintEqualToAnchor:self.leadingAnchor  constant:4],
-        [stack.trailingAnchor constraintEqualToAnchor:self.trailingAnchor constant:-4],
-        [stack.topAnchor      constraintEqualToAnchor:self.topAnchor      constant:4],
-        [stack.bottomAnchor   constraintEqualToAnchor:self.bottomAnchor   constant:-4],
+        [stack.leadingAnchor  constraintEqualToAnchor:self.leadingAnchor  constant:2],
+        [stack.trailingAnchor constraintEqualToAnchor:self.trailingAnchor constant:-2],
+        [stack.topAnchor      constraintEqualToAnchor:self.topAnchor      constant:0],
+        [stack.bottomAnchor   constraintEqualToAnchor:self.bottomAnchor   constant:-2],
     ]];
     return self;
+}
+
+@end
+
+// ── Feels Like Pill ──────────────────────────────────────────────────────────
+
+@interface WWFeelsPillView : NSView
+@property (nonatomic, strong) NSImageView *iconView;
+@property (nonatomic, strong) NSTextField *label;
+@end
+
+@implementation WWFeelsPillView
+
+- (instancetype)init {
+    self = [super initWithFrame:NSZeroRect];
+    if (!self) return nil;
+    self.translatesAutoresizingMaskIntoConstraints = NO;
+    self.wantsLayer = YES;
+    self.layer.masksToBounds = YES;
+    self.layer.cornerRadius = 10;
+    self.layer.borderWidth = 1.0;
+    self.layer.borderColor = [NSColor colorWithRed:0.0 green:191.0/255.0 blue:1.0 alpha:1.0].CGColor;
+    self.layer.backgroundColor = [NSColor colorWithRed:0.0 green:191.0/255.0 blue:1.0 alpha:0.18].CGColor;
+
+    _iconView = [[NSImageView alloc] init];
+    _iconView.translatesAutoresizingMaskIntoConstraints = NO;
+    _iconView.imageScaling = NSImageScaleProportionallyUpOrDown;
+    [_iconView setContentHuggingPriority:NSLayoutPriorityRequired forOrientation:NSLayoutConstraintOrientationHorizontal];
+    [_iconView setContentHuggingPriority:NSLayoutPriorityRequired forOrientation:NSLayoutConstraintOrientationVertical];
+
+    _label = [lbl(@"", 11, YES) retain];
+    _label.textColor = [NSColor colorWithRed:0.0 green:191.0/255.0 blue:1.0 alpha:1.0];
+    _label.alignment = NSTextAlignmentCenter;
+    [_label setContentHuggingPriority:NSLayoutPriorityRequired forOrientation:NSLayoutConstraintOrientationHorizontal];
+
+    NSStackView *stack = [NSStackView stackViewWithViews:@[_iconView, _label]];
+    stack.orientation = NSUserInterfaceLayoutOrientationHorizontal;
+    stack.alignment = NSLayoutAttributeCenterY;
+    stack.spacing = 3;
+    stack.translatesAutoresizingMaskIntoConstraints = NO;
+    [self addSubview:stack];
+
+    [NSLayoutConstraint activateConstraints:@[
+        [_iconView.widthAnchor constraintEqualToConstant:9],
+        [_iconView.heightAnchor constraintEqualToConstant:17],
+        [stack.leadingAnchor constraintEqualToAnchor:self.leadingAnchor constant:6],
+        [stack.trailingAnchor constraintEqualToAnchor:self.trailingAnchor constant:-6],
+        [stack.topAnchor constraintEqualToAnchor:self.topAnchor constant:1],
+        [stack.bottomAnchor constraintEqualToAnchor:self.bottomAnchor constant:-1],
+    ]];
+    return self;
+}
+
+- (void)layout {
+    [super layout];
+    self.layer.cornerRadius = self.bounds.size.height / 2.0;
+}
+
+- (void)dealloc {
+    [_iconView release];
+    [_label release];
+    [super dealloc];
 }
 
 @end
@@ -304,6 +374,7 @@ static NSAttributedString *simpleLineAttr(NSString *iconPath, NSString *text, CG
 @property (nonatomic, strong) NSTextField *timeLbl;
 @property (nonatomic, strong) NSTextField *dateLbl;
 @property (nonatomic, strong) NSTextField *tempLbl;
+@property (nonatomic, strong) WWFeelsPillView *feelsPill;
 @property (nonatomic, strong) NSTextField *descLbl;
 
 // Metrics grid (3×2)
@@ -367,6 +438,8 @@ static void wwSetStr(NSString **slot, NSString *s) {
     // Owned under MRC (copied in wwSetStr, released in -dealloc).
     NSString *_simpleNames[6];
     NSString *_simpleValues[6];
+    NSString *_lastFeelsLabel;
+    NSString *_lastFeelsValue;
 }
 
 - (instancetype)initWithCity:(NSString *)city region:(NSString *)region {
@@ -414,23 +487,37 @@ static void wwSetStr(NSString **slot, NSString *s) {
 
     // ── Info labels ───────────────────────────────────────────────────────────
     _timeLbl = lbl(@"--:--:--", 20, YES);
+    _timeLbl.alignment = NSTextAlignmentCenter;
     _dateLbl = subLbl(@"", 11);
+    _dateLbl.alignment = NSTextAlignmentCenter;
     _tempLbl = lbl(@"--°C", 34, YES);
-    _descLbl = subLbl(@"", 12);
+    _tempLbl.alignment = NSTextAlignmentCenter;
 
-    _infoCol = [NSStackView stackViewWithViews:@[_timeLbl, _dateLbl, _tempLbl, _descLbl]];
+    _lastFeelsLabel = [@"Feels Like" copy];
+    _lastFeelsValue = [@"--" copy];
+    _feelsPill = [[WWFeelsPillView alloc] init];
+    _feelsPill.label.stringValue = [NSString stringWithFormat:@"%@ %@", _lastFeelsLabel, _lastFeelsValue];
+
+    _descLbl = subLbl(@"", 12);
+    _descLbl.alignment = NSTextAlignmentCenter;
+    NSFont *descBase = [NSFont systemFontOfSize:11];
+    NSFont *descItalic = [[NSFontManager sharedFontManager] convertFont:descBase toHaveTrait:NSItalicFontMask];
+    _descLbl.font = descItalic ? descItalic : descBase;
+
+    _infoCol = [NSStackView stackViewWithViews:@[_timeLbl, _dateLbl, _tempLbl, _feelsPill, _descLbl]];
     _infoCol.orientation = NSUserInterfaceLayoutOrientationVertical;
-    _infoCol.alignment   = NSLayoutAttributeLeading;
+    _infoCol.alignment   = NSLayoutAttributeCenterX;
     _infoCol.spacing = 2;
     _infoCol.translatesAutoresizingMaskIntoConstraints = NO;
+    [_infoCol.widthAnchor constraintEqualToConstant:120].active = YES;
 
-    // Left block: icon beside info column
+    // Left block: icon beside info column (centered vertically beside info column)
     _leftBlock = [NSStackView stackViewWithViews:@[_iconView, _infoCol]];
     _leftBlock.orientation = NSUserInterfaceLayoutOrientationHorizontal;
     _leftBlock.alignment   = NSLayoutAttributeCenterY;
-    _leftBlock.spacing = 10;
+    _leftBlock.spacing = 2;
     _leftBlock.translatesAutoresizingMaskIntoConstraints = NO;
-    [_leftBlock setContentHuggingPriority:NSLayoutPriorityDefaultLow forOrientation:NSLayoutConstraintOrientationHorizontal];
+    [_leftBlock setContentHuggingPriority:NSLayoutPriorityDefaultHigh forOrientation:NSLayoutConstraintOrientationHorizontal];
 
     // ── Metrics grid (NSGridView, 3×2) ────────────────────────────────────────
     NSArray<NSString *> *emojis = @[@"💧",@"💨",@"🌬",@"💧",@"🌡",@"☀"];
@@ -445,15 +532,20 @@ static void wwSetStr(NSString **slot, NSString *s) {
     NSArray *row1 = @[_metricTiles[3], _metricTiles[4], _metricTiles[5]];
     _metricsGrid = [NSGridView gridViewWithViews:@[row0, row1]];
     _metricsGrid.translatesAutoresizingMaskIntoConstraints = NO;
-    _metricsGrid.rowSpacing    = 2;
+    _metricsGrid.rowSpacing    = 3;
     _metricsGrid.columnSpacing = 2;
     [_metricsGrid setContentHuggingPriority:NSLayoutPriorityDefaultLow forOrientation:NSLayoutConstraintOrientationHorizontal];
+    [_metricsGrid setContentHuggingPriority:NSLayoutPriorityDefaultHigh forOrientation:NSLayoutConstraintOrientationVertical];
+    for (NSInteger col = 0; col < _metricsGrid.numberOfColumns; col++) {
+        [_metricsGrid columnAtIndex:col].xPlacement = NSGridCellPlacementFill;
+    }
+    [self updateMetricTileWidths];
 
     // Middle row: left info block + metrics grid (enhanced arrangement).
     _middle = [NSStackView stackViewWithViews:@[_leftBlock, _metricsGrid]];
     _middle.orientation = NSUserInterfaceLayoutOrientationHorizontal;
     _middle.alignment   = NSLayoutAttributeCenterY;
-    _middle.spacing = 12;
+    _middle.spacing = 4;
     _middle.translatesAutoresizingMaskIntoConstraints = NO;
 
     // ── Air quality row ───────────────────────────────────────────────────────
@@ -480,6 +572,7 @@ static void wwSetStr(NSString **slot, NSString *s) {
 
     _airRow = [NSStackView stackViewWithViews:airViews];
     _airRow.orientation = NSUserInterfaceLayoutOrientationHorizontal;
+    _airRow.alignment   = NSLayoutAttributeTop;
     _airRow.spacing = 6;
     _airRow.translatesAutoresizingMaskIntoConstraints = NO;
 
@@ -571,27 +664,38 @@ static void wwSetStr(NSString **slot, NSString *s) {
         [_simpleIconRow setViews:@[] inGravity:NSStackViewGravityLeading];
         // Enhanced: metrics as a 3×2 grid beside the icon/info block.
         _leftBlock.orientation = NSUserInterfaceLayoutOrientationHorizontal;
-        _infoCol.alignment = NSLayoutAttributeLeading;
+        _leftBlock.alignment   = NSLayoutAttributeCenterY;
+        _infoCol.alignment = NSLayoutAttributeCenterX;
 
         _cityLbl.alignment = NSTextAlignmentLeft;
-        _timeLbl.alignment = NSTextAlignmentLeft;
-        _dateLbl.alignment = NSTextAlignmentLeft;
-        _tempLbl.alignment = NSTextAlignmentLeft;
-        _descLbl.alignment = NSTextAlignmentLeft;
+        _timeLbl.alignment = NSTextAlignmentCenter;
+        _dateLbl.alignment = NSTextAlignmentCenter;
+        _tempLbl.alignment = NSTextAlignmentCenter;
+        _descLbl.alignment = NSTextAlignmentCenter;
 
-        // Restore the info column to its full enhanced set (time/date/temp/desc).
-        [_infoCol setViews:@[_timeLbl, _dateLbl, _tempLbl, _descLbl]
+        // Restore the info column to its full enhanced set (time/date/temp/pill/desc).
+        [_infoCol setViews:@[_timeLbl, _dateLbl, _tempLbl, _feelsPill, _descLbl]
                  inGravity:NSStackViewGravityLeading];
-        [_leftBlock setViews:@[_iconView, _infoCol]
+        // Icon sits in a taller wrapper, pinned to the top, so it renders ~10pt above centre.
+        NSView *iconWrap = [[[NSView alloc] init] autorelease];
+        iconWrap.translatesAutoresizingMaskIntoConstraints = NO;
+        [iconWrap addSubview:_iconView];
+        [NSLayoutConstraint activateConstraints:@[
+            [iconWrap.widthAnchor  constraintEqualToConstant:90],
+            [iconWrap.heightAnchor constraintEqualToConstant:110],
+            [_iconView.topAnchor     constraintEqualToAnchor:iconWrap.topAnchor],
+            [_iconView.leadingAnchor constraintEqualToAnchor:iconWrap.leadingAnchor],
+        ]];
+        [_leftBlock setViews:@[iconWrap, _infoCol]
                    inGravity:NSStackViewGravityLeading];
 
         [_middle setViews:@[_leftBlock, _metricsGrid]
                 inGravity:NSStackViewGravityLeading];
         _middle.orientation = NSUserInterfaceLayoutOrientationHorizontal;
         _middle.alignment = NSLayoutAttributeCenterY;
-        _middle.spacing = 12;
+        _middle.spacing = 4;
 
-        _airRow.alignment = NSLayoutAttributeCenterY;
+        _airRow.alignment = NSLayoutAttributeTop;
 
         [_rootStack setViews:@[_cityLbl, _middle, _airRow, _errorLbl]
                    inGravity:NSStackViewGravityLeading];
@@ -638,11 +742,25 @@ static void wwSetStr(NSString **slot, NSString *s) {
 }
 
 - (void)dealloc {
+    [_feelsPill release];
+    [_lastFeelsLabel release];
+    [_lastFeelsValue release];
     for (int i = 0; i < 6; i++) {
         [_simpleNames[i] release];
         [_simpleValues[i] release];
     }
     [super dealloc];
+}
+
+- (void)updateMetricTileWidths {
+    CGFloat maxW = 104;
+    for (int i = 0; i < 6; i++) {
+        CGFloat w = _metricTiles[i].fittingSize.width;
+        if (w > maxW) maxW = w;
+    }
+    for (NSInteger col = 0; col < _metricsGrid.numberOfColumns; col++) {
+        [_metricsGrid columnAtIndex:col].width = maxW;
+    }
 }
 
 - (void)setupFeelsLike {
@@ -764,6 +882,7 @@ static void wwSetStr(NSString **slot, NSString *s) {
     set(_metricTiles[3].valueLbl, dewPtStr);
     set(_metricTiles[4].valueLbl, pressStr);
     set(_metricTiles[5].valueLbl, uvStr);
+    [self updateMetricTileWidths];
 
     // Simple-mode plain-text lines: "emoji name value" with the localized
     // metric name (matches the GTK / Fyne simple views). Only update when a
@@ -782,10 +901,25 @@ static void wwSetStr(NSString **slot, NSString *s) {
 - (void)setFeelsLikeNS:(NSString *)value label:(NSString *)label iconPath:(NSString *)iconPath {
     if (iconPath.length > 0) {
         NSImage *img = simpleIconLineImage(iconPath);
-        if (img) _feelsLikeThermIcon.image = img;
+        if (img) {
+            _feelsLikeThermIcon.image = img;
+            _feelsPill.iconView.image = img;
+        }
     }
-    if (label.length > 0) _feelsLikeLabel.text = [label stringByReplacingOccurrencesOfString:@" " withString:@""];
-    if (value.length > 0) _feelsLikeText.stringValue = value;
+    if (label.length > 0) {
+        wwSetStr(&_lastFeelsLabel, label);
+        if (_feelsLikeLabel) {
+            _feelsLikeLabel.text = [label stringByReplacingOccurrencesOfString:@" " withString:@""];
+        }
+    }
+    if (value.length > 0) {
+        wwSetStr(&_lastFeelsValue, value);
+        if (_feelsLikeText) {
+            _feelsLikeText.stringValue = value;
+        }
+    }
+    NSString *pillText = [NSString stringWithFormat:@"%@ %@", _lastFeelsLabel ?: @"", _lastFeelsValue ?: @""];
+    _feelsPill.label.stringValue = [pillText stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
 }
 
 - (void)setAQINS:(NSString *)label iconPath:(NSString *)iconPath {
@@ -861,6 +995,7 @@ static NSString *pollSlotName(int slot) {
         wwSetStr(&_simpleNames[i], names[i]);
         [self refreshSimpleMetricLine:i];
     }
+    [self updateMetricTileWidths];
     if (aqi.length) {
         self.aqiName = aqi;
     }
@@ -885,6 +1020,7 @@ static NSString *pollSlotName(int slot) {
     _iconView.hidden           = !(mask & DFIcon);
     _tempLbl.hidden            = !(mask & DFTemp);
     _feelsLikeBox.hidden       = !(mask & DFTemp);
+    _feelsPill.hidden          = !(mask & DFTemp);
     _descLbl.hidden            = !(mask & DFDesc);
     _timeLbl.hidden            = !(mask & DFTime);
     _dateLbl.hidden            = !(mask & DFDate);
@@ -915,10 +1051,14 @@ static NSString *pollSlotName(int slot) {
 
 - (void)applyFontSizes:(CGFloat)cityTime temp:(CGFloat)temp cond:(CGFloat)cond {
     _cityLbl.font = [NSFont boldSystemFontOfSize:cityTime > 0 ? cityTime : 14];
-    _timeLbl.font = [NSFont boldSystemFontOfSize:cityTime > 0 ? cityTime * 1.14 : 16];
-    _dateLbl.font = [NSFont systemFontOfSize:cond > 0 ? cond : 10];
+    _timeLbl.font = [NSFont boldSystemFontOfSize:cityTime > 0 ? cityTime * 1.4 : 20];
+    _dateLbl.font = [NSFont systemFontOfSize:cond > 0 ? cond : 11];
     _tempLbl.font = [NSFont boldSystemFontOfSize:temp > 0 ? temp : 32];
-    _descLbl.font = [NSFont systemFontOfSize:cond > 0 ? cond : 10];
+    CGFloat condSize = cond > 0 ? cond : 11;
+    NSFont *descBase = [NSFont systemFontOfSize:condSize];
+    NSFont *descItalic = [[NSFontManager sharedFontManager] convertFont:descBase toHaveTrait:NSItalicFontMask];
+    _descLbl.font = descItalic ? descItalic : descBase;
+    _feelsPill.label.font = [NSFont boldSystemFontOfSize:cond > 0 ? cond : 11];
 
     CGFloat lineSize = cond > 0 ? cond : 10;
     for (NSTextField *l in _simpleMetricLines) l.font = [NSFont systemFontOfSize:lineSize];
