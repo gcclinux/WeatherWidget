@@ -250,6 +250,11 @@ func (m *manager) buildWindow() error {
 	win.SetKeepBelow(true) // stay behind all normal windows
 	win.SetResizable(false)
 	win.SetAppPaintable(true)
+	if isDeepin() {
+		// On Deepin (KWin) GTK does not pick an RGBA visual on its own, so the
+		// window is opaque; request it explicitly before the window is realized.
+		enableRGBA(win)
+	}
 
 	// Use NORMAL type — UTILITY and DIALOG types cause Mutter to own placement.
 	// Positioning is achieved through USPosition hints + repeated XMoveWindow calls.
