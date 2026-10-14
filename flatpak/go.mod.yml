@@ -27,6 +27,11 @@
   strip-components: 4
   type: archive
   url: https://proxy.golang.org/github.com/jackc/pgx/v5/@v/v5.9.1.zip
+- dest: vendor/golang.org/x/image
+  sha256: 8b926b1ebae30ade6bc8ba500660284b54fef2c0d1f03e0a37e9a96ff5e02bdc
+  strip-components: 3
+  type: archive
+  url: https://proxy.golang.org/golang.org/x/image/@v/v0.24.0.zip
 - dest: vendor/golang.org/x/sys
   sha256: cb8b073934cf7e579c9f80c4d12619d5f96fcf97af6f07fdc649e7acec0aaddf
   strip-components: 3
@@ -192,11 +197,6 @@
   strip-components: 3
   type: archive
   url: https://proxy.golang.org/github.com/yuin/goldmark/@v/v1.7.8.zip
-- dest: vendor/golang.org/x/image
-  sha256: 8b926b1ebae30ade6bc8ba500660284b54fef2c0d1f03e0a37e9a96ff5e02bdc
-  strip-components: 3
-  type: archive
-  url: https://proxy.golang.org/golang.org/x/image/@v/v0.24.0.zip
 - dest: vendor/golang.org/x/net
   sha256: 9c746c215d695e80d6f4d1b1f1d55deaae5e451b4c031223af25f2b2f0757215
   strip-components: 3
