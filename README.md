@@ -84,7 +84,7 @@ You can download the latest pre-compiled binaries for Windows and Linux from the
 
 ### Windows MSI Package
 ```powershell
- .\installer\build-msi.ps1 -Version "2.0.8" -SkipSign
+ .\installer\build-msi.ps1 -Version "2.1.0" -SkipSign
  ```
 
 ### Linux
@@ -166,6 +166,23 @@ There are two ways to fix this:
 *Note: A `-software` flag is also available (`.\weatherwidget.exe -software`) which instructs the Fyne framework to prefer software rendering, but this still requires basic OpenGL driver availability at the OS level.*
 
 ## Changelog
+
+### v2.1.0 — 2026-10-14
+- **WeatherWidget** 
+  - New data no include feels like in the desktop view.
+  - Feels like in the enhanced view
+  - Feels like in the simple view
+- **System Improvements**:
+  - **Linux (GTK/AppIndicator & KDE Plasma)**:
+    - Complete redesign of the tray menu with a modern, native look.
+    - Added top-section separators for better visual grouping.
+    - Icons now scale correctly to match the system tray icon size.
+    - Additional support for Deepin Desktop Environment.
+  - **System-wide improvements**:
+    - Taskbar/Tray menu now respects the currently selected language (e.g., changes from English to Spanish instantly).
+    - Fixed tray menu to display "Hide Widget" instead of "Show Widget" when the widget is visible.
+  - **MacOS**:
+    - Fixed panel to display the correct weather data.
 
 ### v2.0.0 — 2026-09-11
 - **MultiView desktop WeatherWidnget**:

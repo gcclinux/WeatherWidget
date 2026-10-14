@@ -86,6 +86,16 @@
   <content_rating type="oars-1.1" />
 
   <releases>
+  <release version="2.1.0" date="2026-10-14">
+      <description>
+        <p>WeatgherWidget new data no include feels like in the desktop view.</p>
+        <p>Feels like in the enhanced view</p>
+        <p>Feels like in the simple view</p>
+        <p>System Improvements</p>
+        <p>Complete redesign of the tray menu with a modern, native look.</p>
+        <p>Fully working tray menu on KDE Plasma</p>
+      </description>
+    </release>
     <release version="2.0.8" date="2026-09-30">
       <description>
         <p>Maintenance release.</p>
