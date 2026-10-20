@@ -67,7 +67,7 @@ func showSettingsDialog(m *manager) {
 	nb, _ := gtk.NotebookNew()
 
 	// --- API / Provider tab ---
-	providerBox := buildProviderTab(m, dlg)
+	providerBox, triggerProFromBanner, selectFreeFromBanner := buildProviderTab(m, dlg)
 	providerLabel, _ := gtk.LabelNew(m.t("settings.tab.provider"))
 	nb.AppendPage(providerBox, providerLabel)
 
@@ -75,6 +75,12 @@ func showSettingsDialog(m *manager) {
 	cities := make([]config.CityConfig, len(m.cfg.Cities))
 	copy(cities, m.cfg.Cities)
 	locationsBox, getCities := buildLocationsTab(m, dlg, cities, func() {
+		nb.SetCurrentPage(0)
+	}, func() {
+		triggerProFromBanner()
+		nb.SetCurrentPage(0)
+	}, func() {
+		selectFreeFromBanner()
 		nb.SetCurrentPage(0)
 	})
 	locationsLabel, _ := gtk.LabelNew(m.t("settings.tab.locations"))
@@ -211,7 +217,7 @@ func snapOpacity(v int) int {
 }
 
 // buildProviderTab creates the API / Provider settings tab.
-func buildProviderTab(m *manager, parent *gtk.Dialog) *gtk.Box {
+func buildProviderTab(m *manager, parent *gtk.Dialog) (*gtk.Box, func(), func()) {
 	vbox, _ := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 8)
 	vbox.SetMarginTop(8)
 	vbox.SetMarginStart(4)
@@ -389,7 +395,17 @@ func buildProviderTab(m *manager, parent *gtk.Dialog) *gtk.Box {
 	})
 	vbox.PackStart(saveAPIBtn, false, false, 0)
 
-	return vbox
+	triggerPro := func() {
+		providerCombo.SetActive(0)
+		updateGetApiBtn()
+		handleGetProAPI()
+	}
+	selectFree := func() {
+		providerCombo.SetActive(1)
+		updateGetApiBtn()
+	}
+
+	return vbox, triggerPro, selectFree
 }
 
 // buildAppearanceTab creates the Appearance settings tab.
@@ -1071,7 +1087,7 @@ func buildWidgetTab(m *manager) (*gtk.Box, func() *config.DisplayFields, func() 
 // buildLocationsTab builds the city management tab.
 // Returns the tab widget and a getCities() func that returns the current list
 // at the time of calling (used by the Save button in showSettingsDialog).
-func buildLocationsTab(m *manager, dlg *gtk.Dialog, initialCities []config.CityConfig, onGoToProvider func()) (*gtk.Box, func() []config.CityConfig) {
+func buildLocationsTab(m *manager, dlg *gtk.Dialog, initialCities []config.CityConfig, onGoToProvider func(), onGetPro func(), onSelectFree func()) (*gtk.Box, func() []config.CityConfig) {
 	cities := make([]config.CityConfig, len(initialCities))
 	copy(cities, initialCities)
 
@@ -1081,6 +1097,74 @@ func buildLocationsTab(m *manager, dlg *gtk.Dialog, initialCities []config.CityC
 	outer.SetMarginTop(8)
 	outer.SetMarginStart(4)
 	outer.SetMarginEnd(4)
+
+	// ── Demo Mode Banner (when no API key is configured) ─────────────────
+	if !hasLicense {
+		bannerCSS := `
+.demo-banner-box {
+    border-radius: 10px;
+    padding: 10px 14px;
+    background: rgba(245, 158, 11, 0.14);
+    border: 1.5px solid rgba(245, 158, 11, 0.55);
+}
+.demo-pro-btn {
+    background: linear-gradient(135deg, #0284c7, #0369a1);
+    color: #ffffff;
+    font-weight: bold;
+    border-radius: 6px;
+    padding: 6px 10px;
+}
+.demo-free-btn {
+    border-radius: 6px;
+    padding: 6px 10px;
+}
+`
+		bannerProvider, _ := gtk.CssProviderNew()
+		bannerProvider.LoadFromData(bannerCSS)
+
+		bannerBox, _ := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 6)
+		bannerSc, _ := bannerBox.GetStyleContext()
+		bannerSc.AddProvider(bannerProvider, gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
+		bannerSc.AddClass("demo-banner-box")
+
+		bannerTitle, _ := gtk.LabelNew("")
+		bannerTitle.SetMarkup(fmt.Sprintf("<span font_weight='bold' foreground='#fbbf24'>%s</span>", glib.MarkupEscapeText(m.t("settings.locations.demoBanner.title"))))
+		bannerTitle.SetHAlign(gtk.ALIGN_START)
+		bannerTitle.SetLineWrap(true)
+		bannerBox.PackStart(bannerTitle, false, false, 0)
+
+		bannerSub, _ := gtk.LabelNew(m.t("settings.locations.demoBanner.subtitle"))
+		bannerSub.SetHAlign(gtk.ALIGN_START)
+		bannerSub.SetLineWrap(true)
+		bannerBox.PackStart(bannerSub, false, false, 0)
+
+		btnRow, _ := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 8)
+		proBtn, _ := gtk.ButtonNewWithLabel(m.t("settings.locations.demoBanner.proBtn"))
+		proBtnSc, _ := proBtn.GetStyleContext()
+		proBtnSc.AddProvider(bannerProvider, gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
+		proBtnSc.AddClass("demo-pro-btn")
+		proBtn.Connect("clicked", func() {
+			if onGetPro != nil {
+				onGetPro()
+			}
+		})
+
+		freeBtn, _ := gtk.ButtonNewWithLabel(m.t("settings.locations.demoBanner.freeBtn"))
+		freeBtnSc, _ := freeBtn.GetStyleContext()
+		freeBtnSc.AddProvider(bannerProvider, gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
+		freeBtnSc.AddClass("demo-free-btn")
+		freeBtn.Connect("clicked", func() {
+			if onSelectFree != nil {
+				onSelectFree()
+			}
+		})
+
+		btnRow.PackStart(proBtn, true, true, 0)
+		btnRow.PackStart(freeBtn, true, true, 0)
+		bannerBox.PackStart(btnRow, false, false, 0)
+
+		outer.PackStart(bannerBox, false, false, 0)
+	}
 
 	// ── Saved Cities section ──────────────────────────────────────────────
 	savedTitle, _ := gtk.LabelNew("")
@@ -1258,6 +1342,11 @@ func buildLocationsTab(m *manager, dlg *gtk.Dialog, initialCities []config.CityC
 
 	addBox.PackStart(grid, false, false, 0)
 
+	// Coordinates and timezone are populated by Auto-Fill; keep them read-only.
+	latEntry.SetEditable(false)
+	lonEntry.SetEditable(false)
+	tzEntry.SetEditable(false)
+
 	if !hasLicense {
 		nameEntry.SetSensitive(false)
 		regionEntry.SetSensitive(false)
@@ -1272,7 +1361,58 @@ func buildLocationsTab(m *manager, dlg *gtk.Dialog, initialCities []config.CityC
 	statusLbl.SetHAlign(gtk.ALIGN_START)
 	addBox.PackStart(statusLbl, false, false, 0)
 
-	// Search API button handler.
+	// Add City button (disabled until Auto-Fill completes all fields).
+	btnBox, _ := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 0)
+	addBtn, _ := gtk.ButtonNewWithLabel(m.t("settings.locations.addBtn"))
+	addBtn.SetHAlign(gtk.ALIGN_END)
+	addBtn.SetSensitive(false)
+	btnBox.PackEnd(addBtn, false, false, 0)
+	addBox.PackStart(btnBox, false, false, 0)
+
+	cityAutoFilled := false
+	suppressEntryChange := false
+
+	updateAddBtnState := func() {
+		n, _ := nameEntry.GetText()
+		r, _ := regionEntry.GetText()
+		la, _ := latEntry.GetText()
+		lo, _ := lonEntry.GetText()
+		tz, _ := tzEntry.GetText()
+		ready := hasLicense && cityAutoFilled &&
+			strings.TrimSpace(n) != "" &&
+			strings.TrimSpace(r) != "" &&
+			strings.TrimSpace(la) != "" &&
+			strings.TrimSpace(lo) != "" &&
+			strings.TrimSpace(tz) != ""
+		addBtn.SetSensitive(ready)
+	}
+
+	onManualFieldEdit := func() {
+		if suppressEntryChange {
+			return
+		}
+		if cityAutoFilled {
+			cityAutoFilled = false
+			suppressEntryChange = true
+			latEntry.SetText("")
+			lonEntry.SetText("")
+			tzEntry.SetText("")
+			statusLbl.SetText("")
+			suppressEntryChange = false
+		}
+		updateAddBtnState()
+	}
+	nameEntry.Connect("changed", onManualFieldEdit)
+	regionEntry.Connect("changed", onManualFieldEdit)
+
+	// Pressing Enter in the city name field triggers Auto-Fill.
+	nameEntry.Connect("activate", func() {
+		if hasLicense {
+			searchBtn.Clicked()
+		}
+	})
+
+	// Auto-Fill button handler.
 	searchBtn.Connect("clicked", func() {
 		if !hasLicense {
 			showErrorDialog(dlg, m.t("error.settings.licenseRequired"))
@@ -1391,28 +1531,26 @@ func buildLocationsTab(m *manager, dlg *gtk.Dialog, initialCities []config.CityC
 				return
 			}
 
+			if foundTZ == "" {
+				foundTZ = "UTC"
+			}
+
 			fName, fRegion, fTZ := foundName, foundRegion, foundTZ
 			fLat, fLon := foundLat, foundLon
 			runOnUI(func() {
+				suppressEntryChange = true
 				nameEntry.SetText(fName)
 				regionEntry.SetText(fRegion)
 				latEntry.SetText(fmt.Sprintf("%f", fLat))
 				lonEntry.SetText(fmt.Sprintf("%f", fLon))
 				tzEntry.SetText(fTZ)
+				suppressEntryChange = false
+				cityAutoFilled = true
+				updateAddBtnState()
 				statusLbl.SetText("✓ " + fName + ", " + fRegion)
 			})
 		}()
 	})
-
-	// Add City button.
-	btnBox, _ := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 0)
-	addBtn, _ := gtk.ButtonNewWithLabel(m.t("settings.locations.addBtn"))
-	addBtn.SetHAlign(gtk.ALIGN_END)
-	if !hasLicense {
-		addBtn.SetSensitive(false)
-	}
-	btnBox.PackEnd(addBtn, false, false, 0)
-	addBox.PackStart(btnBox, false, false, 0)
 
 	addBtn.Connect("clicked", func() {
 		if !hasLicense {
@@ -1465,12 +1603,16 @@ func buildLocationsTab(m *manager, dlg *gtk.Dialog, initialCities []config.CityC
 		}
 		cities = result
 
-		// Clear the form.
+		// Clear the form and disable Add City until next Auto-Fill.
+		suppressEntryChange = true
 		nameEntry.SetText("")
 		regionEntry.SetText("")
 		latEntry.SetText("")
 		lonEntry.SetText("")
 		tzEntry.SetText("")
+		suppressEntryChange = false
+		cityAutoFilled = false
+		updateAddBtnState()
 		statusLbl.SetText("")
 
 		refreshList()

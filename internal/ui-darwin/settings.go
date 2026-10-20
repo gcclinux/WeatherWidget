@@ -158,6 +158,7 @@ func (m *manager) settingsStrings() map[string]string {
 		// Provider tab
 		"settings.provider.label", "settings.provider.apiKeyLabel",
 		"settings.provider.apiKeyPlaceholder", "settings.interval.title",
+		"settings.provider.getFreeApi", "settings.provider.getProApi",
 		"settings.provider.note",
 		"settings.provider.apiKeyActivation.title",
 		"settings.provider.apiKeyActivation.message",
@@ -172,6 +173,10 @@ func (m *manager) settingsStrings() map[string]string {
 		"settings.locations.tzPlaceholder", "settings.locations.addBtn",
 		"settings.locations.searchBtn", "settings.locations.searching",
 		"settings.locations.removeBtn",
+		"settings.locations.demoBanner.title",
+		"settings.locations.demoBanner.subtitle",
+		"settings.locations.demoBanner.proBtn",
+		"settings.locations.demoBanner.freeBtn",
 		// Widget tab: panel display
 		"settings.display.title", "settings.display.subtitle",
 		"settings.display.city", "settings.display.icon", "settings.display.temp",

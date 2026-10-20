@@ -800,16 +800,76 @@ func TestFetchWeather_EWW_PollutionURLConstruction(t *testing.T) {
 	adapterFree := NewRemoteAPIAdapter("easyweatherwidget", "")
 	adapterFree.BaseURL = srv2.URL
 
-	defaultCity := config.CityConfig{Name: "Broxburn", Region: "GB", Timezone: "Europe/London"}
+	defaultCity := config.CityConfig{Name: "London", Region: "GB", Timezone: "Europe/London"}
 	if _, err := adapterFree.FetchWeather(context.Background(), defaultCity); err != nil {
 		t.Fatalf("unexpected error (free/default city): %v", err)
 	}
 	srv2.Close()
 
-	wantFreePath := "/api/v1/pollution/key=free/Broxburn,GB"
+	wantFreePath := "/api/v1/pollution/key=free/London,GB"
 	if pollutionPath != wantFreePath {
 		t.Errorf("free pollution path = %q, want %q", pollutionPath, wantFreePath)
 	}
+}
+
+func TestFetchWeather_OpenMeteo_Success(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/forecast" {
+			t.Errorf("unexpected path: %s", r.URL.Path)
+		}
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{
+			"current": {
+				"time": "2026-10-20T18:00",
+				"temperature_2m": 16.6,
+				"relative_humidity_2m": 72,
+				"apparent_temperature": 15.2,
+				"weather_code": 2,
+				"surface_pressure": 1015.3,
+				"wind_speed_10m": 14.5,
+				"wind_direction_10m": 240,
+				"wind_gusts_10m": 22.1,
+				"dew_point_2m": 11.4,
+				"uv_index": 3.5
+			}
+		}`))
+	}))
+	defer srv.Close()
+
+	adapter := NewRemoteAPIAdapter("openmeteo", "")
+	adapter.BaseURL = srv.URL
+
+	city := config.CityConfig{
+		Name:      "London",
+		Region:    "GB",
+		Latitude:  51.5074,
+		Longitude: -0.1278,
+		Timezone:  "Europe/London",
+	}
+
+	data, err := adapter.FetchWeather(context.Background(), city)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if data.CityName != "London" || data.Region != "GB" {
+		t.Errorf("got %s,%s, want London,GB", data.CityName, data.Region)
+	}
+	if data.Temperature != 17 {
+		t.Errorf("Temperature = %d, want 17", data.Temperature)
+	}
+	if data.IconCode != weather.IconPartlyCloudy {
+		t.Errorf("IconCode = %q, want %q", data.IconCode, weather.IconPartlyCloudy)
+	}
+	if data.Description != "scattered clouds" {
+		t.Errorf("Description = %q, want %q", data.Description, "scattered clouds")
+	}
+	if data.Humidity != 72 {
+		t.Errorf("Humidity = %d, want 72", data.Humidity)
+	}
+	if data.WindSpeed != 14.5 {
+		t.Errorf("WindSpeed = %v, want 14.5", data.WindSpeed)
+	}
+	assertNoPollution(t, data)
 }
 
 // assertNoPollution asserts that all nine pollution pointers on data are nil.

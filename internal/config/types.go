@@ -272,25 +272,25 @@ func (v ValidationError) Error() string {
 func DefaultCities() []CityConfig {
 	return []CityConfig{
 		{
-			Name:      "Broxburn",
+			Name:      "London",
 			Region:    "GB",
-			Latitude:  55.934392,
-			Longitude: -3.469387,
+			Latitude:  51.5074,
+			Longitude: -0.1278,
 			Timezone:  "Europe/London",
 		},
 		{
-			Name:      "Holambra",
-			Region:    "BR",
-			Latitude:  -22.633203,
-			Longitude: -47.05453,
-			Timezone:  "America/Sao_Paulo",
+			Name:      "New York",
+			Region:    "US",
+			Latitude:  40.7128,
+			Longitude: -74.0060,
+			Timezone:  "America/New_York",
 		},
 		{
-			Name:      "Ryjewo",
-			Region:    "PL",
-			Latitude:  53.843497,
-			Longitude: 18.96275,
-			Timezone:  "Europe/Warsaw",
+			Name:      "Tokyo",
+			Region:    "JP",
+			Latitude:  35.6762,
+			Longitude: 139.6503,
+			Timezone:  "Asia/Tokyo",
 		},
 	}
 }
@@ -306,7 +306,7 @@ func IsDefaultCity(city CityConfig) bool {
 }
 
 // DefaultConfig returns a Config with sensible defaults:
-// three default cities (Broxburn, Holambra, Ryjewo), 120-minute refresh,
+// three default cities (London, New York, Tokyo), 120-minute refresh,
 // top-right corner, remote_api data source, and EasyWeatherWidget as the
 // default provider (works without a key for the default cities).
 func DefaultConfig() *Config {

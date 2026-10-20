@@ -827,9 +827,54 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 		addTimezoneEntry := widget.NewEntry()
 		addTimezoneEntry.SetPlaceHolder(u.t("settings.locations.tzPlaceholder"))
 
-		addBtn := widget.NewButtonWithIcon(u.t("settings.locations.addBtn"), theme.ContentAddIcon(), func() {
-			// Block adding cities in free mode (no license).
-			if !cfg.HasLicense() {
+		// Coordinates and timezone are populated by Auto-Fill; keep them read-only
+		// and require Auto-Fill before enabling Add City.
+		addLatEntry.Disable()
+		addLonEntry.Disable()
+		addTimezoneEntry.Disable()
+
+		cityAutoFilled := false
+		suppressFieldReset := false
+
+		var addBtn *widget.Button
+		updateAddBtnState := func() {
+			if addBtn == nil {
+				return
+			}
+			hasKey := cfg.HasLicense() || strings.TrimSpace(apiKeyEntry.Text) != ""
+			allFilled := cityAutoFilled &&
+				strings.TrimSpace(addNameEntry.Text) != "" &&
+				strings.TrimSpace(addRegionEntry.Text) != "" &&
+				strings.TrimSpace(addLatEntry.Text) != "" &&
+				strings.TrimSpace(addLonEntry.Text) != "" &&
+				strings.TrimSpace(addTimezoneEntry.Text) != ""
+			if hasKey && allFilled {
+				addBtn.Enable()
+			} else {
+				addBtn.Disable()
+			}
+		}
+
+		invalidateAutoFill := func(_ string) {
+			if suppressFieldReset {
+				return
+			}
+			if cityAutoFilled {
+				cityAutoFilled = false
+				suppressFieldReset = true
+				addLatEntry.SetText("")
+				addLonEntry.SetText("")
+				addTimezoneEntry.SetText("")
+				suppressFieldReset = false
+			}
+			updateAddBtnState()
+		}
+		addNameEntry.OnChanged = invalidateAutoFill
+		addRegionEntry.OnChanged = invalidateAutoFill
+
+		addBtn = widget.NewButtonWithIcon(u.t("settings.locations.addBtn"), theme.ContentAddIcon(), func() {
+			hasKey := cfg.HasLicense() || strings.TrimSpace(apiKeyEntry.Text) != ""
+			if !hasKey {
 				showError(fmt.Errorf("%s", u.t("error.settings.licenseRequired")))
 				return
 			}
@@ -896,19 +941,24 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 				return
 			}
 			state.cities = result
+			suppressFieldReset = true
 			addNameEntry.SetText("")
 			addRegionEntry.SetText("")
 			addLatEntry.SetText("")
 			addLonEntry.SetText("")
 			addTimezoneEntry.SetText("")
+			suppressFieldReset = false
+			cityAutoFilled = false
+			updateAddBtnState()
 			refreshCityList()
 		})
 		addBtn.Importance = widget.HighImportance
+		addBtn.Disable()
 
 		var searchBtn *widget.Button
 		searchBtn = widget.NewButtonWithIcon(u.t("settings.locations.searchBtn"), theme.SearchIcon(), func() {
-			// Block searching for cities in free mode (no license).
-			if !cfg.HasLicense() {
+			hasKey := cfg.HasLicense() || strings.TrimSpace(apiKeyEntry.Text) != ""
+			if !hasKey {
 				showError(fmt.Errorf("%s", u.t("error.settings.licenseRequired")))
 				return
 			}
@@ -987,15 +1037,20 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 					}
 
 					tz := latlong.LookupZoneName(result.Lat, result.Lon)
+					if tz == "" {
+						tz = "UTC"
+					}
 
 					fyne.Do(func() {
+						suppressFieldReset = true
 						addNameEntry.SetText(result.Neighborhood)
 						addRegionEntry.SetText(result.Country)
 						addLatEntry.SetText(fmt.Sprintf("%f", result.Lat))
 						addLonEntry.SetText(fmt.Sprintf("%f", result.Lon))
-						if tz != "" {
-							addTimezoneEntry.SetText(tz)
-						}
+						addTimezoneEntry.SetText(tz)
+						suppressFieldReset = false
+						cityAutoFilled = true
+						updateAddBtnState()
 					})
 				}(name, strings.TrimSpace(addRegionEntry.Text), apiKey)
 
@@ -1052,20 +1107,30 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 						region = res.State + ", " + region
 					}
 					tz := latlong.LookupZoneName(res.Lat, res.Lon)
+					if tz == "" {
+						tz = "UTC"
+					}
 
 					fyne.Do(func() {
+						suppressFieldReset = true
 						addNameEntry.SetText(res.Name)
 						addRegionEntry.SetText(region)
 						addLatEntry.SetText(fmt.Sprintf("%f", res.Lat))
 						addLonEntry.SetText(fmt.Sprintf("%f", res.Lon))
-						if tz != "" {
-							addTimezoneEntry.SetText(tz)
-						}
+						addTimezoneEntry.SetText(tz)
+						suppressFieldReset = false
+						cityAutoFilled = true
+						updateAddBtnState()
 					})
 				}(name, apiKey)
 			}
 		})
 		searchBtn.Importance = widget.MediumImportance
+		addNameEntry.OnSubmitted = func(_ string) {
+			if !searchBtn.Disabled() && searchBtn.OnTapped != nil {
+				searchBtn.OnTapped()
+			}
+		}
 
 		nameItemContent := container.NewBorder(nil, nil, nil, searchBtn, addNameEntry)
 
@@ -1576,9 +1641,56 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 		)))
 		providerTab := container.NewTabItemWithIcon(u.t("settings.tab.provider"), theme.SettingsIcon(), container.NewThemeOverride(providerContent, settingsTh))
 
+		// Demo Mode banner at the top of the Locations tab when no license/key is active.
+		var demoBannerObj fyne.CanvasObject
+		if !cfg.HasLicense() {
+			demoBannerBg := canvas.NewRectangle(color.NRGBA{R: 254, G: 243, B: 199, A: 255}) // warm amber background
+			demoBannerBg.CornerRadius = 10
+			demoBannerBorder := canvas.NewRectangle(color.Transparent)
+			demoBannerBorder.StrokeColor = color.NRGBA{R: 245, G: 158, B: 11, A: 255}
+			demoBannerBorder.StrokeWidth = 1.5
+			demoBannerBorder.CornerRadius = 10
+
+			demoTitle := widget.NewLabel(u.t("settings.locations.demoBanner.title"))
+			demoTitle.TextStyle = fyne.TextStyle{Bold: true}
+			demoTitle.Wrapping = fyne.TextWrapWord
+
+			demoSub := widget.NewLabel(u.t("settings.locations.demoBanner.subtitle"))
+			demoSub.Wrapping = fyne.TextWrapWord
+
+			demoProBtn := widget.NewButton(u.t("settings.locations.demoBanner.proBtn"), func() {
+				providerSelect.SetSelected("EasyWeatherWidget (Pro)")
+				handleGetProAPI()
+				if useDarwinNav() && darwinSelectTab != nil {
+					darwinSelectTab(2)
+				} else if tabs != nil {
+					tabs.SelectIndex(2)
+				}
+			})
+			demoProBtn.Importance = widget.HighImportance
+
+			demoFreeBtn := widget.NewButton(u.t("settings.locations.demoBanner.freeBtn"), func() {
+				providerSelect.SetSelected("OpenWeatherMap (Free)")
+				if useDarwinNav() && darwinSelectTab != nil {
+					darwinSelectTab(2)
+				} else if tabs != nil {
+					tabs.SelectIndex(2)
+				}
+			})
+			demoFreeBtn.Importance = widget.MediumImportance
+
+			demoBtnRow := container.NewGridWithColumns(2, demoProBtn, demoFreeBtn)
+			demoBannerInner := container.NewPadded(container.NewVBox(
+				demoTitle,
+				demoSub,
+				demoBtnRow,
+			))
+			demoBannerObj = container.NewStack(demoBannerBg, demoBannerBorder, demoBannerInner)
+		}
+
 		locationsContent := container.NewPadded(
 			container.NewBorder(
-				nil,
+				demoBannerObj,
 				sectionCard(u.t("settings.locations.addTitle"), "",
 					"➕", color.NRGBA{R: 16, G: 185, B: 129, A: 255}, addForm,
 				),
@@ -1659,9 +1771,10 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 		state.previewPanels = previewPanels
 		previewGrid := container.NewHBox(previewObjects...)
 
-		// Fetch live weather data for preview panels in the background.
+		// Fetch live weather data for preview panels in the background using Open-Meteo
+		// (zero gateway cost) and populate sample Pro pollution metrics for the preview.
 		go func(cities []config.CityConfig, panels []*panel.CityPanel, tempUnit config.TemperatureUnit, windUnit config.WindSpeedUnit) {
-			adapter := remoteapi.NewRemoteAPIAdapter("easyweatherwidget", "free")
+			adapter := remoteapi.NewRemoteAPIAdapter("openmeteo", "")
 			ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 			defer cancel()
 			for i, city := range cities {
@@ -1669,6 +1782,14 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 				if err != nil {
 					continue
 				}
+				aqi := 1
+				co, o3, so2, pm25, pm10 := 195.4, 58.2, 2.4, 6.8, 12.1
+				data.AQI = &aqi
+				data.CO = &co
+				data.O3 = &o3
+				data.SO2 = &so2
+				data.PM25 = &pm25
+				data.PM10 = &pm10
 				idx := i
 				d := data
 				fyne.Do(func() {

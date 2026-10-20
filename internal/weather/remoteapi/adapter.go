@@ -18,16 +18,17 @@ import (
 )
 
 const (
-	defaultOWMBaseURL = "https://api.openweathermap.org"
-	defaultWUBaseURL  = "https://api.weather.com"
-	defaultEWWBaseURL = "https://weather-gateway-ricardo.web.app"
+	defaultOWMBaseURL       = "https://api.openweathermap.org"
+	defaultWUBaseURL        = "https://api.weather.com"
+	defaultEWWBaseURL       = "https://weather-gateway-ricardo.web.app"
+	defaultOpenMeteoBaseURL = "https://api.open-meteo.com"
 )
 
 // RemoteAPIAdapter implements weather.WeatherProvider for remote weather APIs.
-// It supports OpenWeatherMap and Weather Underground providers.
+// It supports OpenWeatherMap, Weather Underground, EasyWeatherWidget, and Open-Meteo providers.
 type RemoteAPIAdapter struct {
 	client   *http.Client
-	provider string // "openweathermap" | "weatherunderground"
+	provider string // "openweathermap" | "weatherunderground" | "easyweatherwidget" | "openmeteo"
 	apiKey   string
 	BaseURL  string // Exported so tests can point to a mock server
 }
@@ -41,6 +42,8 @@ func NewRemoteAPIAdapter(provider, apiKey string) *RemoteAPIAdapter {
 		baseURL = defaultWUBaseURL
 	case "easyweatherwidget":
 		baseURL = defaultEWWBaseURL
+	case "openmeteo":
+		baseURL = defaultOpenMeteoBaseURL
 	}
 	return &RemoteAPIAdapter{
 		client: &http.Client{
@@ -61,6 +64,8 @@ func (r *RemoteAPIAdapter) FetchWeather(ctx context.Context, city config.CityCon
 		return r.fetchWU(ctx, city)
 	case "easyweatherwidget":
 		return r.fetchEWW(ctx, city)
+	case "openmeteo":
+		return r.fetchOpenMeteo(ctx, city)
 	default:
 		return nil, fmt.Errorf("unsupported provider: %s", r.provider)
 	}
@@ -75,6 +80,8 @@ func (r *RemoteAPIAdapter) TestConnection(ctx context.Context) error {
 		return r.testWU(ctx)
 	case "easyweatherwidget":
 		return r.testEWW(ctx)
+	case "openmeteo":
+		return r.testOpenMeteo(ctx)
 	default:
 		return fmt.Errorf("unsupported provider: %s", r.provider)
 	}
@@ -688,5 +695,159 @@ func mapEWWFreeTextToIcon(freeText string) string {
 		return weather.IconClear
 	default:
 		return weather.IconPartlyCloudy
+	}
+}
+
+// --- Open-Meteo implementation (Demo Mode) ---
+
+// openMeteoResponse represents the relevant fields from the Open-Meteo current forecast API.
+type openMeteoResponse struct {
+	Current struct {
+		Time               string  `json:"time"`
+		Temperature2m      float64 `json:"temperature_2m"`
+		RelativeHumidity2m int     `json:"relative_humidity_2m"`
+		ApparentTemp       float64 `json:"apparent_temperature"`
+		WeatherCode        int     `json:"weather_code"`
+		SurfacePressure    float64 `json:"surface_pressure"`
+		WindSpeed10m       float64 `json:"wind_speed_10m"`
+		WindDirection10m   int     `json:"wind_direction_10m"`
+		WindGusts10m       float64 `json:"wind_gusts_10m"`
+		DewPoint2m         float64 `json:"dew_point_2m"`
+		UVIndex            float64 `json:"uv_index"`
+	} `json:"current"`
+}
+
+func (r *RemoteAPIAdapter) fetchOpenMeteo(ctx context.Context, city config.CityConfig) (*weather.WeatherData, error) {
+	if !config.IsDefaultCity(city) && city.Latitude == 0 && city.Longitude == 0 {
+		return nil, fmt.Errorf("open-meteo requires coordinates for %s,%s", city.Name, city.Region)
+	}
+
+	lat, lon := city.Latitude, city.Longitude
+	if lat == 0 && lon == 0 {
+		for _, dc := range config.DefaultCities() {
+			if dc.Name == city.Name && dc.Region == city.Region {
+				lat, lon = dc.Latitude, dc.Longitude
+				break
+			}
+		}
+	}
+
+	u, err := url.Parse(r.BaseURL + "/v1/forecast")
+	if err != nil {
+		return nil, fmt.Errorf("parse URL: %w", err)
+	}
+
+	q := u.Query()
+	q.Set("latitude", fmt.Sprintf("%f", lat))
+	q.Set("longitude", fmt.Sprintf("%f", lon))
+	q.Set("current", "temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,surface_pressure,wind_speed_10m,wind_direction_10m,wind_gusts_10m,dew_point_2m,uv_index")
+	q.Set("wind_speed_unit", "kmh")
+	u.RawQuery = q.Encode()
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
+	if err != nil {
+		return nil, fmt.Errorf("create request: %w", err)
+	}
+
+	log.Printf("fetching weather from Open-Meteo (demo mode) for %s,%s (%f, %f)...", city.Name, city.Region, lat, lon)
+	resp, err := r.client.Do(req)
+	if err != nil {
+		log.Printf("Open-Meteo network error for %s: %v", city.Name, err)
+		return nil, fmt.Errorf("execute request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("read response: %w", err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		log.Printf("Open-Meteo API error for %s: status %d, body: %s", city.Name, resp.StatusCode, string(body))
+		return nil, fmt.Errorf("Open-Meteo API error (status %d): %s", resp.StatusCode, string(body))
+	}
+
+	var om openMeteoResponse
+	if err := json.Unmarshal(body, &om); err != nil {
+		return nil, fmt.Errorf("parse Open-Meteo response: %w", err)
+	}
+
+	loc, err := time.LoadLocation(city.Timezone)
+	if err != nil || city.Timezone == "" {
+		loc = time.UTC
+	}
+	now := time.Now().UTC()
+	localTime := now.In(loc)
+
+	temp := int(math.Round(om.Current.Temperature2m))
+	iconCode, description := mapWMOCodeToWeather(om.Current.WeatherCode)
+	log.Printf("successfully fetched weather for %s from Open-Meteo: %d°C, %s", city.Name, temp, description)
+
+	return &weather.WeatherData{
+		CityName:      city.Name,
+		Region:        city.Region,
+		Temperature:   temp,
+		Description:   description,
+		IconCode:      iconCode,
+		LocalTime:     localTime,
+		FetchedAt:     now,
+		Humidity:      om.Current.RelativeHumidity2m,
+		WindSpeed:     om.Current.WindSpeed10m,
+		WindDirection: om.Current.WindDirection10m,
+		WindGust:      om.Current.WindGusts10m,
+		DewPoint:      om.Current.DewPoint2m,
+		Pressure:      om.Current.SurfacePressure,
+		UVIndex:       om.Current.UVIndex,
+		FeelsLike:     floatPtr(om.Current.ApparentTemp),
+	}, nil
+}
+
+func (r *RemoteAPIAdapter) testOpenMeteo(ctx context.Context) error {
+	u, err := url.Parse(r.BaseURL + "/v1/forecast?latitude=51.5074&longitude=-0.1278&current=temperature_2m")
+	if err != nil {
+		return fmt.Errorf("parse URL: %w", err)
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
+	if err != nil {
+		return fmt.Errorf("create request: %w", err)
+	}
+	resp, err := r.client.Do(req)
+	if err != nil {
+		return fmt.Errorf("connection test failed: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("API test failed (status %d): %s", resp.StatusCode, string(body))
+	}
+	return nil
+}
+
+// mapWMOCodeToWeather maps WMO Weather interpretation codes (WW) from Open-Meteo
+// to internal icon codes and standard descriptions that match i18n weather.condition.* keys.
+func mapWMOCodeToWeather(code int) (icon, description string) {
+	switch code {
+	case 0:
+		return weather.IconClear, "clear sky"
+	case 1:
+		return weather.IconPartlyCloudy, "few clouds"
+	case 2:
+		return weather.IconPartlyCloudy, "scattered clouds"
+	case 3:
+		return weather.IconCloudy, "overcast clouds"
+	case 45, 48:
+		return weather.IconFog, "fog"
+	case 51, 53, 55, 56, 57, 61, 80:
+		return weather.IconRain, "light rain"
+	case 63, 66, 81:
+		return weather.IconRain, "moderate rain"
+	case 65, 67, 82:
+		return weather.IconHeavyRain, "heavy intensity rain"
+	case 71, 73, 75, 77, 85, 86:
+		return weather.IconSnow, "snow"
+	case 95, 96, 99:
+		return weather.IconStorm, "thunderstorm"
+	default:
+		return weather.IconPartlyCloudy, "scattered clouds"
 	}
 }

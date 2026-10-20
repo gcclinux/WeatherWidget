@@ -141,8 +141,11 @@ static inline NSNumber *jbool(BOOL v) { return v ? @YES : @NO; }
 
 // Provider tab
 @property (nonatomic, strong) NSPopUpButton *providerPop;
+@property (nonatomic, strong) NSButton      *getApiBtn;
 @property (nonatomic, strong) NSTextField   *apiKeyField;
 @property (nonatomic, strong) NSTextField   *intervalField;
+@property (nonatomic, strong) NSView        *activationCard;
+@property (nonatomic, strong) NSTextField   *activationKeyLbl;
 
 // Locations tab
 @property (nonatomic, strong) NSMutableArray *cities;      // array of NSMutableDictionary
@@ -152,8 +155,10 @@ static inline NSNumber *jbool(BOOL v) { return v ? @YES : @NO; }
 @property (nonatomic, strong) NSTextField    *addLatField;
 @property (nonatomic, strong) NSTextField    *addLonField;
 @property (nonatomic, strong) NSTextField    *addTZField;
-@property (nonatomic, strong) NSButton       *addCityBtn;    // enabled only when all fields filled
+@property (nonatomic, strong) NSButton       *searchCityBtn;
+@property (nonatomic, strong) NSButton       *addCityBtn;    // enabled only when Auto-Fill succeeds
 @property (nonatomic, strong) NSTextField    *searchStatusLbl; // search feedback label
+@property (nonatomic, assign) BOOL            cityAutoFilled;
 
 // Widget tab — display fields
 @property (nonatomic, strong) NSButton *dfCity;
@@ -390,14 +395,22 @@ static WWSettingsController *g_settingsController = nil;
     CGFloat y = 560;
 
     [v addSubview:[self label:[self L:@"settings.provider.label" fallback:@"Provider"] frame:NSMakeRect(16, y, 200, 20) bold:NO]];
-    _providerPop = [[NSPopUpButton alloc] initWithFrame:NSMakeRect(220, y - 2, 320, 26) pullsDown:NO];
+    _providerPop = [[NSPopUpButton alloc] initWithFrame:NSMakeRect(220, y - 2, 206, 26) pullsDown:NO];
     [_providerPop addItemsWithTitles:@[@"EasyWeatherWidget (Pro)", @"OpenWeatherMap (Free)"]];
+    _providerPop.target = self;
+    _providerPop.action = @selector(onProviderChanged:);
     [v addSubview:_providerPop];
+
+    _getApiBtn = [NSButton buttonWithTitle:[self L:@"settings.provider.getProApi" fallback:@"Get PRO API"]
+        target:self action:@selector(onGetApiClicked:)];
+    _getApiBtn.frame = NSMakeRect(432, y - 2, 128, 26);
+    [v addSubview:_getApiBtn];
     y -= 40;
 
     [v addSubview:[self label:[self L:@"settings.provider.apiKeyLabel" fallback:@"API Key"] frame:NSMakeRect(16, y, 200, 20) bold:NO]];
-    _apiKeyField = [[NSTextField alloc] initWithFrame:NSMakeRect(220, y - 2, 320, 24)];
+    _apiKeyField = [[NSTextField alloc] initWithFrame:NSMakeRect(220, y - 2, 340, 24)];
     _apiKeyField.placeholderString = [self L:@"settings.provider.apiKeyPlaceholder" fallback:@"API Key"];
+    _apiKeyField.delegate = self;
     [v addSubview:_apiKeyField];
     y -= 40;
 
@@ -411,60 +424,123 @@ static WWSettingsController *g_settingsController = nil;
     NSTextField *note = [self sublabel:
         [self L:@"settings.provider.note"
           fallback:@"Note:\nFree = 120 minutes refresh rate (limited).\nPro = 10 minutes refresh rate (unlimited)."]
-        frame:NSMakeRect(16, y - 44, 524, 56)];
+        frame:NSMakeRect(16, y - 44, 544, 56)];
     [v addSubview:note];
     y -= 64;
 
     // ── "Your Pro API Key" activation card ────────────────────────────────────
-    // Shown only when the configured provider is EasyWeatherWidget (Pro) with a
+    // Shown when the configured provider is EasyWeatherWidget (Pro) with a
     // full-length (UUID, 36-char) key — mirrors GTK's showActivationCard.
     NSDictionary *api = self.cfg[@"apiConfig"];
     NSString *provider = api[@"provider"] ?: @"";
     NSString *apiKey = api[@"apiKey"] ?: @"";
     BOOL isProKey = [provider isEqualToString:@"easyweatherwidget"] && apiKey.length == 36;
 
-    if (isProKey) {
-        // Bordered card containing the title, the key, and the "keep safe" note.
-        NSView *card = [[NSView alloc] initWithFrame:NSMakeRect(16, y - 96, 524, 96)];
-        card.wantsLayer = YES;
-        card.layer.cornerRadius = 8;
-        card.layer.borderWidth = 1.0;
-        card.layer.borderColor = [NSColor colorWithWhite:1.0 alpha:0.16].CGColor;
-        card.layer.backgroundColor = [NSColor colorWithWhite:1.0 alpha:0.05].CGColor;
+    NSView *card = [[NSView alloc] initWithFrame:NSMakeRect(16, y - 96, 544, 96)];
+    card.wantsLayer = YES;
+    card.layer.cornerRadius = 8;
+    card.layer.borderWidth = 1.0;
+    card.layer.borderColor = [NSColor colorWithWhite:1.0 alpha:0.16].CGColor;
+    card.layer.backgroundColor = [NSColor colorWithWhite:1.0 alpha:0.05].CGColor;
 
-        NSTextField *cardTitle = [self label:
-            [self L:@"settings.provider.apiKeyActivation.title" fallback:@"Your Pro API Key"]
-            frame:NSMakeRect(12, 68, 500, 20) bold:YES];
-        [card addSubview:cardTitle];
+    NSTextField *cardTitle = [self label:
+        [self L:@"settings.provider.apiKeyActivation.title" fallback:@"Your Pro API Key"]
+        frame:NSMakeRect(12, 68, 520, 20) bold:YES];
+    [card addSubview:cardTitle];
 
-        NSTextField *keyLbl = [NSTextField labelWithString:apiKey];
-        keyLbl.font = [NSFont fontWithName:@"Menlo" size:12] ?: [NSFont systemFontOfSize:12];
-        keyLbl.textColor = [NSColor whiteColor];
-        keyLbl.selectable = YES;
-        keyLbl.frame = NSMakeRect(12, 46, 500, 18);
-        [card addSubview:keyLbl];
+    NSTextField *keyLbl = [NSTextField labelWithString:apiKey];
+    keyLbl.font = [NSFont fontWithName:@"Menlo" size:12] ?: [NSFont systemFontOfSize:12];
+    keyLbl.textColor = [NSColor whiteColor];
+    keyLbl.selectable = YES;
+    keyLbl.frame = NSMakeRect(12, 46, 520, 18);
+    [card addSubview:keyLbl];
+    self.activationKeyLbl = keyLbl;
 
-        NSTextField *msg = [self sublabel:
-            [self L:@"settings.provider.apiKeyActivation.message"
-              fallback:@"Keep this key safe. It is, or will be, activated once your subscription is "
-                        "confirmed and will be disabled if the subscription is cancelled."]
-            frame:NSMakeRect(12, 6, 500, 36)];
-        [card addSubview:msg];
+    NSTextField *msg = [self sublabel:
+        [self L:@"settings.provider.apiKeyActivation.message"
+          fallback:@"Keep this key safe. It is, or will be, activated once your subscription is "
+                    "confirmed and will be disabled if the subscription is cancelled."]
+        frame:NSMakeRect(12, 6, 520, 36)];
+    [card addSubview:msg];
 
-        [v addSubview:card];
-        y -= 108;
-    }
+    card.hidden = !isProKey;
+    [v addSubview:card];
+    self.activationCard = card;
+    y -= 108;
 
     // ── Pro features note (persistent blue benefit line) ──────────────────────
     NSTextField *proNote = [self sublabel:
         [self L:@"settings.provider.proFeaturesNote"
           fallback:@"⭐ EasyWeatherWidget Pro: Enjoy pollution data plus the ability to preset up to 5 cities at once"]
-        frame:NSMakeRect(16, y - 36, 524, 34)];
+        frame:NSMakeRect(16, y - 36, 544, 34)];
     proNote.textColor = [NSColor colorWithRed:0.22 green:0.74 blue:0.97 alpha:1.0]; // #38bdf8
     [v addSubview:proNote];
 
     item.view = v;
     return item;
+}
+
+- (void)updateGetApiBtnTitle {
+    if (!self.getApiBtn) return;
+    if (self.providerPop.indexOfSelectedItem == 1) {
+        self.getApiBtn.title = [self L:@"settings.provider.getFreeApi" fallback:@"Get FREE API"];
+    } else {
+        self.getApiBtn.title = [self L:@"settings.provider.getProApi" fallback:@"Get PRO API"];
+    }
+}
+
+- (void)onProviderChanged:(id)sender {
+    [self updateGetApiBtnTitle];
+}
+
+- (void)onGetApiClicked:(id)sender {
+    if (self.providerPop.indexOfSelectedItem == 1) {
+        [[NSWorkspace sharedWorkspace] openURL:[NSURL URLWithString:@"https://openweathermap.org/"]];
+    } else {
+        [self triggerGetProAPI];
+    }
+}
+
+- (void)triggerGetProAPI {
+    [self.providerPop selectItemAtIndex:0];
+    [self updateGetApiBtnTitle];
+
+    NSString *currentKey = [self.apiKeyField.stringValue
+        stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
+    NSString *clientRef = currentKey;
+    if (currentKey.length != 36) {
+        clientRef = [[[NSUUID UUID] UUIDString] lowercaseString];
+        self.apiKeyField.stringValue = clientRef;
+    }
+
+    NSMutableDictionary *apiCfg = [self.cfg[@"apiConfig"] mutableCopy] ?: [NSMutableDictionary dictionary];
+    apiCfg[@"provider"] = @"easyweatherwidget";
+    apiCfg[@"apiKey"] = clientRef;
+    self.cfg[@"apiConfig"] = apiCfg;
+    [apiCfg release];
+
+    if (self.activationKeyLbl) self.activationKeyLbl.stringValue = clientRef;
+    if (self.activationCard) self.activationCard.hidden = NO;
+
+    NSString *updated = [self buildUpdatedJSON];
+    settingsSaveCB([updated UTF8String]);
+    self.cfgJSON = updated;
+
+    NSString *stripeURL = [NSString stringWithFormat:
+        @"https://buy.stripe.com/bJe3cvaJOa650fQ8cPdZ603?client_reference_id=%@", clientRef];
+    [[NSWorkspace sharedWorkspace] openURL:[NSURL URLWithString:stripeURL]];
+}
+
+- (void)onDemoBannerPro:(id)sender {
+    [self triggerGetProAPI];
+    [self.tabView selectTabViewItemAtIndex:0];
+}
+
+- (void)onDemoBannerFree:(id)sender {
+    [self.providerPop selectItemAtIndex:1];
+    [self updateGetApiBtnTitle];
+    [self.tabView selectTabViewItemAtIndex:0];
+    [self.window makeFirstResponder:self.apiKeyField];
 }
 
 // ── Locations tab ────────────────────────────────────────────────────────────
@@ -473,10 +549,51 @@ static WWSettingsController *g_settingsController = nil;
     NSTabViewItem *item = [[NSTabViewItem alloc] initWithIdentifier:@"locations"];
     item.label = [self L:@"settings.tab.locations" fallback:@"Locations"];
 
+    BOOL hasLic = [self hasLicense];
+    CGFloat docH = hasLic ? 560 : 660;
+
     WWSettingsController *weakSelf = self;
-    NSScrollView *scroll = [self scrollableWithDocumentHeight:560 buildBlock:^(NSView *doc) {
+    NSScrollView *scroll = [self scrollableWithDocumentHeight:docH buildBlock:^(NSView *doc) {
         WWSettingsController *s = weakSelf;
-        CGFloat y = 526;
+        CGFloat y = docH - 34;
+
+        // ── Clickable Demo Mode Banner (when no API key is configured) ────────
+        if (!hasLic) {
+            NSView *banner = [[NSView alloc] initWithFrame:NSMakeRect(16, y - 68, 524, 86)];
+            banner.wantsLayer = YES;
+            banner.layer.cornerRadius = 10;
+            banner.layer.borderWidth = 1.5;
+            banner.layer.borderColor = [NSColor colorWithRed:0.96 green:0.62 blue:0.04 alpha:0.65].CGColor;
+            banner.layer.backgroundColor = [NSColor colorWithRed:0.96 green:0.62 blue:0.04 alpha:0.14].CGColor;
+
+            NSTextField *bTitle = [s label:
+                [s L:@"settings.locations.demoBanner.title" fallback:@"🔒 Demo Mode Active (Showing 3 Preview Cities)"]
+                frame:NSMakeRect(12, 58, 500, 20) bold:YES];
+            bTitle.textColor = [NSColor colorWithRed:0.98 green:0.75 blue:0.14 alpha:1.0];
+            [banner addSubview:bTitle];
+
+            NSTextField *bSub = [s sublabel:
+                [s L:@"settings.locations.demoBanner.subtitle" fallback:@"To unlock custom cities, choose an option below:"]
+                frame:NSMakeRect(12, 38, 500, 18)];
+            [banner addSubview:bSub];
+
+            NSButton *proBtn = [NSButton buttonWithTitle:
+                [s L:@"settings.locations.demoBanner.proBtn" fallback:@"⚡ Get an Instant Pro Key ($1.99/mo)"]
+                target:s action:@selector(onDemoBannerPro:)];
+            proBtn.frame = NSMakeRect(12, 8, 244, 26);
+            proBtn.bezelStyle = NSBezelStyleRounded;
+            [banner addSubview:proBtn];
+
+            NSButton *freeBtn = [NSButton buttonWithTitle:
+                [s L:@"settings.locations.demoBanner.freeBtn" fallback:@"Enter a Free OpenWeatherMap Key in Data Provider"]
+                target:s action:@selector(onDemoBannerFree:)];
+            freeBtn.frame = NSMakeRect(264, 8, 248, 26);
+            freeBtn.bezelStyle = NSBezelStyleRounded;
+            [banner addSubview:freeBtn];
+
+            [doc addSubview:banner];
+            y -= 98;
+        }
 
         [doc addSubview:[s label:[s L:@"settings.locations.savedTitle" fallback:@"Saved Cities"] frame:NSMakeRect(16, y, 300, 20) bold:YES]];
         y -= 22;
@@ -503,18 +620,22 @@ static WWSettingsController *g_settingsController = nil;
         [doc addSubview:[s label:[s L:@"settings.locations.addTitle" fallback:@"Add New City"] frame:NSMakeRect(16, y, 300, 20) bold:YES]];
         y -= 30;
 
-        // Name row: entry + Search API button side by side.
+        // Name row: entry + Auto-Fill button side by side.
         [doc addSubview:[s label:[s L:@"settings.locations.nameLabel" fallback:@"Name"] frame:NSMakeRect(16, y, 90, 20) bold:NO]];
         s.addNameField = [[NSTextField alloc] initWithFrame:NSMakeRect(110, y - 2, 310, 24)];
         s.addNameField.placeholderString = [s L:@"settings.locations.namePlaceholder" fallback:@"City name"];
         s.addNameField.delegate = s;
+        s.addNameField.target = s;
+        s.addNameField.action = @selector(onNameFieldEnter:);
+        if (!hasLic) s.addNameField.enabled = NO;
         [doc addSubview:s.addNameField];
 
-        NSButton *searchBtn = [NSButton buttonWithTitle:[s L:@"settings.locations.searchBtn" fallback:@"Search API"]
+        NSButton *searchBtn = [NSButton buttonWithTitle:[s L:@"settings.locations.searchBtn" fallback:@"Auto-Fill"]
             target:s action:@selector(onSearchCity:)];
         searchBtn.frame = NSMakeRect(426, y - 2, 114, 26);
-        searchBtn.toolTip = [s L:@"settings.locations.searchBtn" fallback:@"Search API"];
-        if (![s hasLicense]) searchBtn.enabled = NO;
+        searchBtn.toolTip = [s L:@"settings.locations.searchBtn" fallback:@"Auto-Fill"];
+        if (!hasLic) searchBtn.enabled = NO;
+        s.searchCityBtn = searchBtn;
         [doc addSubview:searchBtn];
         y -= 32;
 
@@ -523,27 +644,31 @@ static WWSettingsController *g_settingsController = nil;
         s.addRegionField = [[NSTextField alloc] initWithFrame:NSMakeRect(110, y - 2, 430, 24)];
         s.addRegionField.placeholderString = [s L:@"settings.locations.regionPlaceholder" fallback:@"Region, Country (e.g.  CA, US)"];
         s.addRegionField.delegate = s;
+        if (!hasLic) s.addRegionField.enabled = NO;
         [doc addSubview:s.addRegionField];
         y -= 32;
 
-        // Coordinates row (populated by Search API).
+        // Coordinates row (populated by Auto-Fill; read-only).
         [doc addSubview:[s label:[s L:@"settings.locations.latLabel" fallback:@"Latitude"] frame:NSMakeRect(16, y, 90, 20) bold:NO]];
         s.addLatField = [[NSTextField alloc] initWithFrame:NSMakeRect(110, y - 2, 200, 24)];
         s.addLatField.placeholderString = [s L:@"settings.locations.latPlaceholder" fallback:@"Latitude (optional)"];
-        s.addLatField.delegate = s;
+        s.addLatField.editable = NO;
+        s.addLatField.selectable = YES;
         [doc addSubview:s.addLatField];
         [doc addSubview:[s label:[s L:@"settings.locations.lonLabel" fallback:@"Longitude"] frame:NSMakeRect(320, y, 80, 20) bold:NO]];
         s.addLonField = [[NSTextField alloc] initWithFrame:NSMakeRect(400, y - 2, 140, 24)];
         s.addLonField.placeholderString = [s L:@"settings.locations.lonPlaceholder" fallback:@"Longitude (optional)"];
-        s.addLonField.delegate = s;
+        s.addLonField.editable = NO;
+        s.addLonField.selectable = YES;
         [doc addSubview:s.addLonField];
         y -= 32;
 
-        // Timezone row (populated by Search API).
+        // Timezone row (populated by Auto-Fill; read-only).
         [doc addSubview:[s label:[s L:@"settings.locations.tzLabel" fallback:@"Timezone"] frame:NSMakeRect(16, y, 90, 20) bold:NO]];
         s.addTZField = [[NSTextField alloc] initWithFrame:NSMakeRect(110, y - 2, 430, 24)];
         s.addTZField.placeholderString = [s L:@"settings.locations.tzPlaceholder" fallback:@"America/Los_Angeles"];
-        s.addTZField.delegate = s;
+        s.addTZField.editable = NO;
+        s.addTZField.selectable = YES;
         [doc addSubview:s.addTZField];
         y -= 36;
 
@@ -555,13 +680,12 @@ static WWSettingsController *g_settingsController = nil;
         [doc addSubview:s.searchStatusLbl];
         y -= 30;
 
-        // Add City button — disabled until all 5 fields are non-empty.
+        // Add City button — disabled until Auto-Fill populates all 5 fields.
         NSButton *addBtn = [NSButton buttonWithTitle:[NSString stringWithFormat:@"\uff0b %@",
             [s L:@"settings.locations.addBtn" fallback:@"Add City"]]
             target:s action:@selector(onAddCity:)];
         addBtn.frame = NSMakeRect(436, y, 104, 28);
         addBtn.enabled = NO; // enabled dynamically by -updateAddCityBtn
-        if (![s hasLicense]) addBtn.enabled = NO;
         s.addCityBtn = addBtn;
         [doc addSubview:addBtn];
     }];
@@ -570,12 +694,17 @@ static WWSettingsController *g_settingsController = nil;
     return item;
 }
 
-// Enables or disables the Add City button based on whether all five required
-// fields (Name, Region/Country, Latitude, Longitude, Timezone) are non-empty.
-// Called whenever any of those fields changes.
+- (void)onNameFieldEnter:(id)sender {
+    if (self.searchCityBtn && self.searchCityBtn.enabled) {
+        [self onSearchCity:self.searchCityBtn];
+    }
+}
+
+// Enables or disables the Add City button based on whether Auto-Fill has
+// populated all five required fields (Name, Region/Country, Latitude, Longitude, Timezone).
 - (void)updateAddCityBtn {
     if (!self.addCityBtn) return;
-    if (![self hasLicense]) {
+    if (![self hasLicense] || !self.cityAutoFilled) {
         self.addCityBtn.enabled = NO;
         return;
     }
@@ -588,9 +717,27 @@ static WWSettingsController *g_settingsController = nil;
                                lat.length > 0 && lon.length > 0 && tz.length > 0);
 }
 
-// NSControlTextDidChangeNotification delegate — fired whenever any observed
-// NSTextField's text content changes; used to gate the Add City button.
+// NSControlTextDidChangeNotification delegate — fired whenever the user edits
+// addNameField or addRegionField. Invalidates any previous Auto-Fill coordinates
+// so the user must run Auto-Fill again before Add City becomes enabled.
 - (void)controlTextDidChange:(NSNotification *)aNotification {
+    id obj = [aNotification object];
+    if (obj == self.apiKeyField) {
+        BOOL hasLic = [self hasLicense];
+        if (self.addNameField)   self.addNameField.enabled   = hasLic;
+        if (self.addRegionField) self.addRegionField.enabled = hasLic;
+        if (self.searchCityBtn)  self.searchCityBtn.enabled  = hasLic;
+        [self refreshCityList];
+        [self updateAddCityBtn];
+        return;
+    }
+    if ((obj == self.addNameField || obj == self.addRegionField) && self.cityAutoFilled) {
+        self.cityAutoFilled = NO;
+        self.addLatField.stringValue = @"";
+        self.addLonField.stringValue = @"";
+        self.addTZField.stringValue = @"";
+        self.searchStatusLbl.stringValue = @"";
+    }
     [self updateAddCityBtn];
 }
 
@@ -617,15 +764,24 @@ static WWSettingsController *g_settingsController = nil;
     }
 
     NSDictionary *api = self.cfg[@"apiConfig"];
-    NSString *apiKey = api[@"apiKey"] ?: @"";
+    NSString *apiKey = [self.apiKeyField.stringValue
+        stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
     if (apiKey.length == 0) {
-        [self showAlert:[self L:@"settings.locations.searchBtn" fallback:@"Search API"]
+        apiKey = api[@"apiKey"] ?: @"";
+    }
+    if (apiKey.length == 0) {
+        [self showAlert:[self L:@"settings.locations.searchBtn" fallback:@"Auto-Fill"]
                    info:[self L:@"error.settings.apiKeyRequired"
                             fallback:@"API Key is required in the settings above to search."]];
         return;
     }
 
-    NSString *provider = api[@"provider"] ?: @"easyweatherwidget";
+    NSString *provider = (self.providerPop && self.providerPop.indexOfSelectedItem == 1)
+        ? @"openweathermap"
+        : (api[@"provider"] ?: @"easyweatherwidget");
+    if (self.providerPop && self.providerPop.indexOfSelectedItem == 0) {
+        provider = @"easyweatherwidget";
+    }
     NSString *region = [self.addRegionField.stringValue
         stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
 
@@ -789,14 +945,17 @@ static WWSettingsController *g_settingsController = nil;
             if (s) {
                 btn.enabled = [s hasLicense];
                 if (errorMsg) {
+                    s.cityAutoFilled = NO;
                     s.searchStatusLbl.textColor = [NSColor systemRedColor];
                     s.searchStatusLbl.stringValue = errorMsg;
+                    [s updateAddCityBtn];
                 } else {
                     s.addNameField.stringValue   = foundName   ?: @"";
                     s.addRegionField.stringValue = foundRegion ?: @"";
                     s.addLatField.stringValue    = foundLat    ?: @"";
                     s.addLonField.stringValue    = foundLon    ?: @"";
-                    s.addTZField.stringValue     = foundTZ     ?: @"";
+                    s.addTZField.stringValue     = (foundTZ.length > 0) ? foundTZ : @"UTC";
+                    s.cityAutoFilled = YES;
                     NSString *summary = [NSString stringWithFormat:@"\u2713 %@, %@",
                         foundName ?: @"", foundRegion ?: @""];
                     s.searchStatusLbl.textColor = [NSColor systemGreenColor];
@@ -866,6 +1025,11 @@ static WWSettingsController *g_settingsController = nil;
 }
 
 - (BOOL)hasLicense {
+    if (self.apiKeyField) {
+        NSString *liveKey = [self.apiKeyField.stringValue
+            stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
+        if (liveKey.length > 0) return YES;
+    }
     NSDictionary *api = self.cfg[@"apiConfig"];
     NSString *key = api[@"apiKey"];
     if (key && key.length > 0) return YES;
@@ -875,6 +1039,11 @@ static WWSettingsController *g_settingsController = nil;
 }
 
 - (BOOL)isPro {
+    if (self.providerPop && self.apiKeyField) {
+        NSString *liveKey = [self.apiKeyField.stringValue
+            stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
+        if (self.providerPop.indexOfSelectedItem == 0 && liveKey.length > 0) return YES;
+    }
     NSDictionary *api = self.cfg[@"apiConfig"];
     NSString *provider = api[@"provider"];
     NSString *key = api[@"apiKey"];
@@ -956,6 +1125,7 @@ static WWSettingsController *g_settingsController = nil;
     [self.cities addObject:city];
 
     // Clear the form and reset the Add City button.
+    self.cityAutoFilled = NO;
     self.addNameField.stringValue   = @"";
     self.addRegionField.stringValue = @"";
     self.addLatField.stringValue    = @"";
@@ -1396,6 +1566,7 @@ static WWSettingsController *g_settingsController = nil;
     NSDictionary *api = cfg[@"apiConfig"];
     NSString *provider = api[@"provider"] ?: @"easyweatherwidget";
     [_providerPop selectItemAtIndex:[provider isEqualToString:@"openweathermap"] ? 1 : 0];
+    [self updateGetApiBtnTitle];
     _apiKeyField.stringValue = api[@"apiKey"] ?: @"";
     NSNumber *interval = cfg[@"refreshInterval"];
     _intervalField.stringValue = interval ? [interval stringValue] : @"120";

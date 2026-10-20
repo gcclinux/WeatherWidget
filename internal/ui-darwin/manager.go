@@ -841,7 +841,7 @@ func (m *manager) buildProvider(cfg *config.Config) weather.WeatherProvider {
 		apiKey = cfg.APIConfig.APIKey
 	}
 	if apiKey == "" {
-		provider = "easyweatherwidget"
+		provider = "openmeteo"
 	}
 	return remoteapi.NewRemoteAPIAdapter(provider, apiKey)
 }
