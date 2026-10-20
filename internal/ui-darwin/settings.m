@@ -394,8 +394,8 @@ static WWSettingsController *g_settingsController = nil;
 
     CGFloat y = 560;
 
-    [v addSubview:[self label:[self L:@"settings.provider.label" fallback:@"Provider"] frame:NSMakeRect(16, y, 200, 20) bold:NO]];
-    _providerPop = [[NSPopUpButton alloc] initWithFrame:NSMakeRect(220, y - 2, 206, 26) pullsDown:NO];
+    [v addSubview:[self label:[self L:@"settings.provider.label" fallback:@"Provider"] frame:NSMakeRect(16, y, 120, 20) bold:NO]];
+    _providerPop = [[NSPopUpButton alloc] initWithFrame:NSMakeRect(140, y - 2, 216, 26) pullsDown:NO];
     [_providerPop addItemsWithTitles:@[@"EasyWeatherWidget (Pro)", @"OpenWeatherMap (Free)"]];
     _providerPop.target = self;
     _providerPop.action = @selector(onProviderChanged:);
@@ -403,12 +403,12 @@ static WWSettingsController *g_settingsController = nil;
 
     _getApiBtn = [NSButton buttonWithTitle:[self L:@"settings.provider.getProApi" fallback:@"Get PRO API"]
         target:self action:@selector(onGetApiClicked:)];
-    _getApiBtn.frame = NSMakeRect(432, y - 2, 128, 26);
+    _getApiBtn.frame = NSMakeRect(364, y - 2, 196, 26);
     [v addSubview:_getApiBtn];
     y -= 40;
 
-    [v addSubview:[self label:[self L:@"settings.provider.apiKeyLabel" fallback:@"API Key"] frame:NSMakeRect(16, y, 200, 20) bold:NO]];
-    _apiKeyField = [[NSTextField alloc] initWithFrame:NSMakeRect(220, y - 2, 340, 24)];
+    [v addSubview:[self label:[self L:@"settings.provider.apiKeyLabel" fallback:@"API Key"] frame:NSMakeRect(16, y, 120, 20) bold:NO]];
+    _apiKeyField = [[NSTextField alloc] initWithFrame:NSMakeRect(140, y - 2, 420, 24)];
     _apiKeyField.placeholderString = [self L:@"settings.provider.apiKeyPlaceholder" fallback:@"API Key"];
     _apiKeyField.delegate = self;
     [v addSubview:_apiKeyField];
@@ -471,8 +471,8 @@ static WWSettingsController *g_settingsController = nil;
     // ── Pro features note (persistent blue benefit line) ──────────────────────
     NSTextField *proNote = [self sublabel:
         [self L:@"settings.provider.proFeaturesNote"
-          fallback:@"⭐ EasyWeatherWidget Pro: Enjoy pollution data plus the ability to preset up to 5 cities at once"]
-        frame:NSMakeRect(16, y - 36, 544, 34)];
+          fallback:@"🍃 Always-On Desktop Air Quality & UV Monitor (Pro): Track live PM2.5, Wildfire Smoke, Smog (NO₂, O₃) & AQI across up to 5 cities with 10-min updates — ideal for runners, families, and allergy/asthma care."]
+        frame:NSMakeRect(16, y - 54, 544, 52)];
     proNote.textColor = [NSColor colorWithRed:0.22 green:0.74 blue:0.97 alpha:1.0]; // #38bdf8
     [v addSubview:proNote];
 
@@ -550,7 +550,7 @@ static WWSettingsController *g_settingsController = nil;
     item.label = [self L:@"settings.tab.locations" fallback:@"Locations"];
 
     BOOL hasLic = [self hasLicense];
-    CGFloat docH = hasLic ? 560 : 660;
+    CGFloat docH = hasLic ? 560 : 690;
 
     WWSettingsController *weakSelf = self;
     NSScrollView *scroll = [self scrollableWithDocumentHeight:docH buildBlock:^(NSView *doc) {
@@ -559,7 +559,7 @@ static WWSettingsController *g_settingsController = nil;
 
         // ── Clickable Demo Mode Banner (when no API key is configured) ────────
         if (!hasLic) {
-            NSView *banner = [[NSView alloc] initWithFrame:NSMakeRect(16, y - 68, 524, 86)];
+            NSView *banner = [[NSView alloc] initWithFrame:NSMakeRect(16, y - 98, 524, 116)];
             banner.wantsLayer = YES;
             banner.layer.cornerRadius = 10;
             banner.layer.borderWidth = 1.5;
@@ -568,31 +568,31 @@ static WWSettingsController *g_settingsController = nil;
 
             NSTextField *bTitle = [s label:
                 [s L:@"settings.locations.demoBanner.title" fallback:@"🔒 Demo Mode Active (Showing 3 Preview Cities)"]
-                frame:NSMakeRect(12, 58, 500, 20) bold:YES];
+                frame:NSMakeRect(12, 88, 500, 20) bold:YES];
             bTitle.textColor = [NSColor colorWithRed:0.98 green:0.75 blue:0.14 alpha:1.0];
             [banner addSubview:bTitle];
 
             NSTextField *bSub = [s sublabel:
                 [s L:@"settings.locations.demoBanner.subtitle" fallback:@"To unlock custom cities, choose an option below:"]
-                frame:NSMakeRect(12, 38, 500, 18)];
+                frame:NSMakeRect(12, 68, 500, 18)];
             [banner addSubview:bSub];
 
             NSButton *proBtn = [NSButton buttonWithTitle:
                 [s L:@"settings.locations.demoBanner.proBtn" fallback:@"⚡ Get an Instant Pro Key ($1.99/mo)"]
                 target:s action:@selector(onDemoBannerPro:)];
-            proBtn.frame = NSMakeRect(12, 8, 244, 26);
+            proBtn.frame = NSMakeRect(12, 38, 500, 26);
             proBtn.bezelStyle = NSBezelStyleRounded;
             [banner addSubview:proBtn];
 
             NSButton *freeBtn = [NSButton buttonWithTitle:
                 [s L:@"settings.locations.demoBanner.freeBtn" fallback:@"Enter a Free OpenWeatherMap Key in Data Provider"]
                 target:s action:@selector(onDemoBannerFree:)];
-            freeBtn.frame = NSMakeRect(264, 8, 248, 26);
+            freeBtn.frame = NSMakeRect(12, 8, 500, 26);
             freeBtn.bezelStyle = NSBezelStyleRounded;
             [banner addSubview:freeBtn];
 
             [doc addSubview:banner];
-            y -= 98;
+            y -= 128;
         }
 
         [doc addSubview:[s label:[s L:@"settings.locations.savedTitle" fallback:@"Saved Cities"] frame:NSMakeRect(16, y, 300, 20) bold:YES]];
@@ -1152,9 +1152,9 @@ static WWSettingsController *g_settingsController = nil;
     item.label = [self L:@"settings.tab.widget" fallback:@"Widget"];
 
     WWSettingsController *weakSelf = self;
-    NSScrollView *scroll = [self scrollableWithDocumentHeight:560 buildBlock:^(NSView *doc) {
+    NSScrollView *scroll = [self scrollableWithDocumentHeight:620 buildBlock:^(NSView *doc) {
         WWSettingsController *s = weakSelf;
-        CGFloat y = 526;
+        CGFloat y = 586;
 
         // Panel display fields.
         [doc addSubview:[s label:[s L:@"settings.display.title" fallback:@"Panel Display"] frame:NSMakeRect(16, y, 300, 20) bold:YES]];
@@ -1211,7 +1211,15 @@ static WWSettingsController *g_settingsController = nil;
             b.enabled = pro;
             [doc addSubview:b];
         }
-        y -= 40;
+        y -= 56;
+
+        NSTextField *pollutionProNote = [s sublabel:
+            [s L:@"settings.pollution.proNote"
+              fallback:@"🍃 Always-On Desktop Air Quality & UV Monitor (Pro): Track live PM2.5, Wildfire Smoke, Smog (NO₂, O₃) & AQI across up to 5 cities with 10-min updates — ideal for runners, families, and allergy/asthma care."]
+            frame:NSMakeRect(16, y, 524, 50)];
+        pollutionProNote.textColor = [NSColor colorWithRed:0.22 green:0.74 blue:0.97 alpha:1.0]; // #38bdf8
+        [doc addSubview:pollutionProNote];
+        y -= 32;
 
         // Temperature unit.
         [doc addSubview:[s label:[s L:@"settings.temperature.title" fallback:@"Temperature Unit"] frame:NSMakeRect(16, y, 300, 20) bold:YES]];
@@ -1520,29 +1528,29 @@ static WWSettingsController *g_settingsController = nil;
     title.frame = NSMakeRect(16, 560, 560, 28);
     [v addSubview:title];
 
-    NSTextField *sub = [NSTextField wrappingLabelWithString:[self L:@"settings.about.description" fallback:@"Desktop weather overlay for macOS"]];
-    sub.frame = NSMakeRect(16, 500, 560, 48);
+    NSTextField *sub = [NSTextField wrappingLabelWithString:[self L:@"settings.about.description" fallback:@"A compact, transparent time, weather & environmental health monitor that lives on your desktop.\nTrack up to 5 cities at a glance — including live UV Index, AQI, PM2.5, wildfire smoke, and urban smog (NO₂, O₃) for outdoor runners, families, and asthma/allergy care."]];
+    sub.frame = NSMakeRect(16, 472, 560, 76);
     sub.textColor = [NSColor secondaryLabelColor];
     [v addSubview:sub];
 
     NSTextField *website = [NSTextField labelWithString:
         [NSString stringWithFormat:@"%@ easysmartapps.co.uk/weatherwidget",
          [self L:@"settings.about.websiteLabel" fallback:@"Website:"]]];
-    website.frame = NSMakeRect(16, 470, 560, 20);
+    website.frame = NSMakeRect(16, 440, 560, 20);
     website.textColor = [NSColor linkColor];
     [v addSubview:website];
 
     NSTextField *manual = [NSTextField labelWithString:
         [NSString stringWithFormat:@"%@ easysmartapps.co.uk/weatherwidget-manual",
          [self L:@"settings.about.manualLabel" fallback:@"Manual:"]]];
-    manual.frame = NSMakeRect(16, 444, 560, 20);
+    manual.frame = NSMakeRect(16, 414, 560, 20);
     manual.textColor = [NSColor linkColor];
     [v addSubview:manual];
 
     NSTextField *air = [NSTextField labelWithString:
         [NSString stringWithFormat:@"%@ easysmartapps.co.uk/weatherwidget-environmental",
          [self L:@"settings.about.airIndexLabel" fallback:@"Air Index:"]]];
-    air.frame = NSMakeRect(16, 418, 560, 20);
+    air.frame = NSMakeRect(16, 388, 560, 20);
     air.textColor = [NSColor linkColor];
     [v addSubview:air];
 

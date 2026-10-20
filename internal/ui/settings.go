@@ -1496,8 +1496,19 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 			chkPM10,
 		)
 
+		pollutionProNoteBg := canvas.NewRectangle(color.NRGBA{R: 14, G: 165, B: 233, A: 25})
+		pollutionProNoteBg.CornerRadius = 8
+		pollutionProNoteBorder := canvas.NewRectangle(color.Transparent)
+		pollutionProNoteBorder.StrokeColor = color.NRGBA{R: 56, G: 189, B: 248, A: 100}
+		pollutionProNoteBorder.StrokeWidth = 1
+		pollutionProNoteBorder.CornerRadius = 8
+		pollutionProNoteLabel := widget.NewLabel(u.t("settings.pollution.proNote"))
+		pollutionProNoteLabel.Wrapping = fyne.TextWrapWord
+		pollutionProNoteCard := container.NewStack(pollutionProNoteBg, pollutionProNoteBorder, container.NewPadded(pollutionProNoteLabel))
+
 		pollutionSection := container.NewVBox(
 			pollutionChecks,
+			pollutionProNoteCard,
 		)
 
 		// ── View Mode ─────────────────────────────────────────────────────────
@@ -1679,11 +1690,11 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 			})
 			demoFreeBtn.Importance = widget.MediumImportance
 
-			demoBtnRow := container.NewGridWithColumns(2, demoProBtn, demoFreeBtn)
 			demoBannerInner := container.NewPadded(container.NewVBox(
 				demoTitle,
 				demoSub,
-				demoBtnRow,
+				demoProBtn,
+				demoFreeBtn,
 			))
 			demoBannerObj = container.NewStack(demoBannerBg, demoBannerBorder, demoBannerInner)
 		}

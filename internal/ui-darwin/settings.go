@@ -185,6 +185,7 @@ func (m *manager) settingsStrings() map[string]string {
 		"settings.display.dewPoint", "settings.display.pressure", "settings.display.uvIndex",
 		// Widget tab: pollution
 		"settings.pollution.title", "settings.pollution.subtitle",
+		"settings.pollution.proNote",
 		"settings.pollution.aqi", "settings.pollution.co", "settings.pollution.no",
 		"settings.pollution.no2", "settings.pollution.o3", "settings.pollution.so2",
 		"settings.pollution.nh3", "settings.pollution.pm2_5", "settings.pollution.pm10",

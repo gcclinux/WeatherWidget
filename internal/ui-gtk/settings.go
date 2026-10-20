@@ -970,6 +970,27 @@ func buildWidgetTab(m *manager) (*gtk.Box, func() *config.DisplayFields, func() 
 
 	vbox.PackStart(gridPollution, false, false, 0)
 
+	pollutionProBox, _ := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 4)
+	pollutionProBoxSc, _ := pollutionProBox.GetStyleContext()
+	pollutionProNoteCSS, _ := gtk.CssProviderNew()
+	_ = pollutionProNoteCSS.LoadFromData(`
+.pro-note-box {
+    border-radius: 8px;
+    padding: 8px 12px;
+    background: rgba(14, 165, 233, 0.1);
+    border: 1px solid rgba(56, 189, 248, 0.35);
+}
+`)
+	pollutionProBoxSc.AddProvider(pollutionProNoteCSS, gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
+	pollutionProBoxSc.AddClass("pro-note-box")
+
+	pollutionProNote, _ := gtk.LabelNew("")
+	pollutionProNote.SetMarkup(fmt.Sprintf("<span foreground='#38bdf8' font_size='9500'>%s</span>", glib.MarkupEscapeText(m.t("settings.pollution.proNote"))))
+	pollutionProNote.SetHAlign(gtk.ALIGN_START)
+	pollutionProNote.SetLineWrap(true)
+	pollutionProBox.PackStart(pollutionProNote, true, true, 0)
+	vbox.PackStart(pollutionProBox, false, false, 0)
+
 	getDisplayFields := func() *config.DisplayFields {
 		return &config.DisplayFields{
 			ShowCity:     chkCity.GetActive(),
@@ -1138,7 +1159,7 @@ func buildLocationsTab(m *manager, dlg *gtk.Dialog, initialCities []config.CityC
 		bannerSub.SetLineWrap(true)
 		bannerBox.PackStart(bannerSub, false, false, 0)
 
-		btnRow, _ := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 8)
+		btnRow, _ := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 6)
 		proBtn, _ := gtk.ButtonNewWithLabel(m.t("settings.locations.demoBanner.proBtn"))
 		proBtnSc, _ := proBtn.GetStyleContext()
 		proBtnSc.AddProvider(bannerProvider, gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
