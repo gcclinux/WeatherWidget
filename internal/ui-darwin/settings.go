@@ -189,6 +189,7 @@ func (m *manager) settingsStrings() map[string]string {
 		"settings.pollution.aqi", "settings.pollution.co", "settings.pollution.no",
 		"settings.pollution.no2", "settings.pollution.o3", "settings.pollution.so2",
 		"settings.pollution.nh3", "settings.pollution.pm2_5", "settings.pollution.pm10",
+		"settings.pollution.ticker",
 		// Widget tab: units
 		"settings.temperature.title", "settings.windspeed.title",
 		"settings.temperature.celsius", "settings.temperature.fahrenheit",
@@ -324,6 +325,7 @@ func mergeSettingsJSON(base *config.Config, data []byte) (*config.Config, error)
 			jsonSetBool(pf, "showNH3", &p.ShowNH3)
 			jsonSetBool(pf, "showPM25", &p.ShowPM25)
 			jsonSetBool(pf, "showPM10", &p.ShowPM10)
+			jsonSetBool(pf, "showTicker", &p.ShowTicker)
 			out.PollutionFields = p
 		}
 	}

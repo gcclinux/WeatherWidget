@@ -183,6 +183,7 @@ static inline NSNumber *jbool(BOOL v) { return v ? @YES : @NO; }
 @property (nonatomic, strong) NSButton *pfNH3;
 @property (nonatomic, strong) NSButton *pfPM25;
 @property (nonatomic, strong) NSButton *pfPM10;
+@property (nonatomic, strong) NSButton *pfTicker;
 // Widget tab — units
 @property (nonatomic, strong) NSButton *tempCelsius;
 @property (nonatomic, strong) NSButton *tempFahrenheit;
@@ -1204,10 +1205,12 @@ static WWSettingsController *g_settingsController = nil;
         s.pfNH3  = [s checkbox:@"NH₃"  frame:NSMakeRect(cx0 + 2*colW, y, colW, 20)];
         s.pfPM25 = [s checkbox:@"PM2.5" frame:NSMakeRect(cx0 + 3*colW, y, colW, 20)];
         y -= rowH;
-        s.pfPM10 = [s checkbox:@"PM10" frame:NSMakeRect(cx0 + 0*colW, y, colW, 20)];
+        s.pfPM10   = [s checkbox:@"PM10" frame:NSMakeRect(cx0 + 0*colW, y, colW, 20)];
+        s.pfTicker = [s checkbox:[s L:@"settings.pollution.ticker" fallback:@"Pollution Info Ticker"]
+                           frame:NSMakeRect(cx0 + 1*colW, y, 3*colW, 20)];
 
         BOOL pro = [s isPro];
-        for (NSButton *b in @[s.pfAQI, s.pfCO, s.pfNO, s.pfNO2, s.pfO3, s.pfSO2, s.pfNH3, s.pfPM25, s.pfPM10]) {
+        for (NSButton *b in @[s.pfAQI, s.pfCO, s.pfNO, s.pfNO2, s.pfO3, s.pfSO2, s.pfNH3, s.pfPM25, s.pfPM10, s.pfTicker]) {
             b.enabled = pro;
             [doc addSubview:b];
         }
@@ -1533,26 +1536,36 @@ static WWSettingsController *g_settingsController = nil;
     sub.textColor = [NSColor secondaryLabelColor];
     [v addSubview:sub];
 
-    NSTextField *website = [NSTextField labelWithString:
-        [NSString stringWithFormat:@"%@ easysmartapps.co.uk/weatherwidget",
-         [self L:@"settings.about.websiteLabel" fallback:@"Website:"]]];
-    website.frame = NSMakeRect(16, 440, 560, 20);
-    website.textColor = [NSColor linkColor];
-    [v addSubview:website];
-
-    NSTextField *manual = [NSTextField labelWithString:
-        [NSString stringWithFormat:@"%@ easysmartapps.co.uk/weatherwidget-manual",
-         [self L:@"settings.about.manualLabel" fallback:@"Manual:"]]];
-    manual.frame = NSMakeRect(16, 414, 560, 20);
-    manual.textColor = [NSColor linkColor];
-    [v addSubview:manual];
-
-    NSTextField *air = [NSTextField labelWithString:
-        [NSString stringWithFormat:@"%@ easysmartapps.co.uk/weatherwidget-environmental",
-         [self L:@"settings.about.airIndexLabel" fallback:@"Air Index:"]]];
-    air.frame = NSMakeRect(16, 388, 560, 20);
-    air.textColor = [NSColor linkColor];
-    [v addSubview:air];
+    // Each row: "<Label> <clickable host/path>". The URL portion carries an
+    // NSLinkAttributeName so a click opens the default browser.
+    NSArray<NSArray *> *links = @[
+        @[[self L:@"settings.about.websiteLabel" fallback:@"Website:"],
+          @"easysmartapps.co.uk/weatherwidget", @440],
+        @[[self L:@"settings.about.manualLabel" fallback:@"Manual:"],
+          @"easysmartapps.co.uk/weatherwidget-manual", @414],
+        @[[self L:@"settings.about.airIndexLabel" fallback:@"Air Index:"],
+          @"easysmartapps.co.uk/weatherwidget-environmental", @388],
+    ];
+    for (NSArray *row in links) {
+        NSString *label = row[0];
+        NSString *path  = row[1];
+        NSString *full  = [NSString stringWithFormat:@"%@ %@", label, path];
+        NSMutableAttributedString *as = [[NSMutableAttributedString alloc]
+            initWithString:full
+                attributes:@{ NSFontAttributeName: [NSFont systemFontOfSize:13],
+                              NSForegroundColorAttributeName: [NSColor linkColor] }];
+        NSRange r = NSMakeRange(label.length + 1, path.length);
+        [as addAttributes:@{
+            NSLinkAttributeName: [NSURL URLWithString:[@"https://" stringByAppendingString:path]],
+            NSUnderlineStyleAttributeName: @(NSUnderlineStyleSingle),
+            NSForegroundColorAttributeName: [NSColor linkColor],
+            NSCursorAttributeName: [NSCursor pointingHandCursor] } range:r];
+        NSTextField *tf = [NSTextField labelWithAttributedString:as];
+        tf.allowsEditingTextAttributes = YES;   // required for links to be clickable
+        tf.selectable = YES;
+        tf.frame = NSMakeRect(16, [row[2] doubleValue], 560, 20);
+        [v addSubview:tf];
+    }
 
     item.view = v;
     return item;
@@ -1611,8 +1624,9 @@ static WWSettingsController *g_settingsController = nil;
     _pfO3.state   = [self boolFor:pf key:@"showO3"   defaultVal:NO] ? NSControlStateValueOn : NSControlStateValueOff;
     _pfSO2.state  = [self boolFor:pf key:@"showSO2"  defaultVal:NO] ? NSControlStateValueOn : NSControlStateValueOff;
     _pfNH3.state  = [self boolFor:pf key:@"showNH3"  defaultVal:NO] ? NSControlStateValueOn : NSControlStateValueOff;
-    _pfPM25.state = [self boolFor:pf key:@"showPM25" defaultVal:NO] ? NSControlStateValueOn : NSControlStateValueOff;
-    _pfPM10.state = [self boolFor:pf key:@"showPM10" defaultVal:NO] ? NSControlStateValueOn : NSControlStateValueOff;
+    _pfPM25.state   = [self boolFor:pf key:@"showPM25"   defaultVal:NO] ? NSControlStateValueOn : NSControlStateValueOff;
+    _pfPM10.state   = [self boolFor:pf key:@"showPM10"   defaultVal:NO] ? NSControlStateValueOn : NSControlStateValueOff;
+    _pfTicker.state = [self boolFor:pf key:@"showTicker" defaultVal:NO] ? NSControlStateValueOn : NSControlStateValueOff;
 
     // ── Widget: units ──
     NSString *tempUnit = cfg[@"temperatureUnit"] ?: @"celsius";
@@ -1736,8 +1750,9 @@ static WWSettingsController *g_settingsController = nil;
         @"showO3":   jbool(_pfO3.state   == NSControlStateValueOn),
         @"showSO2":  jbool(_pfSO2.state  == NSControlStateValueOn),
         @"showNH3":  jbool(_pfNH3.state  == NSControlStateValueOn),
-        @"showPM25": jbool(_pfPM25.state == NSControlStateValueOn),
-        @"showPM10": jbool(_pfPM10.state == NSControlStateValueOn),
+        @"showPM25":   jbool(_pfPM25.state   == NSControlStateValueOn),
+        @"showPM10":   jbool(_pfPM10.state   == NSControlStateValueOn),
+        @"showTicker": jbool(_pfTicker.state == NSControlStateValueOn),
     };
 
     // ── Units ──

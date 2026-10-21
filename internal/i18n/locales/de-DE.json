@@ -229,5 +229,17 @@
   "settings.fontSize.subtitle": "Passen Sie die Textgröße für jeden Teil des Widgets an. Änderungen werden sofort übernommen.",
   "settings.fontSize.cityTime": "Stadt & Uhrzeit",
   "settings.fontSize.tempIcon": "Temperatur & Symbol",
-  "settings.fontSize.conditions": "Wetterbedingungen"
+  "settings.fontSize.conditions": "Wetterbedingungen",
+  "settings.pollution.ticker": "Schadstoff-Info-Ticker",
+  "pollution.ticker.currently": "Aktuell",
+  "pollution.ticker.sources": "Hauptquellen",
+  "pollution.sources.aqi": "Gesamtindex aller überwachten Luftschadstoffe",
+  "pollution.sources.co": "Autoabgase, Gasheizgeräte & Tabakrauch",
+  "pollution.sources.no": "Fahrzeugmotoren & Kraftwerkskessel",
+  "pollution.sources.no2": "Diesel- & Benzinfahrzeuge, Kraftwerke, Gasheizung",
+  "pollution.sources.o3": "Sonnenlicht-Reaktion mit Abgasen & Dämpfen",
+  "pollution.sources.so2": "Kohle- & Ölverbrennung, Raffinerien & Schiffsdiesel",
+  "pollution.sources.nh3": "Landwirtschaft, Düngemittel & Fahrzeugkatalysatoren",
+  "pollution.sources.pm25": "Autoabgase, Holzverbrennung & Industrie",
+  "pollution.sources.pm10": "Straßen- & Baustaub, Landwirtschaft & Steinbrüche"
 }

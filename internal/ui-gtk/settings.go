@@ -968,6 +968,11 @@ func buildWidgetTab(m *manager) (*gtk.Box, func() *config.DisplayFields, func() 
 	chkPM10.SetSensitive(isPro)
 	gridPollution.Attach(chkPM10, 0, 2, 1, 1)
 
+	chkTicker, _ := gtk.CheckButtonNewWithLabel(m.t("settings.pollution.ticker"))
+	chkTicker.SetActive(pf.ShowTicker)
+	chkTicker.SetSensitive(isPro)
+	gridPollution.Attach(chkTicker, 1, 2, 3, 1)
+
 	vbox.PackStart(gridPollution, false, false, 0)
 
 	pollutionProBox, _ := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 4)
@@ -1010,15 +1015,16 @@ func buildWidgetTab(m *manager) (*gtk.Box, func() *config.DisplayFields, func() 
 
 	getPollutionFields := func() *config.PollutionFields {
 		return &config.PollutionFields{
-			ShowAQI:  chkAQI.GetActive(),
-			ShowCO:   chkCO.GetActive(),
-			ShowNO:   chkNO.GetActive(),
-			ShowNO2:  chkNO2.GetActive(),
-			ShowO3:   chkO3.GetActive(),
-			ShowSO2:  chkSO2.GetActive(),
-			ShowNH3:  chkNH3.GetActive(),
-			ShowPM25: chkPM25.GetActive(),
-			ShowPM10: chkPM10.GetActive(),
+			ShowAQI:    chkAQI.GetActive(),
+			ShowCO:     chkCO.GetActive(),
+			ShowNO:     chkNO.GetActive(),
+			ShowNO2:    chkNO2.GetActive(),
+			ShowO3:     chkO3.GetActive(),
+			ShowSO2:    chkSO2.GetActive(),
+			ShowNH3:    chkNH3.GetActive(),
+			ShowPM25:   chkPM25.GetActive(),
+			ShowPM10:   chkPM10.GetActive(),
+			ShowTicker: chkTicker.GetActive(),
 		}
 	}
 

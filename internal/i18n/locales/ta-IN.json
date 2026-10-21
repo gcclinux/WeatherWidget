@@ -230,5 +230,17 @@
   "settings.fontSize.subtitle": "விட்ஜெட்டின் ஒவ்வொரு பகுதிக்கான உரை அளவை சரிசெய்யவும். மாற்றங்கள் உடனடியாக பொருந்தும்.",
   "settings.fontSize.cityTime": "நகரம் & நேரம்",
   "settings.fontSize.tempIcon": "வெப்பநிலை & சின்னம்",
-  "settings.fontSize.conditions": "வானிலை நிலைகள்"
+  "settings.fontSize.conditions": "வானிலை நிலைகள்",
+  "settings.pollution.ticker": "மாசுபாடு தகவல் டிக்கர்",
+  "pollution.ticker.currently": "தற்போது",
+  "pollution.ticker.sources": "முதன்மை ஆதாரங்கள்",
+  "pollution.sources.aqi": "கண்காணிக்கப்படும் அனைத்து மாசுபடுத்திகளின் கூட்டு குறியீடு",
+  "pollution.sources.co": "வாகனப் புகை, எரிவாயு அடுப்புகள் & புகையிலை புகை",
+  "pollution.sources.no": "வாகன இயந்திரங்கள் & மின் நிலைய உலைகள்",
+  "pollution.sources.no2": "டீசல் & பெட்ரோல் வாகனங்கள், மின் நிலையங்கள்",
+  "pollution.sources.o3": "வாகனப் புகையுடன் சூரிய ஒளி வினைபுரிதல்",
+  "pollution.sources.so2": "நிலக்கரி & எண்ணெய் எரிப்பு, சுத்திகரிப்பு ஆலைகள்",
+  "pollution.sources.nh3": "விவசாயம், உரங்கள் & வாகன வினையூக்கிகள்",
+  "pollution.sources.pm25": "வாகனப் புகை, விறகு எரிப்பு & தொழிற்சாலைகள்",
+  "pollution.sources.pm10": "சாலை & கட்டுமானத் தூசி, விவசாயம் & குவாரிகள்"
 }

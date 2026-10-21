@@ -195,6 +195,62 @@ type metricTileWidget struct {
 	value     *canvas.Text
 }
 
+// tickerTrackLayout positions the 4 styled text segments of the current ticker
+// item side by side starting at offsetX, while reporting zero minimum width so
+// the clipped ticker area fills the remaining space in the header row.
+type tickerTrackLayout struct {
+	offsetX float32
+}
+
+func (t *tickerTrackLayout) MinSize(objects []fyne.CanvasObject) fyne.Size {
+	var h float32 = 20
+	for _, o := range objects {
+		if o.Visible() {
+			h = fyne.Max(h, o.MinSize().Height)
+		}
+	}
+	return fyne.NewSize(0, h)
+}
+
+func (t *tickerTrackLayout) Layout(objects []fyne.CanvasObject, size fyne.Size) {
+	x := t.offsetX
+	for _, o := range objects {
+		if !o.Visible() {
+			continue
+		}
+		ms := o.MinSize()
+		y := (size.Height - ms.Height) / 2
+		o.Resize(ms)
+		o.Move(fyne.NewPos(x, y))
+		x += ms.Width
+	}
+}
+
+func (t *tickerTrackLayout) totalWidth(objects []fyne.CanvasObject) float32 {
+	var w float32
+	for _, o := range objects {
+		if o.Visible() {
+			w += o.MinSize().Width
+		}
+	}
+	return w
+}
+
+func statusColorForLevel(level int) color.Color {
+	switch level {
+	case 1:
+		return color.NRGBA{R: 52, G: 211, B: 153, A: 255} // #34D399 Good
+	case 2:
+		return color.NRGBA{R: 251, G: 191, B: 36, A: 255} // #FBBF24 Fair
+	case 3:
+		return color.NRGBA{R: 251, G: 146, B: 60, A: 255} // #FB923C Moderate
+	case 4:
+		return color.NRGBA{R: 248, G: 113, B: 113, A: 255} // #F87171 Poor
+	default:
+		return color.NRGBA{R: 192, G: 132, B: 252, A: 255} // #C084FC Very Poor
+	}
+}
+
 // CityPanel renders weather data for a single city within the widget.
 //
 // The card is laid out horizontally: a left "info" block (location, weather
@@ -222,10 +278,22 @@ type CityPanel struct {
 	dewPointTile, pressureTile, uvTile *metricTileWidget
 
 	// Air-quality row (bottom of the card).
-	airCells        map[weather.PollutionMetric]*airMetricCell
-	airRow          *fyne.Container // full bottom row container
-	aqiLeftRow      *fyne.Container // AQI cell on the left
+	airCells         map[weather.PollutionMetric]*airMetricCell
+	airRow           *fyne.Container // full bottom row container
+	aqiLeftRow       *fyne.Container // AQI cell on the left
 	otherAirRightRow *fyne.Container // other pollution cells on the right
+
+	// Pollution info ticker (top header row, to the right of cityText).
+	tickerLayout  *tickerTrackLayout
+	tickerTrack   *fyne.Container
+	tickerClip    fyne.CanvasObject
+	tickerHead    *canvas.Text
+	tickerStatus  *canvas.Text
+	tickerTail    *canvas.Text
+	tickerItems   []weather.PollutionTickerItem
+	tickerIdx     int
+	tickerStagger int
+	tickerStopCh  chan struct{}
 
 	errorIcon *canvas.Image
 
@@ -408,6 +476,8 @@ func (p *CityPanel) shortPollutionName(m weather.PollutionMetric) string {
 	return full
 }
 
+var fyneTickerStaggerCounter int
+
 // NewCityPanel creates a new CityPanel with placeholder content.
 // If lm is nil, hardcoded English defaults are used for placeholder text.
 func NewCityPanel(lm *i18n.LocaleManager) *CityPanel {
@@ -415,7 +485,9 @@ func NewCityPanel(lm *i18n.LocaleManager) *CityPanel {
 		lm:              lm,
 		displayFields:   config.DefaultDisplayFields(),
 		pollutionFields: config.DefaultPollutionFields(),
+		tickerStagger:   fyneTickerStaggerCounter,
 	}
+	fyneTickerStaggerCounter++
 
 	// Weather icon — start with the default cloudy icon.
 	p.iconWidget = canvas.NewImageFromResource(loadIconFromAssets(weather.IconCloudy))
@@ -434,6 +506,21 @@ func NewCityPanel(lm *i18n.LocaleManager) *CityPanel {
 	p.cityText.TextSize = 18
 	p.cityText.TextStyle = fyne.TextStyle{Bold: true}
 	p.cityText.Alignment = fyne.TextAlignLeading
+
+	// Pollution info ticker widgets (clipped horizontal marquee to the right of cityText).
+	tickerCyan := color.NRGBA{R: 0, G: 190, B: 255, A: 255}
+	p.tickerHead = canvas.NewText("", color.White)
+	p.tickerHead.TextSize = 12
+	p.tickerHead.TextStyle = fyne.TextStyle{Bold: true}
+	p.tickerStatus = canvas.NewText("", color.White)
+	p.tickerStatus.TextSize = 12
+	p.tickerStatus.TextStyle = fyne.TextStyle{Bold: true}
+	p.tickerTail = canvas.NewText("", tickerCyan)
+	p.tickerTail.TextSize = 12
+	p.tickerLayout = &tickerTrackLayout{offsetX: 360}
+	p.tickerTrack = container.New(p.tickerLayout, p.tickerHead, p.tickerStatus, p.tickerTail)
+	p.tickerClip = container.NewClip(p.tickerTrack)
+	p.tickerClip.Hide()
 
 	p.tempText = canvas.NewText(p.translate("panel.placeholder.temp", "--°C"), color.White)
 	p.tempText.TextSize = 36
@@ -495,10 +582,16 @@ func NewCityPanel(lm *i18n.LocaleManager) *CityPanel {
 			name:  name,
 			value: value,
 		}
-		cell.container = container.NewVBox(
+		topPart := container.NewVBox(
 			container.NewCenter(icon),
 			container.NewCenter(name),
+		)
+		cell.container = container.NewBorder(
+			topPart,
 			container.NewCenter(value),
+			nil,
+			nil,
+			layout.NewSpacer(),
 		)
 		cell.container.Hide()
 		p.airCells[m] = cell
@@ -626,10 +719,17 @@ func (p *CityPanel) buildLayout() fyne.CanvasObject {
 	p.airRow = container.NewBorder(nil, nil, aqiWithPadding, otherWithPadding, nil)
 	bottom := p.airRow
 
-	// Build the final content: city name on top, then middle row, then air row.
+	// Build the final content: header row (city name + pollution ticker) on top,
+	// then middle row, then air row.
 	var contentObjects []fyne.CanvasObject
 	if p.displayFields.ShowCity {
-		contentObjects = append(contentObjects, p.cityText)
+		headerSpacer := canvas.NewRectangle(color.Transparent)
+		headerSpacer.SetMinSize(fyne.NewSize(16, 1))
+		leftCity := container.NewHBox(p.cityText, headerSpacer)
+		headerRow := container.NewBorder(nil, nil, leftCity, nil, p.tickerClip)
+		contentObjects = append(contentObjects, headerRow)
+	} else {
+		contentObjects = append(contentObjects, p.tickerClip)
 	}
 	contentObjects = append(contentObjects, middle, bottom)
 	content := container.New(&gapVBoxLayout{gap: 2}, contentObjects...)
@@ -822,6 +922,105 @@ func (p *CityPanel) applyAirCells() {
 	if p.airRow != nil {
 		p.airRow.Refresh()
 	}
+	p.applyTicker()
+}
+
+func (p *CityPanel) setTickerItemSegments(it weather.PollutionTickerItem) {
+	if it.FullName != "" && it.FullName != it.Symbol {
+		p.tickerHead.Text = it.Symbol + " (" + it.FullName + "): "
+	} else {
+		p.tickerHead.Text = it.Symbol + ": "
+	}
+	p.tickerStatus.Text = it.StatusText
+	p.tickerStatus.Color = statusColorForLevel(it.StatusLevel)
+	p.tickerTail.Text = " • " + it.SourcesText
+	p.tickerHead.Refresh()
+	p.tickerStatus.Refresh()
+	p.tickerTail.Refresh()
+}
+
+func (p *CityPanel) applyTicker() {
+	items := weather.PlanPollutionTicker(p.pollutionFields, weather.PollutionOf(p.lastData), p.lm)
+	if len(items) == 0 {
+		p.stopTicker()
+		p.tickerItems = nil
+		if p.tickerClip != nil {
+			p.tickerClip.Hide()
+		}
+		return
+	}
+
+	// Check if items are identical to avoid resetting scroll position on routine refreshes.
+	same := len(items) == len(p.tickerItems)
+	if same {
+		for i := range items {
+			if items[i] != p.tickerItems[i] {
+				same = false
+				break
+			}
+		}
+	}
+	p.tickerItems = items
+	if p.tickerClip != nil {
+		p.tickerClip.Show()
+	}
+	if same && p.tickerStopCh != nil {
+		return
+	}
+
+	p.stopTicker()
+	p.tickerIdx = p.tickerStagger % len(p.tickerItems)
+	p.setTickerItemSegments(p.tickerItems[p.tickerIdx])
+	w := p.tickerClip.Size().Width
+	if w < 20 {
+		w = 360
+	}
+	p.tickerLayout.offsetX = w
+	p.tickerTrack.Refresh()
+
+	p.mu.Lock()
+	stopCh := make(chan struct{})
+	p.tickerStopCh = stopCh
+	p.mu.Unlock()
+
+	go func(stopCh chan struct{}) {
+		ticker := time.NewTicker(33 * time.Millisecond)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-stopCh:
+				return
+			case <-ticker.C:
+				fyne.Do(func() {
+					if len(p.tickerItems) == 0 || p.tickerClip == nil || !p.tickerClip.Visible() {
+						return
+					}
+					totalW := p.tickerLayout.totalWidth(p.tickerTrack.Objects)
+					p.tickerLayout.offsetX -= 1.6
+					if p.tickerLayout.offsetX+totalW < -12 {
+						p.tickerIdx = (p.tickerIdx + 1) % len(p.tickerItems)
+						p.setTickerItemSegments(p.tickerItems[p.tickerIdx])
+						cw := p.tickerClip.Size().Width
+						if cw < 20 {
+							cw = 360
+						}
+						p.tickerLayout.offsetX = cw
+					}
+					p.tickerLayout.Layout(p.tickerTrack.Objects, p.tickerTrack.Size())
+					canvas.Refresh(p.tickerTrack)
+				})
+			}
+		}
+	}(stopCh)
+}
+
+func (p *CityPanel) stopTicker() {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.tickerStopCh != nil {
+		close(p.tickerStopCh)
+		p.tickerStopCh = nil
+	}
 }
 
 // Container returns the Fyne container for embedding in a parent layout.
@@ -986,6 +1185,7 @@ func (p *CityPanel) StartClock(timezone string) {
 // StopClock stops the time ticker goroutine and any icon animation.
 func (p *CityPanel) StopClock() {
 	p.StopAnimation()
+	p.stopTicker()
 
 	p.mu.Lock()
 	defer p.mu.Unlock()

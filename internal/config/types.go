@@ -169,29 +169,31 @@ func (c *Config) GetDisplayFields() *DisplayFields {
 
 // PollutionFields controls which air quality and pollution metrics are visible.
 type PollutionFields struct {
-	ShowCO   bool `json:"showCO"`
-	ShowNO   bool `json:"showNO"`
-	ShowNO2  bool `json:"showNO2"`
-	ShowO3   bool `json:"showO3"`
-	ShowSO2  bool `json:"showSO2"`
-	ShowNH3  bool `json:"showNH3"`
-	ShowPM25 bool `json:"showPM25"`
-	ShowPM10 bool `json:"showPM10"`
-	ShowAQI  bool `json:"showAQI,omitempty"`
+	ShowCO     bool `json:"showCO"`
+	ShowNO     bool `json:"showNO"`
+	ShowNO2    bool `json:"showNO2"`
+	ShowO3     bool `json:"showO3"`
+	ShowSO2    bool `json:"showSO2"`
+	ShowNH3    bool `json:"showNH3"`
+	ShowPM25   bool `json:"showPM25"`
+	ShowPM10   bool `json:"showPM10"`
+	ShowAQI    bool `json:"showAQI,omitempty"`
+	ShowTicker bool `json:"showTicker,omitempty"`
 }
 
 // DefaultPollutionFields returns a PollutionFields with all metrics initially off.
 func DefaultPollutionFields() *PollutionFields {
 	return &PollutionFields{
-		ShowCO:   false,
-		ShowNO:   false,
-		ShowNO2:  false,
-		ShowO3:   false,
-		ShowSO2:  false,
-		ShowNH3:  false,
-		ShowPM25: false,
-		ShowPM10: false,
-		ShowAQI:  false,
+		ShowCO:     false,
+		ShowNO:     false,
+		ShowNO2:    false,
+		ShowO3:     false,
+		ShowSO2:    false,
+		ShowNH3:    false,
+		ShowPM25:   false,
+		ShowPM10:   false,
+		ShowAQI:    false,
+		ShowTicker: false,
 	}
 }
 

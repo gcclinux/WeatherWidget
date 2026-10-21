@@ -300,3 +300,46 @@ func TestProperty6_IconMappingResolvesInEmbed(t *testing.T) {
 		t.Fatalf("AirIconFile(MetricNH3) = %q, want %q", got, "nh2.png")
 	}
 }
+
+func TestPlanPollutionTicker(t *testing.T) {
+	pm25 := 8.5
+	no2 := 120.0
+	o3 := 180.0
+	data := PollutionData{
+		PM25: &pm25,
+		NO2:  &no2,
+		O3:   &o3,
+	}
+
+	// When ShowTicker is false, returns nil.
+	fieldsOff := &config.PollutionFields{
+		ShowPM25:   true,
+		ShowNO2:    true,
+		ShowTicker: false,
+	}
+	if got := PlanPollutionTicker(fieldsOff, data); got != nil {
+		t.Fatalf("PlanPollutionTicker with ShowTicker=false returned %v, want nil", got)
+	}
+
+	// When ShowTicker is true, returns items for selected & present metrics in canonical order.
+	fieldsOn := &config.PollutionFields{
+		ShowPM25:   true,
+		ShowNO2:    true,
+		ShowO3:     true,
+		ShowCO:     true, // absent in data
+		ShowTicker: true,
+	}
+	items := PlanPollutionTicker(fieldsOn, data)
+	if len(items) != 3 {
+		t.Fatalf("len(items) = %d, want 3", len(items))
+	}
+	if items[0].Metric != MetricNO2 || items[0].StatusLevel != 2 || items[0].StatusText != "Fair" {
+		t.Fatalf("items[0] = %+v, want NO2 Fair (level 2)", items[0])
+	}
+	if items[1].Metric != MetricO3 || items[1].StatusLevel != 4 || items[1].StatusText != "Poor" {
+		t.Fatalf("items[1] = %+v, want O3 Poor (level 4)", items[1])
+	}
+	if items[2].Metric != MetricPM25 || items[2].StatusLevel != 1 || items[2].StatusText != "Good" {
+		t.Fatalf("items[2] = %+v, want PM25 Good (level 1)", items[2])
+	}
+}

@@ -272,23 +272,35 @@ static NSAttributedString *simpleLineAttr(NSString *iconPath, NSString *text, CG
     _nameLbl.lineBreakMode = NSLineBreakByWordWrapping;
     _nameLbl.maximumNumberOfLines = 2;
     _nameLbl.preferredMaxLayoutWidth = 72;
+    [_nameLbl setContentHuggingPriority:NSLayoutPriorityRequired
+                         forOrientation:NSLayoutConstraintOrientationVertical];
+    [_nameLbl setContentCompressionResistancePriority:NSLayoutPriorityRequired
+                                       forOrientation:NSLayoutConstraintOrientationVertical];
     _valueLbl = lbl(@"", 10, YES);
     _valueLbl.alignment = NSTextAlignmentCenter;
+    [_valueLbl setContentHuggingPriority:NSLayoutPriorityRequired
+                          forOrientation:NSLayoutConstraintOrientationVertical];
+    [_valueLbl setContentCompressionResistancePriority:NSLayoutPriorityRequired
+                                        forOrientation:NSLayoutConstraintOrientationVertical];
 
-    NSStackView *stack = [NSStackView stackViewWithViews:@[_iconView, _nameLbl, _valueLbl]];
+    NSStackView *stack = [NSStackView stackViewWithViews:@[_iconView, _nameLbl]];
     stack.orientation = NSUserInterfaceLayoutOrientationVertical;
     stack.spacing = 2;
     stack.alignment = NSLayoutAttributeCenterX;
     stack.translatesAutoresizingMaskIntoConstraints = NO;
     [self addSubview:stack];
+    [self addSubview:_valueLbl];
 
     [NSLayoutConstraint activateConstraints:@[
         [_iconView.widthAnchor  constraintEqualToConstant:26],
         [_iconView.heightAnchor constraintEqualToConstant:26],
-        [stack.leadingAnchor  constraintEqualToAnchor:self.leadingAnchor  constant:2],
-        [stack.trailingAnchor constraintEqualToAnchor:self.trailingAnchor constant:-2],
-        [stack.topAnchor      constraintEqualToAnchor:self.topAnchor      constant:0],
-        [stack.bottomAnchor   constraintEqualToAnchor:self.bottomAnchor   constant:-2],
+        [stack.leadingAnchor      constraintEqualToAnchor:self.leadingAnchor  constant:2],
+        [stack.trailingAnchor     constraintEqualToAnchor:self.trailingAnchor constant:-2],
+        [stack.topAnchor          constraintEqualToAnchor:self.topAnchor      constant:0],
+        [_valueLbl.topAnchor      constraintGreaterThanOrEqualToAnchor:stack.bottomAnchor constant:2],
+        [_valueLbl.leadingAnchor  constraintEqualToAnchor:self.leadingAnchor  constant:2],
+        [_valueLbl.trailingAnchor constraintEqualToAnchor:self.trailingAnchor constant:-2],
+        [_valueLbl.bottomAnchor   constraintEqualToAnchor:self.bottomAnchor   constant:-2],
     ]];
     return self;
 }
@@ -357,6 +369,208 @@ static NSAttributedString *simpleLineAttr(NSString *iconPath, NSString *text, CG
 
 @end
 
+// ── Pollution Info Ticker (Enhanced View header) ─────────────────────────────
+
+@interface WWTickerView : NSView {
+    NSArray<NSDictionary *> *_rawItems;
+    NSMutableArray<NSAttributedString *> *_attrItems;
+    NSString *_lastJSON;
+    NSInteger _currentIndex;
+    NSInteger _staggerIndex;
+    CGFloat _offsetX;
+    CGFloat _fontSize;
+    NSTimer *_timer;
+}
+- (void)updateWithJSON:(NSString *)json;
+- (void)setTickerFontSize:(CGFloat)size;
+- (void)stopScrolling;
+@end
+
+static NSInteger s_tickerStaggerCounter = 0;
+
+static NSColor *wwStatusColorForLevel(int level) {
+    switch (level) {
+        case 1: return [NSColor colorWithRed:0.204 green:0.827 blue:0.600 alpha:1.0]; // #34D399 Good
+        case 2: return [NSColor colorWithRed:0.984 green:0.749 blue:0.141 alpha:1.0]; // #FBBF24 Fair
+        case 3: return [NSColor colorWithRed:0.984 green:0.573 blue:0.235 alpha:1.0]; // #FB923C Moderate
+        case 4: return [NSColor colorWithRed:0.973 green:0.443 blue:0.443 alpha:1.0]; // #F87171 Poor
+        default: return [NSColor colorWithRed:0.753 green:0.518 blue:0.988 alpha:1.0]; // #C084FC Very Poor
+    }
+}
+
+@implementation WWTickerView
+
+- (instancetype)initWithFrame:(NSRect)frameRect {
+    self = [super initWithFrame:frameRect];
+    if (!self) return nil;
+    self.translatesAutoresizingMaskIntoConstraints = NO;
+    self.wantsLayer = YES;
+    self.layer.masksToBounds = YES;
+    _fontSize = 11.0;
+    _staggerIndex = s_tickerStaggerCounter++;
+    _attrItems = [[NSMutableArray alloc] init];
+    [self setContentHuggingPriority:NSLayoutPriorityDefaultLow
+                     forOrientation:NSLayoutConstraintOrientationHorizontal];
+    [self setContentCompressionResistancePriority:NSLayoutPriorityDefaultLow
+                                   forOrientation:NSLayoutConstraintOrientationHorizontal];
+    [self.heightAnchor constraintGreaterThanOrEqualToConstant:18].active = YES;
+    return self;
+}
+
+- (NSSize)intrinsicContentSize {
+    return NSMakeSize(NSViewNoIntrinsicMetric, 18);
+}
+
+- (void)rebuildAttributedItems {
+    [_attrItems removeAllObjects];
+    if (!_rawItems || _rawItems.count == 0) return;
+
+    CGFloat sz = _fontSize > 0 ? _fontSize : 11.0;
+    NSFont *boldFont = [NSFont boldSystemFontOfSize:sz];
+    NSFont *regFont  = [NSFont systemFontOfSize:sz];
+    NSColor *cyanColor = [NSColor colorWithRed:0.0 green:191.0/255.0 blue:1.0 alpha:1.0];
+    NSColor *whiteColor = [NSColor whiteColor];
+
+    for (NSDictionary *item in _rawItems) {
+        NSString *symbol      = item[@"symbol"]      ?: @"";
+        NSString *fullName    = item[@"fullName"]    ?: @"";
+        NSString *statusText  = item[@"statusText"]  ?: @"";
+        int statusLevel       = [item[@"statusLevel"] intValue];
+        NSString *sourcesText = item[@"sourcesText"] ?: @"";
+
+        NSMutableAttributedString *line = [[[NSMutableAttributedString alloc] init] autorelease];
+
+        NSString *headerStr = (fullName.length > 0 && ![fullName isEqualToString:symbol])
+            ? [NSString stringWithFormat:@"%@ (%@): ", symbol, fullName]
+            : [NSString stringWithFormat:@"%@: ", symbol];
+        [line appendAttributedString:[[[NSAttributedString alloc]
+            initWithString:headerStr
+                attributes:@{ NSFontAttributeName: boldFont,
+                              NSForegroundColorAttributeName: whiteColor }] autorelease]];
+
+        NSColor *statusColor = wwStatusColorForLevel(statusLevel);
+        [line appendAttributedString:[[[NSAttributedString alloc]
+            initWithString:statusText
+                attributes:@{ NSFontAttributeName: boldFont,
+                              NSForegroundColorAttributeName: statusColor }] autorelease]];
+
+        NSString *tailStr = [NSString stringWithFormat:@" • %@", sourcesText];
+        [line appendAttributedString:[[[NSAttributedString alloc]
+            initWithString:tailStr
+                attributes:@{ NSFontAttributeName: regFont,
+                              NSForegroundColorAttributeName: cyanColor }] autorelease]];
+
+        [_attrItems addObject:line];
+    }
+}
+
+- (void)updateWithJSON:(NSString *)json {
+    NSString *norm = json ?: @"";
+    if (_lastJSON && [_lastJSON isEqualToString:norm]) {
+        return;
+    }
+    [_lastJSON release];
+    _lastJSON = [norm copy];
+
+    [_rawItems release];
+    _rawItems = nil;
+
+    if (norm.length > 0) {
+        NSData *data = [norm dataUsingEncoding:NSUTF8StringEncoding];
+        id parsed = [NSJSONSerialization JSONObjectWithData:data options:0 error:nil];
+        if ([parsed isKindOfClass:[NSArray class]]) {
+            _rawItems = [parsed retain];
+        }
+    }
+
+    [self rebuildAttributedItems];
+
+    if (_attrItems.count == 0) {
+        [self stopScrolling];
+        self.hidden = YES;
+        [self setNeedsDisplay:YES];
+        return;
+    }
+
+    self.hidden = NO;
+    _currentIndex = _staggerIndex % (NSInteger)_attrItems.count;
+    CGFloat w = self.bounds.size.width;
+    _offsetX = (w > 20) ? w : 360.0;
+    [self startScrolling];
+    [self setNeedsDisplay:YES];
+}
+
+- (void)setTickerFontSize:(CGFloat)size {
+    CGFloat target = size > 0 ? size : 11.0;
+    if (fabs(_fontSize - target) < 0.1) return;
+    _fontSize = target;
+    [self rebuildAttributedItems];
+    [self setNeedsDisplay:YES];
+}
+
+- (void)startScrolling {
+    if (_timer) return;
+    _timer = [[NSTimer scheduledTimerWithTimeInterval:0.033
+                                               target:self
+                                             selector:@selector(onTick:)
+                                             userInfo:nil
+                                              repeats:YES] retain];
+}
+
+- (void)stopScrolling {
+    if (_timer) {
+        [_timer invalidate];
+        [_timer release];
+        _timer = nil;
+    }
+}
+
+- (void)viewDidMoveToSuperview {
+    [super viewDidMoveToSuperview];
+    if (!self.superview) {
+        [self stopScrolling];
+    } else if (_attrItems.count > 0 && !self.hidden) {
+        [self startScrolling];
+    }
+}
+
+- (void)onTick:(NSTimer *)timer {
+    if (_attrItems.count == 0 || self.hidden) return;
+    if (_currentIndex < 0 || _currentIndex >= (NSInteger)_attrItems.count) {
+        _currentIndex = 0;
+    }
+    NSAttributedString *cur = _attrItems[_currentIndex];
+    NSSize sz = [cur size];
+    _offsetX -= 1.6; // ~48pt/sec at 30fps
+    if (_offsetX + sz.width < -12.0) {
+        _currentIndex = (_currentIndex + 1) % _attrItems.count;
+        CGFloat w = self.bounds.size.width;
+        _offsetX = (w > 20) ? w : 360.0;
+    }
+    [self setNeedsDisplay:YES];
+}
+
+- (void)drawRect:(NSRect)dirtyRect {
+    [super drawRect:dirtyRect];
+    if (_attrItems.count == 0 || _currentIndex < 0 || _currentIndex >= (NSInteger)_attrItems.count) {
+        return;
+    }
+    NSAttributedString *cur = _attrItems[_currentIndex];
+    NSSize sz = [cur size];
+    CGFloat y = floor((self.bounds.size.height - sz.height) / 2.0);
+    [cur drawAtPoint:NSMakePoint(_offsetX, y)];
+}
+
+- (void)dealloc {
+    [self stopScrolling];
+    [_rawItems release];
+    [_attrItems release];
+    [_lastJSON release];
+    [super dealloc];
+}
+
+@end
+
 // ── WWCityCardView ────────────────────────────────────────────────────────────
 
 @interface WWCityCardView : NSView
@@ -369,8 +583,10 @@ static NSAttributedString *simpleLineAttr(NSString *iconPath, NSString *text, CG
 @property (nonatomic, strong) NSStackView *rootStack;
 
 // Top labels
-@property (nonatomic, strong) NSTextField *cityLbl;
-@property (nonatomic, strong) NSImageView *iconView;
+@property (nonatomic, strong) NSTextField  *cityLbl;
+@property (nonatomic, strong) WWTickerView *tickerView;
+@property (nonatomic, strong) NSStackView  *headerRow;
+@property (nonatomic, strong) NSImageView  *iconView;
 @property (nonatomic, strong) NSTextField *timeLbl;
 @property (nonatomic, strong) NSTextField *dateLbl;
 @property (nonatomic, strong) NSTextField *tempLbl;
@@ -469,10 +685,24 @@ static void wwSetStr(NSString **slot, NSString *s) {
     _bgOverlayLayer.autoresizingMask = kCALayerWidthSizable | kCALayerHeightSizable;
     [self.layer addSublayer:_bgOverlayLayer];
 
-    // ── City label ────────────────────────────────────────────────────────────
+    // ── City label + Enhanced pollution ticker header ─────────────────────────
     // Plain "City, Region" to match the GTK/Fyne simple + enhanced views. The
     // weather update overwrites this with the same format once data arrives.
     _cityLbl = lbl([NSString stringWithFormat:@"%@, %@", city, region], 14, YES);
+    [_cityLbl setContentHuggingPriority:NSLayoutPriorityRequired
+                         forOrientation:NSLayoutConstraintOrientationHorizontal];
+    [_cityLbl setContentCompressionResistancePriority:NSLayoutPriorityRequired
+                                       forOrientation:NSLayoutConstraintOrientationHorizontal];
+
+    _tickerView = [[WWTickerView alloc] initWithFrame:NSZeroRect];
+    _tickerView.hidden = YES;
+
+    _headerRow = [[NSStackView alloc] initWithFrame:NSZeroRect];
+    _headerRow.orientation = NSUserInterfaceLayoutOrientationHorizontal;
+    _headerRow.alignment   = NSLayoutAttributeCenterY;
+    _headerRow.spacing     = 16;
+    _headerRow.translatesAutoresizingMaskIntoConstraints = NO;
+    [_headerRow.widthAnchor constraintEqualToConstant:kEnhancedCardW - 28].active = YES;
 
     // ── Weather icon ──────────────────────────────────────────────────────────
     _iconView = [[NSImageView alloc] init];
@@ -575,6 +805,10 @@ static void wwSetStr(NSString **slot, NSString *s) {
     _airRow.alignment   = NSLayoutAttributeTop;
     _airRow.spacing = 6;
     _airRow.translatesAutoresizingMaskIntoConstraints = NO;
+    for (WWAirTile *pt in _pollTiles) {
+        [pt.bottomAnchor constraintEqualToAnchor:_airRow.bottomAnchor].active = YES;
+    }
+    [_aqiTile.bottomAnchor constraintEqualToAnchor:_airRow.bottomAnchor].active = YES;
 
     // ── Simple-mode plain-text lines ──────────────────────────────────────────
     // These mirror the classic compact widget (image "simple"): one text line
@@ -659,6 +893,10 @@ static void wwSetStr(NSString **slot, NSString *s) {
         [_middle removeArrangedSubview:v];
         [v removeFromSuperview];
     }
+    for (NSView *v in [_headerRow.arrangedSubviews copy]) {
+        [_headerRow removeArrangedSubview:v];
+        [v removeFromSuperview];
+    }
 
     if (!simple) {
         [_simpleIconRow setViews:@[] inGravity:NSStackViewGravityLeading];
@@ -672,6 +910,9 @@ static void wwSetStr(NSString **slot, NSString *s) {
         _dateLbl.alignment = NSTextAlignmentCenter;
         _tempLbl.alignment = NSTextAlignmentCenter;
         _descLbl.alignment = NSTextAlignmentCenter;
+
+        [_headerRow setViews:@[_cityLbl, _tickerView]
+                   inGravity:NSStackViewGravityLeading];
 
         // Restore the info column to its full enhanced set (time/date/temp/pill/desc).
         [_infoCol setViews:@[_timeLbl, _dateLbl, _tempLbl, _feelsPill, _descLbl]
@@ -697,13 +938,14 @@ static void wwSetStr(NSString **slot, NSString *s) {
 
         _airRow.alignment = NSLayoutAttributeTop;
 
-        [_rootStack setViews:@[_cityLbl, _middle, _airRow, _errorLbl]
+        [_rootStack setViews:@[_headerRow, _middle, _airRow, _errorLbl]
                    inGravity:NSStackViewGravityLeading];
         _rootStack.orientation = NSUserInterfaceLayoutOrientationVertical;
         _rootStack.alignment   = NSLayoutAttributeLeading;
         _rootStack.spacing = 8;
         [_rootStack setEdgeInsets:NSEdgeInsetsMake(12, 14, 12, 14)];
     } else {
+        [_tickerView stopScrolling];
         [self setupFeelsLike];
         [_simpleIconRow setViews:@[_iconView, _feelsLikeBox]
                        inGravity:NSStackViewGravityLeading];
@@ -742,6 +984,9 @@ static void wwSetStr(NSString **slot, NSString *s) {
 }
 
 - (void)dealloc {
+    [_tickerView stopScrolling];
+    [_tickerView release];
+    [_headerRow release];
     [_feelsPill release];
     [_lastFeelsLabel release];
     [_lastFeelsValue release];
@@ -1049,6 +1294,14 @@ static NSString *pollSlotName(int slot) {
     _errorLbl.hidden = !visible;
 }
 
+- (void)setTickerJSON:(NSString *)json {
+    if (_simpleMode) {
+        [_tickerView updateWithJSON:@""];
+        return;
+    }
+    [_tickerView updateWithJSON:json];
+}
+
 - (void)applyFontSizes:(CGFloat)cityTime temp:(CGFloat)temp cond:(CGFloat)cond {
     _cityLbl.font = [NSFont boldSystemFontOfSize:cityTime > 0 ? cityTime : 14];
     _timeLbl.font = [NSFont boldSystemFontOfSize:cityTime > 0 ? cityTime * 1.4 : 20];
@@ -1059,6 +1312,7 @@ static NSString *pollSlotName(int slot) {
     NSFont *descItalic = [[NSFontManager sharedFontManager] convertFont:descBase toHaveTrait:NSItalicFontMask];
     _descLbl.font = descItalic ? descItalic : descBase;
     _feelsPill.label.font = [NSFont boldSystemFontOfSize:cond > 0 ? cond : 11];
+    [_tickerView setTickerFontSize:cond > 0 ? cond : 11];
 
     CGFloat lineSize = cond > 0 ? cond : 10;
     for (NSTextField *l in _simpleMetricLines) l.font = [NSFont systemFontOfSize:lineSize];
@@ -1169,11 +1423,14 @@ void removeAllCards(uintptr_t containerHandle) {
     // dispatch_async here would queue the removal to run AFTER the inline
     // addCityCard calls, wiping out freshly-added cards once the run loop starts.
     run_on_main(^{
+        s_tickerStaggerCounter = 0;
         NSView *container = (__bridge NSView *)(void *)containerHandle;
         for (NSView *v in [container.subviews copy]) {
             if ([v isKindOfClass:[WWCityCardView class]]) {
-                [v removeFromSuperview];
-                CFRelease((__bridge CFTypeRef)v);
+                WWCityCardView *card = (WWCityCardView *)v;
+                [card.tickerView stopScrolling];
+                [card removeFromSuperview];
+                CFRelease((__bridge CFTypeRef)card);
             }
         }
     });
@@ -1281,6 +1538,13 @@ void updateCardPollutant(uintptr_t cardHandle, int slot,
     dispatch_async(dispatch_get_main_queue(), ^{
         [(__bridge WWCityCardView *)(void *)cardHandle
             setPollSlotNS:slot iconPath:nIcon value:nValue];
+    });
+}
+
+void updateCardTicker(uintptr_t cardHandle, const char *itemsJSON) {
+    NSString *nJSON = nsFromC(itemsJSON);
+    dispatch_async(dispatch_get_main_queue(), ^{
+        [(__bridge WWCityCardView *)(void *)cardHandle setTickerJSON:nJSON];
     });
 }
 

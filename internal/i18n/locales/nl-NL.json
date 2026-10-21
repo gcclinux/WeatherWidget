@@ -229,5 +229,17 @@
   "settings.fontSize.subtitle": "Pas de tekstgrootte aan voor elk onderdeel van de widget. Wijzigingen worden direct toegepast.",
   "settings.fontSize.cityTime": "Stad en tijd",
   "settings.fontSize.tempIcon": "Temperatuur en pictogram",
-  "settings.fontSize.conditions": "Weersomstandigheden"
+  "settings.fontSize.conditions": "Weersomstandigheden",
+  "settings.pollution.ticker": "Luchtvervuiling-infoticker",
+  "pollution.ticker.currently": "Momenteel",
+  "pollution.ticker.sources": "Belangrijkste bronnen",
+  "pollution.sources.aqi": "Samengestelde index van alle gemeten stoffen",
+  "pollution.sources.co": "Uitlaatgassen, gaskachels & tabaksrook",
+  "pollution.sources.no": "Voertuigmotoren & ovens van energiecentrales",
+  "pollution.sources.no2": "Diesel- en benzineauto's, centrales, gasverwarming",
+  "pollution.sources.o3": "Zonlicht dat reageert met uitlaatgassen & dampen",
+  "pollution.sources.so2": "Verbranding van kolen & olie, raffinaderijen & schepen",
+  "pollution.sources.nh3": "Landbouw, meststoffen & katalysatoren",
+  "pollution.sources.pm25": "Uitlaatgassen, houtstook & industrie",
+  "pollution.sources.pm10": "Weg- en bouwstof, landbouw & steengroeven"
 }

@@ -3,10 +3,12 @@
 package uitk
 
 import (
+	"fmt"
 	"strings"
 	"time"
 
 	"github.com/gotk3/gotk3/gdk"
+	"github.com/gotk3/gotk3/glib"
 	"github.com/gotk3/gotk3/gtk"
 
 	"weatherwidget/assets"
@@ -84,6 +86,16 @@ type cityPanel struct {
 	tempLbl *gtk.Label
 	descLbl *gtk.Label
 
+	// Pollution info ticker (Enhanced mode top header row, to the right of cityLbl)
+	headerBox     *gtk.Box
+	tickerScroll  *gtk.ScrolledWindow
+	tickerLbl     *gtk.Label
+	tickerItems   []weather.PollutionTickerItem
+	tickerIdx     int
+	tickerStagger int
+	tickerPos     float64
+	tickerStop    chan struct{}
+
 	feelsPill *gtk.Box
 	feelsIcon *gtk.Image
 	feelsLbl  *gtk.Label
@@ -127,9 +139,18 @@ type cityPanel struct {
 	clockStop   chan struct{}
 }
 
+var gtkTickerStaggerCounter int
+
 // newCityPanel creates a new panel for the given city.
 func newCityPanel(city, region, timezone string, lm *i18n.LocaleManager) (*cityPanel, error) {
-	p := &cityPanel{city: city, region: region, timezone: timezone, lm: lm}
+	p := &cityPanel{
+		city:          city,
+		region:        region,
+		timezone:      timezone,
+		lm:            lm,
+		tickerStagger: gtkTickerStaggerCounter,
+	}
+	gtkTickerStaggerCounter++
 
 	// Root box — the card. Vertical: top info region, separator, air row.
 	root, err := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 2)
@@ -142,7 +163,13 @@ func newCityPanel(city, region, timezone string, lm *i18n.LocaleManager) (*cityP
 	root.SetSizeRequest(cardWidth, -1)
 	p.root = root
 
-	// ── Location (top of the card) ───────────────────────────────────────────
+	// ── Location + Pollution Ticker header (top of the card) ─────────────────
+	headerBox, err := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 16)
+	if err != nil {
+		return nil, err
+	}
+	p.headerBox = headerBox
+
 	cityLbl, err := gtk.LabelNew("📍 " + city + ", " + region)
 	if err != nil {
 		return nil, err
@@ -152,7 +179,45 @@ func newCityPanel(city, region, timezone string, lm *i18n.LocaleManager) (*cityP
 	sc, _ = cityLbl.GetStyleContext()
 	sc.AddClass("city-label")
 	p.cityLbl = cityLbl
-	root.PackStart(cityLbl, false, false, 0)
+	headerBox.PackStart(cityLbl, false, false, 0)
+
+	tickerScroll, err := gtk.ScrolledWindowNew(nil, nil)
+	if err != nil {
+		return nil, err
+	}
+	tickerScroll.SetPolicy(gtk.POLICY_EXTERNAL, gtk.POLICY_NEVER)
+	tickerScroll.SetHExpand(true)
+	tickerScroll.SetVAlign(gtk.ALIGN_CENTER)
+	tickerScroll.SetSizeRequest(80, 20)
+	tickerScroll.SetNoShowAll(true)
+
+	tickerTrack, err := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 0)
+	if err != nil {
+		return nil, err
+	}
+	leftPad, _ := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 0)
+	leftPad.SetSizeRequest(340, 1)
+	rightPad, _ := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 0)
+	rightPad.SetSizeRequest(340, 1)
+
+	tickerLbl, err := gtk.LabelNew("")
+	if err != nil {
+		return nil, err
+	}
+	tickerLbl.SetSingleLineMode(true)
+	tickerLbl.SetVAlign(gtk.ALIGN_CENTER)
+	p.tickerLbl = tickerLbl
+
+	tickerTrack.PackStart(leftPad, false, false, 0)
+	tickerTrack.PackStart(tickerLbl, false, false, 0)
+	tickerTrack.PackStart(rightPad, false, false, 0)
+	tickerScroll.Add(tickerTrack)
+	tickerTrack.ShowAll()
+	tickerScroll.Hide()
+	p.tickerScroll = tickerScroll
+	headerBox.PackStart(tickerScroll, true, true, 0)
+
+	root.PackStart(headerBox, false, false, 0)
 
 	// ── Top region: [ left info block ] [ metrics grid ] ─────────────────────
 	topRegion, err := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 12)
@@ -378,7 +443,7 @@ func newCityPanel(city, region, timezone string, lm *i18n.LocaleManager) (*cityP
 		tileValue.SetJustify(gtk.JUSTIFY_CENTER)
 		sc, _ = tileValue.GetStyleContext()
 		sc.AddClass("air-label")
-		tile.PackStart(tileValue, false, false, 0)
+		tile.PackEnd(tileValue, false, false, 0)
 
 		// AQI goes directly in the main pollution box (left-aligned)
 		// All other metrics go in the right-aligned box
@@ -614,6 +679,114 @@ func (p *cityPanel) applyPollutionRows(pf *config.PollutionFields) {
 		} else {
 			w.row.Hide()
 		}
+	}
+
+	p.applyTicker(pf)
+}
+
+func gtkStatusColorHex(level int) string {
+	switch level {
+	case 1:
+		return "#34D399" // Good
+	case 2:
+		return "#FBBF24" // Fair
+	case 3:
+		return "#FB923C" // Moderate
+	case 4:
+		return "#F87171" // Poor
+	default:
+		return "#C084FC" // Very Poor
+	}
+}
+
+func formatTickerItemMarkup(it weather.PollutionTickerItem) string {
+	header := it.Symbol
+	if it.FullName != "" && it.FullName != it.Symbol {
+		header = fmt.Sprintf("%s (%s)", it.Symbol, it.FullName)
+	}
+	return fmt.Sprintf(
+		"<span foreground='#FFFFFF' weight='bold'>%s: </span>"+
+			"<span foreground='%s' weight='bold'>%s</span>"+
+			"<span foreground='#00BFFF'> • %s</span>",
+		glib.MarkupEscapeText(header),
+		gtkStatusColorHex(it.StatusLevel),
+		glib.MarkupEscapeText(it.StatusText),
+		glib.MarkupEscapeText(it.SourcesText),
+	)
+}
+
+func (p *cityPanel) applyTicker(pf *config.PollutionFields) {
+	items := weather.PlanPollutionTicker(pf, weather.PollutionOf(p.lastData), p.lm)
+	if len(items) == 0 {
+		p.stopTicker()
+		p.tickerItems = nil
+		if p.tickerScroll != nil {
+			p.tickerScroll.Hide()
+		}
+		return
+	}
+
+	same := len(items) == len(p.tickerItems)
+	if same {
+		for i := range items {
+			if items[i] != p.tickerItems[i] {
+				same = false
+				break
+			}
+		}
+	}
+	p.tickerItems = items
+	if p.tickerScroll != nil {
+		p.tickerScroll.Show()
+	}
+	if same && p.tickerStop != nil {
+		return
+	}
+
+	p.stopTicker()
+	p.tickerIdx = p.tickerStagger % len(p.tickerItems)
+	p.tickerPos = 0
+	p.tickerLbl.SetMarkup(formatTickerItemMarkup(p.tickerItems[p.tickerIdx]))
+	if hadj := p.tickerScroll.GetHAdjustment(); hadj != nil {
+		hadj.SetValue(0)
+	}
+
+	stopCh := make(chan struct{})
+	p.tickerStop = stopCh
+	go func(stop <-chan struct{}) {
+		ticker := time.NewTicker(33 * time.Millisecond)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-stop:
+				return
+			case <-ticker.C:
+				runOnUI(func() {
+					if len(p.tickerItems) == 0 || p.tickerScroll == nil || !p.tickerScroll.GetVisible() {
+						return
+					}
+					hadj := p.tickerScroll.GetHAdjustment()
+					if hadj == nil {
+						return
+					}
+					p.tickerPos += 1.6
+					maxScroll := hadj.GetUpper() - hadj.GetPageSize()
+					if maxScroll > 40 && p.tickerPos >= maxScroll {
+						p.tickerIdx = (p.tickerIdx + 1) % len(p.tickerItems)
+						p.tickerLbl.SetMarkup(formatTickerItemMarkup(p.tickerItems[p.tickerIdx]))
+						p.tickerPos = 0
+					}
+					hadj.SetValue(p.tickerPos)
+				})
+			}
+		}
+	}(stopCh)
+}
+
+func (p *cityPanel) stopTicker() {
+	if p.tickerStop != nil {
+		close(p.tickerStop)
+		p.tickerStop = nil
 	}
 }
 
@@ -976,6 +1149,7 @@ func (p *cityPanel) startClock() {
 
 // stopClock stops the clock goroutine.
 func (p *cityPanel) stopClock() {
+	p.stopTicker()
 	if p.clockStop != nil {
 		close(p.clockStop)
 		p.clockStop = nil

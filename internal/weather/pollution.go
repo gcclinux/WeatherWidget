@@ -228,3 +228,310 @@ func PlanPollutionRows(fields *config.PollutionFields, d PollutionData, lm ...*i
 	}
 	return rows
 }
+
+// PollutionTickerItem represents one planned ticker sentence for a selected,
+// present air-quality metric in Enhanced mode.
+type PollutionTickerItem struct {
+	Metric       PollutionMetric
+	Symbol       string // e.g. "PM2.5", "NO₂", "O₃", "AQI"
+	FullName     string // localized full name, e.g. "Particulate 2.5"
+	CurrentlyLbl string // localized "Currently"
+	StatusText   string // localized qualitative status, e.g. "Good"
+	StatusLevel  int    // 1=Good, 2=Fair, 3=Moderate, 4=Poor, 5=Very Poor
+	SourcesLbl   string // localized "Primary sources"
+	SourcesText  string // localized primary sources list
+}
+
+var pollutantMeta = map[PollutionMetric]struct {
+	symbol         string
+	nameKey        string
+	nameFallback   string
+	sourceKey      string
+	sourceFallback string
+}{
+	MetricAQI: {
+		symbol:         "AQI",
+		nameKey:        "pollution.aqi",
+		nameFallback:   "Air Quality Index",
+		sourceKey:      "pollution.sources.aqi",
+		sourceFallback: "Composite index of all monitored air pollutants",
+	},
+	MetricCO: {
+		symbol:         "CO",
+		nameKey:        "pollution.co",
+		nameFallback:   "Carbon Monoxide",
+		sourceKey:      "pollution.sources.co",
+		sourceFallback: "Vehicle exhaust, gas heaters & tobacco smoke",
+	},
+	MetricNO: {
+		symbol:         "NO",
+		nameKey:        "pollution.no",
+		nameFallback:   "Nitric Oxide",
+		sourceKey:      "pollution.sources.no",
+		sourceFallback: "Vehicle engines & power plant furnaces",
+	},
+	MetricNO2: {
+		symbol:         "NO₂",
+		nameKey:        "pollution.no2",
+		nameFallback:   "Nitrogen Dioxide",
+		sourceKey:      "pollution.sources.no2",
+		sourceFallback: "Diesel & petrol vehicles, power plants, gas heating",
+	},
+	MetricO3: {
+		symbol:         "O₃",
+		nameKey:        "pollution.o3",
+		nameFallback:   "Ozone",
+		sourceKey:      "pollution.sources.o3",
+		sourceFallback: "Sunlight reacting with vehicle exhaust & fumes",
+	},
+	MetricSO2: {
+		symbol:         "SO₂",
+		nameKey:        "pollution.so2",
+		nameFallback:   "Sulphur Dioxide",
+		sourceKey:      "pollution.sources.so2",
+		sourceFallback: "Coal & oil burning, refineries & shipping fuel",
+	},
+	MetricNH3: {
+		symbol:         "NH₃",
+		nameKey:        "pollution.nh3",
+		nameFallback:   "Ammonia",
+		sourceKey:      "pollution.sources.nh3",
+		sourceFallback: "Agriculture, fertilizers & vehicle catalysts",
+	},
+	MetricPM25: {
+		symbol:         "PM2.5",
+		nameKey:        "pollution.pm25",
+		nameFallback:   "Particulate 2.5",
+		sourceKey:      "pollution.sources.pm25",
+		sourceFallback: "Vehicle exhaust, wood burning & industry",
+	},
+	MetricPM10: {
+		symbol:         "PM10",
+		nameKey:        "pollution.pm10",
+		nameFallback:   "Particulate 10",
+		sourceKey:      "pollution.sources.pm10",
+		sourceFallback: "Road & construction dust, farming & quarries",
+	},
+}
+
+// PollutantSymbol returns the short chemical/index symbol for a metric (e.g. "NO₂", "PM2.5").
+func PollutantSymbol(m PollutionMetric) string {
+	return pollutantMeta[m].symbol
+}
+
+// PollutantLevel maps a pollutant concentration (µg/m³) to a 1-5 status level
+// (1=Good, 2=Fair, 3=Moderate, 4=Poor, 5=Very Poor) using the UK DAQI and
+// OpenWeather environmental thresholds.
+func PollutantLevel(m PollutionMetric, val float64) int {
+	switch m {
+	case MetricPM25:
+		switch {
+		case val <= 11:
+			return 1
+		case val <= 35:
+			return 2
+		case val <= 53:
+			return 3
+		case val <= 70:
+			return 4
+		default:
+			return 5
+		}
+	case MetricPM10:
+		switch {
+		case val <= 16:
+			return 1
+		case val <= 50:
+			return 2
+		case val <= 75:
+			return 3
+		case val <= 100:
+			return 4
+		default:
+			return 5
+		}
+	case MetricNO2:
+		switch {
+		case val <= 67:
+			return 1
+		case val <= 200:
+			return 2
+		case val <= 400:
+			return 3
+		case val <= 600:
+			return 4
+		default:
+			return 5
+		}
+	case MetricO3:
+		switch {
+		case val <= 33:
+			return 1
+		case val <= 100:
+			return 2
+		case val <= 160:
+			return 3
+		case val <= 240:
+			return 4
+		default:
+			return 5
+		}
+	case MetricSO2:
+		switch {
+		case val <= 88:
+			return 1
+		case val <= 266:
+			return 2
+		case val <= 532:
+			return 3
+		case val <= 1064:
+			return 4
+		default:
+			return 5
+		}
+	case MetricCO:
+		switch {
+		case val < 4400:
+			return 1
+		case val < 9400:
+			return 2
+		case val < 12400:
+			return 3
+		case val < 15400:
+			return 4
+		default:
+			return 5
+		}
+	case MetricNO:
+		switch {
+		case val < 20:
+			return 1
+		case val < 50:
+			return 2
+		case val < 80:
+			return 3
+		case val < 100:
+			return 4
+		default:
+			return 5
+		}
+	case MetricNH3:
+		switch {
+		case val < 40:
+			return 1
+		case val < 100:
+			return 2
+		case val < 150:
+			return 3
+		case val < 200:
+			return 4
+		default:
+			return 5
+		}
+	default:
+		return 1
+	}
+}
+
+// PlanPollutionTicker returns the localized ticker items for all metrics that
+// are selected in fields AND present in d, when fields.ShowTicker is true.
+// Returns nil when fields is nil or fields.ShowTicker is false.
+func PlanPollutionTicker(fields *config.PollutionFields, d PollutionData, lm ...*i18n.LocaleManager) []PollutionTickerItem {
+	if fields == nil || !fields.ShowTicker {
+		return nil
+	}
+
+	var localeMgr *i18n.LocaleManager
+	if len(lm) > 0 {
+		localeMgr = lm[0]
+	}
+
+	currentlyLbl := tr(localeMgr, "pollution.ticker.currently", "Currently")
+	sourcesLbl := tr(localeMgr, "pollution.ticker.sources", "Primary sources")
+
+	var items []PollutionTickerItem
+	for _, m := range PollutionMetricOrder {
+		var (
+			selected bool
+			present  bool
+			level    int
+		)
+		switch m {
+		case MetricAQI:
+			selected = fields.ShowAQI
+			if d.AQI != nil {
+				present = true
+				lvl := *d.AQI
+				if lvl < 1 {
+					lvl = 1
+				} else if lvl > 5 {
+					lvl = 5
+				}
+				level = lvl
+			}
+		case MetricCO:
+			selected = fields.ShowCO
+			if d.CO != nil {
+				present = true
+				level = PollutantLevel(m, *d.CO)
+			}
+		case MetricNO:
+			selected = fields.ShowNO
+			if d.NO != nil {
+				present = true
+				level = PollutantLevel(m, *d.NO)
+			}
+		case MetricNO2:
+			selected = fields.ShowNO2
+			if d.NO2 != nil {
+				present = true
+				level = PollutantLevel(m, *d.NO2)
+			}
+		case MetricO3:
+			selected = fields.ShowO3
+			if d.O3 != nil {
+				present = true
+				level = PollutantLevel(m, *d.O3)
+			}
+		case MetricSO2:
+			selected = fields.ShowSO2
+			if d.SO2 != nil {
+				present = true
+				level = PollutantLevel(m, *d.SO2)
+			}
+		case MetricNH3:
+			selected = fields.ShowNH3
+			if d.NH3 != nil {
+				present = true
+				level = PollutantLevel(m, *d.NH3)
+			}
+		case MetricPM25:
+			selected = fields.ShowPM25
+			if d.PM25 != nil {
+				present = true
+				level = PollutantLevel(m, *d.PM25)
+			}
+		case MetricPM10:
+			selected = fields.ShowPM10
+			if d.PM10 != nil {
+				present = true
+				level = PollutantLevel(m, *d.PM10)
+			}
+		}
+
+		if selected && present {
+			meta := pollutantMeta[m]
+			items = append(items, PollutionTickerItem{
+				Metric:       m,
+				Symbol:       meta.symbol,
+				FullName:     tr(localeMgr, meta.nameKey, meta.nameFallback),
+				CurrentlyLbl: currentlyLbl,
+				StatusText:   AQICategoryLocalized(level, localeMgr),
+				StatusLevel:  level,
+				SourcesLbl:   sourcesLbl,
+				SourcesText:  tr(localeMgr, meta.sourceKey, meta.sourceFallback),
+			})
+		}
+	}
+	return items
+}

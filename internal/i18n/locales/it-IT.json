@@ -229,5 +229,17 @@
   "settings.fontSize.subtitle": "Regola la dimensione del testo per ogni parte del widget. Le modifiche vengono applicate immediatamente.",
   "settings.fontSize.cityTime": "Città e ora",
   "settings.fontSize.tempIcon": "Temperatura e icona",
-  "settings.fontSize.conditions": "Condizioni meteo"
+  "settings.fontSize.conditions": "Condizioni meteo",
+  "settings.pollution.ticker": "Ticker info inquinamento",
+  "pollution.ticker.currently": "Attualmente",
+  "pollution.ticker.sources": "Fonti principali",
+  "pollution.sources.aqi": "Indice complessivo di tutti gli inquinanti monitorati",
+  "pollution.sources.co": "Gas di scarico, stufe a gas e fumo di tabacco",
+  "pollution.sources.no": "Motori di veicoli e caldaie di centrali elettriche",
+  "pollution.sources.no2": "Veicoli diesel e benzina, centrali e riscaldamento a gas",
+  "pollution.sources.o3": "Luce solare che reagisce con gas di scarico e vapori",
+  "pollution.sources.so2": "Combustione di carbone e petrolio, raffinerie e navi",
+  "pollution.sources.nh3": "Agricoltura, fertilizzanti e catalizzatori",
+  "pollution.sources.pm25": "Gas di scarico, combustione di legna e industria",
+  "pollution.sources.pm10": "Polveri stradali e da cantiere, agricoltura e cave"
 }

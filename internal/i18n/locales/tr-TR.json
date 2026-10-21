@@ -229,5 +229,17 @@
   "settings.fontSize.subtitle": "Widgetin her bölümü için metin boyutunu ayarlayın. Değişiklikler anında uygulanır.",
   "settings.fontSize.cityTime": "Şehir ve Saat",
   "settings.fontSize.tempIcon": "Sıcaklık ve Simge",
-  "settings.fontSize.conditions": "Hava Koşulları"
+  "settings.fontSize.conditions": "Hava Koşulları",
+  "settings.pollution.ticker": "Kirlilik Bilgi Kayan Yazısı",
+  "pollution.ticker.currently": "Şu anda",
+  "pollution.ticker.sources": "Başlıca kaynaklar",
+  "pollution.sources.aqi": "İzlenen tüm kirleticilerin birleşik hava kalitesi endeksi",
+  "pollution.sources.co": "Araç egzozu, gaz sobaları ve tütün dumanı",
+  "pollution.sources.no": "Araç motorları ve termik santral fırınları",
+  "pollution.sources.no2": "Dizel ve benzinli araçlar, santraller, gazlı ısıtma",
+  "pollution.sources.o3": "Güneş ışığının egzoz ve dumanlarla reaksiyonu",
+  "pollution.sources.so2": "Kömür ve petrol yakımı, rafineriler ve gemi yakıtı",
+  "pollution.sources.nh3": "Tarım, gübreler ve araç katalitik konvertörleri",
+  "pollution.sources.pm25": "Araç egzozu, odun yakma ve sanayi",
+  "pollution.sources.pm10": "Yol ve inşaat tozu, tarım ve taş ocakları"
 }

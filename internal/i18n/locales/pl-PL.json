@@ -229,5 +229,17 @@
   "settings.fontSize.subtitle": "Dostosuj rozmiar tekstu dla każdej części widżetu. Zmiany są natychmiast widoczne.",
   "settings.fontSize.cityTime": "Miasto i godzina",
   "settings.fontSize.tempIcon": "Temperatura i ikona",
-  "settings.fontSize.conditions": "Warunki pogodowe"
+  "settings.fontSize.conditions": "Warunki pogodowe",
+  "settings.pollution.ticker": "Pasek informacyjny o zanieczyszczeniach",
+  "pollution.ticker.currently": "Obecnie",
+  "pollution.ticker.sources": "Główne źródła",
+  "pollution.sources.aqi": "Złożony wskaźnik wszystkich monitorowanych zanieczyszczeń",
+  "pollution.sources.co": "Spaliny samochodowe, piecyki gazowe i dym tytoniowy",
+  "pollution.sources.no": "Silniki spalinowe i piece w elektrowniach",
+  "pollution.sources.no2": "Pojazdy Diesla i benzynowe, elektrownie, ogrzewanie gazowe",
+  "pollution.sources.o3": "Światło słoneczne reagujące ze spalinami i oparami",
+  "pollution.sources.so2": "Spalanie węgla i oleju, rafinerie i żegluga",
+  "pollution.sources.nh3": "Rolnictwo, nawozy sztuczne i katalizatory",
+  "pollution.sources.pm25": "Spaliny samochodowe, spalanie drewna i przemysł",
+  "pollution.sources.pm10": "Pył drogowy i budowlany, rolnictwo i kamieniołomy"
 }

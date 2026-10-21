@@ -230,5 +230,17 @@
   "settings.fontSize.subtitle": "ウィジェットの各エリアの文字サイズを調整します。変更はリアルタイムに反映されます。",
   "settings.fontSize.cityTime": "都市名 & 時刻",
   "settings.fontSize.tempIcon": "気温 & アイコン",
-  "settings.fontSize.conditions": "気象情報"
+  "settings.fontSize.conditions": "気象情報",
+  "settings.pollution.ticker": "大気汚染情報ティッカー",
+  "pollution.ticker.currently": "現在",
+  "pollution.ticker.sources": "主な発生源",
+  "pollution.sources.aqi": "監視対象の大気汚染物質の総合大気質指数",
+  "pollution.sources.co": "自動車の排気ガス、ガス暖房、タバコの煙",
+  "pollution.sources.no": "自動車エンジン、発電所の燃焼炉",
+  "pollution.sources.no2": "ディーゼル・ガソリン車、発電所、ガス暖房",
+  "pollution.sources.o3": "排気ガスや溶剤と太陽光との光化学反応",
+  "pollution.sources.so2": "石炭・重油の燃焼、製油所、船舶燃料",
+  "pollution.sources.nh3": "農業・畜産、化学肥料、自動車の触媒",
+  "pollution.sources.pm25": "自動車の排気ガス、薪の燃焼、工場排煙",
+  "pollution.sources.pm10": "道路や建設現場の粉塵、農作業、採石場"
 }

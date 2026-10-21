@@ -230,5 +230,17 @@
   "settings.fontSize.subtitle": "分别调整小组件各区域的文字大小。调整后立即实时生效。",
   "settings.fontSize.cityTime": "城市与时间",
   "settings.fontSize.tempIcon": "温度与图标",
-  "settings.fontSize.conditions": "天气状况"
+  "settings.fontSize.conditions": "天气状况",
+  "settings.pollution.ticker": "污染信息滚动条",
+  "pollution.ticker.currently": "当前",
+  "pollution.ticker.sources": "主要来源",
+  "pollution.sources.aqi": "基于所有监测污染物的综合空气质量指数",
+  "pollution.sources.co": "汽车尾气、燃气取暖设备及烟草烟雾",
+  "pollution.sources.no": "机动车发动机与发电厂燃烧炉",
+  "pollution.sources.no2": "柴油和汽油车辆、发电厂、燃气供暖",
+  "pollution.sources.o3": "阳光与汽车尾气及工业挥发物的光化学反应",
+  "pollution.sources.so2": "煤炭与重油燃烧、炼油厂及船舶燃料",
+  "pollution.sources.nh3": "农业畜牧、化肥及机动车三元催化器",
+  "pollution.sources.pm25": "机动车尾气、木材燃烧与工业排放",
+  "pollution.sources.pm10": "道路与建筑扬尘、农业耕作及采石场"
 }

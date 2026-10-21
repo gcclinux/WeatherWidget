@@ -9,6 +9,7 @@ package uidarwin
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"os"
@@ -505,6 +506,41 @@ func (m *manager) updateCard(card uintptr, d *weather.WeatherData) {
 		}
 		iconPath := resolveAirIconPath(row.IconFile)
 		nativeUpdateCardPollutant(card, slot, iconPath, row.ValueText)
+	}
+
+	// Pollution info ticker (Enhanced mode only).
+	if m.viewMode != config.ViewModeSimple {
+		tickerItems := weather.PlanPollutionTicker(pf, pd, m.lm)
+		if len(tickerItems) > 0 {
+			type tickerDTO struct {
+				Symbol       string `json:"symbol"`
+				FullName     string `json:"fullName"`
+				CurrentlyLbl string `json:"currentlyLbl"`
+				StatusText   string `json:"statusText"`
+				StatusLevel  int    `json:"statusLevel"`
+				SourcesLbl   string `json:"sourcesLbl"`
+				SourcesText  string `json:"sourcesText"`
+			}
+			dtos := make([]tickerDTO, len(tickerItems))
+			for i, it := range tickerItems {
+				dtos[i] = tickerDTO{
+					Symbol:       it.Symbol,
+					FullName:     it.FullName,
+					CurrentlyLbl: it.CurrentlyLbl,
+					StatusText:   it.StatusText,
+					StatusLevel:  it.StatusLevel,
+					SourcesLbl:   it.SourcesLbl,
+					SourcesText:  it.SourcesText,
+				}
+			}
+			if b, err := json.Marshal(dtos); err == nil {
+				nativeUpdateCardTicker(card, string(b))
+			}
+		} else {
+			nativeUpdateCardTicker(card, "")
+		}
+	} else {
+		nativeUpdateCardTicker(card, "")
 	}
 }
 

@@ -1454,6 +1454,8 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 		chkPM25.Checked = pf.ShowPM25
 		chkPM10 := widget.NewCheck(u.t("settings.pollution.pm10"), nil)
 		chkPM10.Checked = pf.ShowPM10
+		chkTicker := widget.NewCheck(u.t("settings.pollution.ticker"), nil)
+		chkTicker.Checked = pf.ShowTicker
 
 		if !isPro {
 			chkAQI.Disable()
@@ -1465,19 +1467,21 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 			chkNH3.Disable()
 			chkPM25.Disable()
 			chkPM10.Disable()
+			chkTicker.Disable()
 		}
 
 		updatePollutionFields := func() {
 			state.pollutionFields = &config.PollutionFields{
-				ShowAQI:  chkAQI.Checked,
-				ShowCO:   chkCO.Checked,
-				ShowNO:   chkNO.Checked,
-				ShowNO2:  chkNO2.Checked,
-				ShowO3:   chkO3.Checked,
-				ShowSO2:  chkSO2.Checked,
-				ShowNH3:  chkNH3.Checked,
-				ShowPM25: chkPM25.Checked,
-				ShowPM10: chkPM10.Checked,
+				ShowAQI:    chkAQI.Checked,
+				ShowCO:     chkCO.Checked,
+				ShowNO:     chkNO.Checked,
+				ShowNO2:    chkNO2.Checked,
+				ShowO3:     chkO3.Checked,
+				ShowSO2:    chkSO2.Checked,
+				ShowNH3:    chkNH3.Checked,
+				ShowPM25:   chkPM25.Checked,
+				ShowPM10:   chkPM10.Checked,
+				ShowTicker: chkTicker.Checked,
 			}
 		}
 		chkAQI.OnChanged = func(_ bool) { updatePollutionFields() }
@@ -1489,11 +1493,12 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 		chkNH3.OnChanged = func(_ bool) { updatePollutionFields() }
 		chkPM25.OnChanged = func(_ bool) { updatePollutionFields() }
 		chkPM10.OnChanged = func(_ bool) { updatePollutionFields() }
+		chkTicker.OnChanged = func(_ bool) { updatePollutionFields() }
 
 		pollutionChecks := container.NewGridWithColumns(4,
 			chkAQI, chkCO, chkNO, chkNO2,
 			chkO3, chkSO2, chkNH3, chkPM25,
-			chkPM10,
+			chkPM10, chkTicker,
 		)
 
 		pollutionProNoteBg := canvas.NewRectangle(color.NRGBA{R: 14, G: 165, B: 233, A: 25})
