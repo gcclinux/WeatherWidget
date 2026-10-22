@@ -716,7 +716,7 @@ func formatTickerItemMarkup(it weather.PollutionTickerItem) string {
 }
 
 func (p *cityPanel) applyTicker(pf *config.PollutionFields) {
-	items := weather.PlanPollutionTicker(pf, weather.PollutionOf(p.lastData), p.lm)
+	items := weather.PlanPollutionTickerWithWeather(pf, p.lastData, p.lastUnit, p.lm)
 	if len(items) == 0 {
 		p.stopTicker()
 		p.tickerItems = nil

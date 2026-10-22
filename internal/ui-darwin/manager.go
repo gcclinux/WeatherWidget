@@ -510,7 +510,7 @@ func (m *manager) updateCard(card uintptr, d *weather.WeatherData) {
 
 	// Pollution info ticker (Enhanced mode only).
 	if m.viewMode != config.ViewModeSimple {
-		tickerItems := weather.PlanPollutionTicker(pf, pd, m.lm)
+		tickerItems := weather.PlanPollutionTickerWithWeather(pf, d, tempUnit, m.lm)
 		if len(tickerItems) > 0 {
 			type tickerDTO struct {
 				Symbol       string `json:"symbol"`

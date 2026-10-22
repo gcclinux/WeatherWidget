@@ -92,21 +92,21 @@ const (
 
 // Config holds the complete application configuration.
 type Config struct {
-	DataSource      DataSourceType  `json:"dataSource"`
-	Cities          []CityConfig    `json:"cities"`
-	RefreshInterval int             `json:"refreshInterval"` // minutes, 1–60, default 10
-	CornerPosition  string          `json:"cornerPosition"`  // "top-left"|"top-right"|"bottom-left"|"bottom-right"
-	MonitorIndex    int             `json:"monitorIndex"`    // 0-based monitor index; 0 = primary
-	CustomX         *int            `json:"customX,omitempty"`
-	CustomY         *int            `json:"customY,omitempty"`
-	Opacity         int             `json:"opacity"`                // 25, 50, 75, or 100 (percent)
-	NoBackground    bool            `json:"noBackground,omitempty"` // remove panel background (GTK Linux)
-	NoBorder        bool            `json:"noBorder,omitempty"`     // remove window decorations (GTK Linux)
-	Locale          string          `json:"locale"`
-	TemperatureUnit TemperatureUnit `json:"temperatureUnit,omitempty"`
-	WindSpeedUnit   WindSpeedUnit   `json:"windSpeedUnit,omitempty"`
-	IconTheme       IconTheme       `json:"iconTheme,omitempty"`
-	ViewMode        ViewMode        `json:"viewMode,omitempty"` // "enhanced" or "simple" layout
+	DataSource      DataSourceType   `json:"dataSource"`
+	Cities          []CityConfig     `json:"cities"`
+	RefreshInterval int              `json:"refreshInterval"` // minutes, 1–60, default 10
+	CornerPosition  string           `json:"cornerPosition"`  // "top-left"|"top-right"|"bottom-left"|"bottom-right"
+	MonitorIndex    int              `json:"monitorIndex"`    // 0-based monitor index; 0 = primary
+	CustomX         *int             `json:"customX,omitempty"`
+	CustomY         *int             `json:"customY,omitempty"`
+	Opacity         int              `json:"opacity"`                // 25, 50, 75, or 100 (percent)
+	NoBackground    bool             `json:"noBackground,omitempty"` // remove panel background (GTK Linux)
+	NoBorder        bool             `json:"noBorder,omitempty"`     // remove window decorations (GTK Linux)
+	Locale          string           `json:"locale"`
+	TemperatureUnit TemperatureUnit  `json:"temperatureUnit,omitempty"`
+	WindSpeedUnit   WindSpeedUnit    `json:"windSpeedUnit,omitempty"`
+	IconTheme       IconTheme        `json:"iconTheme,omitempty"`
+	ViewMode        ViewMode         `json:"viewMode,omitempty"` // "enhanced" or "simple" layout
 	DisplayFields   *DisplayFields   `json:"displayFields,omitempty"`
 	PollutionFields *PollutionFields `json:"pollutionFields,omitempty"`
 	APIConfig       *APIConfig       `json:"apiConfig,omitempty"`
@@ -167,40 +167,69 @@ func (c *Config) GetDisplayFields() *DisplayFields {
 	return DefaultDisplayFields()
 }
 
+// TickerProfile controls how cautious the environmental ticker should be when
+// turning pollution levels into practical guidance. It is a local preference,
+// not health information, and is only used by the Pro pollution ticker.
+type TickerProfile string
+
+const (
+	TickerProfileEveryday    TickerProfile = "everyday"
+	TickerProfileActive      TickerProfile = "active"
+	TickerProfileFamily      TickerProfile = "family"
+	TickerProfileSensitive   TickerProfile = "sensitive"
+	TickerProfileVentilation TickerProfile = "ventilation"
+)
+
+// NormalizeTickerProfile returns a safe default for missing or invalid values.
+// The empty value intentionally maps to Everyday Outdoors so existing saved
+// configurations gain the enhanced ticker without a migration step.
+func NormalizeTickerProfile(p TickerProfile) TickerProfile {
+	switch p {
+	case TickerProfileEveryday, TickerProfileActive, TickerProfileFamily, TickerProfileSensitive, TickerProfileVentilation:
+		return p
+	default:
+		return TickerProfileEveryday
+	}
+}
+
 // PollutionFields controls which air quality and pollution metrics are visible.
 type PollutionFields struct {
-	ShowCO     bool `json:"showCO"`
-	ShowNO     bool `json:"showNO"`
-	ShowNO2    bool `json:"showNO2"`
-	ShowO3     bool `json:"showO3"`
-	ShowSO2    bool `json:"showSO2"`
-	ShowNH3    bool `json:"showNH3"`
-	ShowPM25   bool `json:"showPM25"`
-	ShowPM10   bool `json:"showPM10"`
-	ShowAQI    bool `json:"showAQI,omitempty"`
-	ShowTicker bool `json:"showTicker,omitempty"`
+	ShowCO        bool          `json:"showCO"`
+	ShowNO        bool          `json:"showNO"`
+	ShowNO2       bool          `json:"showNO2"`
+	ShowO3        bool          `json:"showO3"`
+	ShowSO2       bool          `json:"showSO2"`
+	ShowNH3       bool          `json:"showNH3"`
+	ShowPM25      bool          `json:"showPM25"`
+	ShowPM10      bool          `json:"showPM10"`
+	ShowAQI       bool          `json:"showAQI,omitempty"`
+	ShowTicker    bool          `json:"showTicker,omitempty"`
+	TickerProfile TickerProfile `json:"tickerProfile,omitempty"`
 }
 
 // DefaultPollutionFields returns a PollutionFields with all metrics initially off.
 func DefaultPollutionFields() *PollutionFields {
 	return &PollutionFields{
-		ShowCO:     false,
-		ShowNO:     false,
-		ShowNO2:    false,
-		ShowO3:     false,
-		ShowSO2:    false,
-		ShowNH3:    false,
-		ShowPM25:   false,
-		ShowPM10:   false,
-		ShowAQI:    false,
-		ShowTicker: false,
+		ShowCO:        false,
+		ShowNO:        false,
+		ShowNO2:       false,
+		ShowO3:        false,
+		ShowSO2:       false,
+		ShowNH3:       false,
+		ShowPM25:      false,
+		ShowPM10:      false,
+		ShowAQI:       false,
+		ShowTicker:    false,
+		TickerProfile: TickerProfileEveryday,
 	}
 }
 
 // GetPollutionFields returns the config's PollutionFields, or defaults if nil.
 func (c *Config) GetPollutionFields() *PollutionFields {
 	if c.PollutionFields != nil {
-		return c.PollutionFields
+		fields := *c.PollutionFields
+		fields.TickerProfile = NormalizeTickerProfile(fields.TickerProfile)
+		return &fields
 	}
 	return DefaultPollutionFields()
 }

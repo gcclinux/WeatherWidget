@@ -184,6 +184,7 @@ static inline NSNumber *jbool(BOOL v) { return v ? @YES : @NO; }
 @property (nonatomic, strong) NSButton *pfPM25;
 @property (nonatomic, strong) NSButton *pfPM10;
 @property (nonatomic, strong) NSButton *pfTicker;
+@property (nonatomic, strong) NSPopUpButton *pfTickerProfile;
 // Widget tab — units
 @property (nonatomic, strong) NSButton *tempCelsius;
 @property (nonatomic, strong) NSButton *tempFahrenheit;
@@ -1153,9 +1154,9 @@ static WWSettingsController *g_settingsController = nil;
     item.label = [self L:@"settings.tab.widget" fallback:@"Widget"];
 
     WWSettingsController *weakSelf = self;
-    NSScrollView *scroll = [self scrollableWithDocumentHeight:620 buildBlock:^(NSView *doc) {
+    NSScrollView *scroll = [self scrollableWithDocumentHeight:640 buildBlock:^(NSView *doc) {
         WWSettingsController *s = weakSelf;
-        CGFloat y = 586;
+        CGFloat y = 606;
 
         // Panel display fields.
         [doc addSubview:[s label:[s L:@"settings.display.title" fallback:@"Panel Display"] frame:NSMakeRect(16, y, 300, 20) bold:YES]];
@@ -1206,15 +1207,55 @@ static WWSettingsController *g_settingsController = nil;
         s.pfPM25 = [s checkbox:@"PM2.5" frame:NSMakeRect(cx0 + 3*colW, y, colW, 20)];
         y -= rowH;
         s.pfPM10   = [s checkbox:@"PM10" frame:NSMakeRect(cx0 + 0*colW, y, colW, 20)];
+
+        // Ticker sub-section: separated from the metric grid and laid out as
+        // [checkbox] / [profile label + dropdown] / [hint], indented under the checkbox.
+        y -= 22;
+        NSBox *tickerDivider = [[NSBox alloc] initWithFrame:NSMakeRect(16, y, 524, 1)];
+        tickerDivider.boxType = NSBoxSeparator;
+        [doc addSubview:tickerDivider];
+        [tickerDivider release];
+        y -= 28;
+
         s.pfTicker = [s checkbox:[s L:@"settings.pollution.ticker" fallback:@"Pollution Info Ticker"]
-                           frame:NSMakeRect(cx0 + 1*colW, y, 3*colW, 20)];
+                           frame:NSMakeRect(cx0, y, 300, 20)];
+
+        CGFloat tickerIndent = 22;
+        CGFloat profileLabelW = 130;
+        y -= 30;
+        [doc addSubview:[s sublabel:[s L:@"settings.pollution.profile.title" fallback:@"Ticker Profile"]
+            frame:NSMakeRect(cx0 + tickerIndent, y + 2, profileLabelW, 18)]];
+        s.pfTickerProfile = [[NSPopUpButton alloc] initWithFrame:NSMakeRect(cx0 + tickerIndent + profileLabelW, y - 3, 250, 26) pullsDown:NO];
+        [s.pfTickerProfile addItemWithTitle:[s L:@"settings.pollution.profile.everyday" fallback:@"Everyday Outdoors"]];
+        [s.pfTickerProfile addItemWithTitle:[s L:@"settings.pollution.profile.active" fallback:@"Runner & Cyclist"]];
+        [s.pfTickerProfile addItemWithTitle:[s L:@"settings.pollution.profile.family" fallback:@"Family & School Run"]];
+        [s.pfTickerProfile addItemWithTitle:[s L:@"settings.pollution.profile.sensitive" fallback:@"Sensitive Airways"]];
+        [s.pfTickerProfile addItemWithTitle:[s L:@"settings.pollution.profile.ventilation" fallback:@"Open Windows"]];
 
         BOOL pro = [s isPro];
         for (NSButton *b in @[s.pfAQI, s.pfCO, s.pfNO, s.pfNO2, s.pfO3, s.pfSO2, s.pfNH3, s.pfPM25, s.pfPM10, s.pfTicker]) {
             b.enabled = pro;
             [doc addSubview:b];
         }
-        y -= 56;
+        s.pfTickerProfile.enabled = pro;
+        [doc addSubview:s.pfTickerProfile];
+        y -= 24;
+
+        // Hint sits directly under the dropdown, aligned with the indented controls.
+        NSTextField *profileHint = [s sublabel:[s L:@"settings.pollution.profile.subtitle"
+            fallback:@"Choose how the Pro ticker turns air-quality data into guidance."]
+            frame:NSMakeRect(cx0 + tickerIndent, y, 524 - tickerIndent, 18)];
+        [doc addSubview:profileHint];
+
+        // The Pro callout is 50pt high. Keep frames distinct: AppKit
+        // coordinates are bottom-up, so too small a step would draw the
+        // callout over the hint.
+        y -= 30;
+        NSBox *profileDivider = [[NSBox alloc] initWithFrame:NSMakeRect(16, y, 524, 1)];
+        profileDivider.boxType = NSBoxSeparator;
+        [doc addSubview:profileDivider];
+        [profileDivider release];
+        y -= 30;
 
         NSTextField *pollutionProNote = [s sublabel:
             [s L:@"settings.pollution.proNote"
@@ -1627,6 +1668,11 @@ static WWSettingsController *g_settingsController = nil;
     _pfPM25.state   = [self boolFor:pf key:@"showPM25"   defaultVal:NO] ? NSControlStateValueOn : NSControlStateValueOff;
     _pfPM10.state   = [self boolFor:pf key:@"showPM10"   defaultVal:NO] ? NSControlStateValueOn : NSControlStateValueOff;
     _pfTicker.state = [self boolFor:pf key:@"showTicker" defaultVal:NO] ? NSControlStateValueOn : NSControlStateValueOff;
+    NSString *tickerProfile = pf[@"tickerProfile"] ?: @"everyday";
+    NSDictionary *profileIndexes = @{
+        @"everyday": @0, @"active": @1, @"family": @2, @"sensitive": @3, @"ventilation": @4,
+    };
+    [_pfTickerProfile selectItemAtIndex:[profileIndexes[tickerProfile] integerValue]];
 
     // ── Widget: units ──
     NSString *tempUnit = cfg[@"temperatureUnit"] ?: @"celsius";
@@ -1742,6 +1788,8 @@ static WWSettingsController *g_settingsController = nil;
     };
 
     // ── Pollution fields ──
+    NSInteger tickerProfileIndex = _pfTickerProfile.indexOfSelectedItem;
+    if (tickerProfileIndex < 0 || tickerProfileIndex > 4) tickerProfileIndex = 0;
     cfg[@"pollutionFields"] = @{
         @"showAQI":  jbool(_pfAQI.state  == NSControlStateValueOn),
         @"showCO":   jbool(_pfCO.state   == NSControlStateValueOn),
@@ -1753,6 +1801,7 @@ static WWSettingsController *g_settingsController = nil;
         @"showPM25":   jbool(_pfPM25.state   == NSControlStateValueOn),
         @"showPM10":   jbool(_pfPM10.state   == NSControlStateValueOn),
         @"showTicker": jbool(_pfTicker.state == NSControlStateValueOn),
+        @"tickerProfile": @[@"everyday", @"active", @"family", @"sensitive", @"ventilation"][tickerProfileIndex],
     };
 
     // ── Units ──

@@ -931,16 +931,18 @@ func (p *CityPanel) setTickerItemSegments(it weather.PollutionTickerItem) {
 	} else {
 		p.tickerHead.Text = it.Symbol + ": "
 	}
-	p.tickerStatus.Text = it.StatusText
+	// Fyne text rendering has no colour-emoji support, so drop emoji from the
+	// friendly messages (the wording still reads naturally without them).
+	p.tickerStatus.Text = weather.StripEmoji(it.StatusText)
 	p.tickerStatus.Color = statusColorForLevel(it.StatusLevel)
-	p.tickerTail.Text = " • " + it.SourcesText
+	p.tickerTail.Text = " • " + weather.StripEmoji(it.SourcesText)
 	p.tickerHead.Refresh()
 	p.tickerStatus.Refresh()
 	p.tickerTail.Refresh()
 }
 
 func (p *CityPanel) applyTicker() {
-	items := weather.PlanPollutionTicker(p.pollutionFields, weather.PollutionOf(p.lastData), p.lm)
+	items := weather.PlanPollutionTickerWithWeather(p.pollutionFields, p.lastData, p.lastTempUnit, p.lm)
 	if len(items) == 0 {
 		p.stopTicker()
 		p.tickerItems = nil

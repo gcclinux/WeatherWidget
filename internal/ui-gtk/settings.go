@@ -973,7 +973,43 @@ func buildWidgetTab(m *manager) (*gtk.Box, func() *config.DisplayFields, func() 
 	chkTicker.SetSensitive(isPro)
 	gridPollution.Attach(chkTicker, 1, 2, 3, 1)
 
+	profileLabel, _ := gtk.LabelNew(m.t("settings.pollution.profile.title"))
+	profileLabel.SetHAlign(gtk.ALIGN_START)
+	profileLabel.SetSensitive(isPro)
+	gridPollution.Attach(profileLabel, 0, 3, 1, 1)
+	profileChoices := []config.TickerProfile{
+		config.TickerProfileEveryday,
+		config.TickerProfileActive,
+		config.TickerProfileFamily,
+		config.TickerProfileSensitive,
+		config.TickerProfileVentilation,
+	}
+	profileLabels := map[config.TickerProfile]string{
+		config.TickerProfileEveryday:    m.t("settings.pollution.profile.everyday"),
+		config.TickerProfileActive:      m.t("settings.pollution.profile.active"),
+		config.TickerProfileFamily:      m.t("settings.pollution.profile.family"),
+		config.TickerProfileSensitive:   m.t("settings.pollution.profile.sensitive"),
+		config.TickerProfileVentilation: m.t("settings.pollution.profile.ventilation"),
+	}
+	profileCombo, _ := gtk.ComboBoxTextNew()
+	activeProfile := config.NormalizeTickerProfile(pf.TickerProfile)
+	activeProfileIdx := 0
+	for i, profile := range profileChoices {
+		profileCombo.AppendText(profileLabels[profile])
+		if profile == activeProfile {
+			activeProfileIdx = i
+		}
+	}
+	profileCombo.SetActive(activeProfileIdx)
+	profileCombo.SetSensitive(isPro)
+	gridPollution.Attach(profileCombo, 1, 3, 3, 1)
+
 	vbox.PackStart(gridPollution, false, false, 0)
+	profileHint, _ := gtk.LabelNew(m.t("settings.pollution.profile.subtitle"))
+	profileHint.SetHAlign(gtk.ALIGN_START)
+	profileHint.SetLineWrap(true)
+	profileHint.SetSensitive(isPro)
+	vbox.PackStart(profileHint, false, false, 0)
 
 	pollutionProBox, _ := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 4)
 	pollutionProBoxSc, _ := pollutionProBox.GetStyleContext()
@@ -1014,17 +1050,23 @@ func buildWidgetTab(m *manager) (*gtk.Box, func() *config.DisplayFields, func() 
 	}
 
 	getPollutionFields := func() *config.PollutionFields {
+		profileIdx := profileCombo.GetActive()
+		profile := config.TickerProfileEveryday
+		if profileIdx >= 0 && profileIdx < len(profileChoices) {
+			profile = profileChoices[profileIdx]
+		}
 		return &config.PollutionFields{
-			ShowAQI:    chkAQI.GetActive(),
-			ShowCO:     chkCO.GetActive(),
-			ShowNO:     chkNO.GetActive(),
-			ShowNO2:    chkNO2.GetActive(),
-			ShowO3:     chkO3.GetActive(),
-			ShowSO2:    chkSO2.GetActive(),
-			ShowNH3:    chkNH3.GetActive(),
-			ShowPM25:   chkPM25.GetActive(),
-			ShowPM10:   chkPM10.GetActive(),
-			ShowTicker: chkTicker.GetActive(),
+			ShowAQI:       chkAQI.GetActive(),
+			ShowCO:        chkCO.GetActive(),
+			ShowNO:        chkNO.GetActive(),
+			ShowNO2:       chkNO2.GetActive(),
+			ShowO3:        chkO3.GetActive(),
+			ShowSO2:       chkSO2.GetActive(),
+			ShowNH3:       chkNH3.GetActive(),
+			ShowPM25:      chkPM25.GetActive(),
+			ShowPM10:      chkPM10.GetActive(),
+			ShowTicker:    chkTicker.GetActive(),
+			TickerProfile: profile,
 		}
 	}
 

@@ -30,7 +30,8 @@ func TestMergeSettingsJSON_ObjCQuirks(t *testing.T) {
 		},
 		"pollutionFields": {
 			"showAQI": 1, "showCO": 0, "showNO": 0, "showNO2": 0, "showO3": 1,
-			"showSO2": 0, "showNH3": 1, "showPM25": 1, "showPM10": 1
+			"showSO2": 0, "showNH3": 1, "showPM25": 1, "showPM10": 1,
+			"tickerProfile": "sensitive"
 		},
 		"apiConfig": { "provider": "easyweatherwidget", "apiKey": "key-123" },
 		"cities": [
@@ -66,6 +67,9 @@ func TestMergeSettingsJSON_ObjCQuirks(t *testing.T) {
 	}
 	if !out.GetPollutionFields().ShowAQI {
 		t.Errorf("showAQI = false, want true")
+	}
+	if out.GetPollutionFields().TickerProfile != config.TickerProfileSensitive {
+		t.Errorf("tickerProfile = %q, want sensitive", out.GetPollutionFields().TickerProfile)
 	}
 	if len(out.Cities) != 2 {
 		t.Errorf("cities = %d, want 2", len(out.Cities))

@@ -62,21 +62,21 @@ var providerValueToDisplay = map[string]string{
 
 // settingsState holds mutable UI state for the settings dialog.
 type settingsState struct {
-	cities           []config.CityConfig
-	window           fyne.Window
-	selectedLang      string                 // locale code selected in the language dropdown
-	selectedUnit      config.TemperatureUnit // temperature unit selected in the appearance tab
-	selectedWindUnit  config.WindSpeedUnit   // wind speed unit selected in the widget tab
-	selectedIconTheme config.IconTheme       // icon theme selected in the display tab
-	selectedViewMode  config.ViewMode        // view mode selected in the display tab
-	saved             bool                   // true if Save was clicked (suppresses revert on close)
-	previewPanels     []*panel.CityPanel     // live preview panels in the About tab
-	appearancePanels  []*panel.CityPanel     // live preview panels in the Appearance tab
-	displayFields     *config.DisplayFields  // current display field checkbox state
+	cities            []config.CityConfig
+	window            fyne.Window
+	selectedLang      string                  // locale code selected in the language dropdown
+	selectedUnit      config.TemperatureUnit  // temperature unit selected in the appearance tab
+	selectedWindUnit  config.WindSpeedUnit    // wind speed unit selected in the widget tab
+	selectedIconTheme config.IconTheme        // icon theme selected in the display tab
+	selectedViewMode  config.ViewMode         // view mode selected in the display tab
+	saved             bool                    // true if Save was clicked (suppresses revert on close)
+	previewPanels     []*panel.CityPanel      // live preview panels in the About tab
+	appearancePanels  []*panel.CityPanel      // live preview panels in the Appearance tab
+	displayFields     *config.DisplayFields   // current display field checkbox state
 	pollutionFields   *config.PollutionFields // current pollution field checkbox state
-	customX           *int                   // pending custom X position
-	customY           *int                   // pending custom Y position
-	noBackground      bool                   // pending background removal state
+	customX           *int                    // pending custom X position
+	customY           *int                    // pending custom Y position
+	noBackground      bool                    // pending background removal state
 }
 
 // t is a helper that returns the translated string for the given key.
@@ -162,7 +162,6 @@ func (u *UIManager) showSettingsPopup(title, msg string, isError bool, win fyne.
 	)
 	pop.Show()
 }
-
 
 // ShowSettings opens a settings dialog window.
 func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config) error) {
@@ -1456,6 +1455,28 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 		chkPM10.Checked = pf.ShowPM10
 		chkTicker := widget.NewCheck(u.t("settings.pollution.ticker"), nil)
 		chkTicker.Checked = pf.ShowTicker
+		profileLabels := map[config.TickerProfile]string{
+			config.TickerProfileEveryday:    u.t("settings.pollution.profile.everyday"),
+			config.TickerProfileActive:      u.t("settings.pollution.profile.active"),
+			config.TickerProfileFamily:      u.t("settings.pollution.profile.family"),
+			config.TickerProfileSensitive:   u.t("settings.pollution.profile.sensitive"),
+			config.TickerProfileVentilation: u.t("settings.pollution.profile.ventilation"),
+		}
+		profileValues := map[string]config.TickerProfile{}
+		profileOptions := make([]string, 0, len(profileLabels))
+		for _, profile := range []config.TickerProfile{
+			config.TickerProfileEveryday,
+			config.TickerProfileActive,
+			config.TickerProfileFamily,
+			config.TickerProfileSensitive,
+			config.TickerProfileVentilation,
+		} {
+			label := profileLabels[profile]
+			profileOptions = append(profileOptions, label)
+			profileValues[label] = profile
+		}
+		profileSelect := widget.NewSelect(profileOptions, nil)
+		profileSelect.SetSelected(profileLabels[config.NormalizeTickerProfile(pf.TickerProfile)])
 
 		if !isPro {
 			chkAQI.Disable()
@@ -1468,20 +1489,22 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 			chkPM25.Disable()
 			chkPM10.Disable()
 			chkTicker.Disable()
+			profileSelect.Disable()
 		}
 
 		updatePollutionFields := func() {
 			state.pollutionFields = &config.PollutionFields{
-				ShowAQI:    chkAQI.Checked,
-				ShowCO:     chkCO.Checked,
-				ShowNO:     chkNO.Checked,
-				ShowNO2:    chkNO2.Checked,
-				ShowO3:     chkO3.Checked,
-				ShowSO2:    chkSO2.Checked,
-				ShowNH3:    chkNH3.Checked,
-				ShowPM25:   chkPM25.Checked,
-				ShowPM10:   chkPM10.Checked,
-				ShowTicker: chkTicker.Checked,
+				ShowAQI:       chkAQI.Checked,
+				ShowCO:        chkCO.Checked,
+				ShowNO:        chkNO.Checked,
+				ShowNO2:       chkNO2.Checked,
+				ShowO3:        chkO3.Checked,
+				ShowSO2:       chkSO2.Checked,
+				ShowNH3:       chkNH3.Checked,
+				ShowPM25:      chkPM25.Checked,
+				ShowPM10:      chkPM10.Checked,
+				ShowTicker:    chkTicker.Checked,
+				TickerProfile: profileValues[profileSelect.Selected],
 			}
 		}
 		chkAQI.OnChanged = func(_ bool) { updatePollutionFields() }
@@ -1494,12 +1517,20 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 		chkPM25.OnChanged = func(_ bool) { updatePollutionFields() }
 		chkPM10.OnChanged = func(_ bool) { updatePollutionFields() }
 		chkTicker.OnChanged = func(_ bool) { updatePollutionFields() }
+		profileSelect.OnChanged = func(_ string) { updatePollutionFields() }
 
 		pollutionChecks := container.NewGridWithColumns(4,
 			chkAQI, chkCO, chkNO, chkNO2,
 			chkO3, chkSO2, chkNH3, chkPM25,
 			chkPM10, chkTicker,
 		)
+		// Keep this compact: a wrapped explanatory label makes Fyne calculate a
+		// one-line minimum height, then draw over the Pro callout below it.
+		// The concise profile label plus selected value explains the control
+		// without destabilising the fixed-width settings card in Free or Pro.
+		profileRow := container.NewBorder(nil, nil, widget.NewLabel(u.t("settings.pollution.profile.title")), nil, profileSelect)
+		profileCalloutGap := canvas.NewRectangle(color.Transparent)
+		profileCalloutGap.SetMinSize(fyne.NewSize(1, 8))
 
 		pollutionProNoteBg := canvas.NewRectangle(color.NRGBA{R: 14, G: 165, B: 233, A: 25})
 		pollutionProNoteBg.CornerRadius = 8
@@ -1513,6 +1544,9 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 
 		pollutionSection := container.NewVBox(
 			pollutionChecks,
+			profileRow,
+			profileCalloutGap,
+			widget.NewSeparator(),
 			pollutionProNoteCard,
 		)
 

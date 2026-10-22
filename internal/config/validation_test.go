@@ -43,6 +43,19 @@ func TestValidate_ValidRemoteConfig(t *testing.T) {
 	}
 }
 
+func TestTickerProfileDefaultsAndNormalizes(t *testing.T) {
+	if got := NormalizeTickerProfile(""); got != TickerProfileEveryday {
+		t.Fatalf("NormalizeTickerProfile(empty) = %q, want %q", got, TickerProfileEveryday)
+	}
+	if got := NormalizeTickerProfile("unknown"); got != TickerProfileEveryday {
+		t.Fatalf("NormalizeTickerProfile(unknown) = %q, want %q", got, TickerProfileEveryday)
+	}
+	cfg := &Config{PollutionFields: &PollutionFields{TickerProfile: TickerProfileSensitive}}
+	if got := cfg.GetPollutionFields().TickerProfile; got != TickerProfileSensitive {
+		t.Fatalf("GetPollutionFields().TickerProfile = %q, want %q", got, TickerProfileSensitive)
+	}
+}
+
 func TestValidate_ValidDatabaseConfig(t *testing.T) {
 	errs := Validate(validDatabaseConfig(), nil)
 	if len(errs) != 0 {
