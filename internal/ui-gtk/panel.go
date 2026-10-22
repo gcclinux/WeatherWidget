@@ -681,6 +681,14 @@ func (p *cityPanel) applyPollutionRows(pf *config.PollutionFields) {
 		}
 	}
 
+	if p.pollutionBox != nil {
+		if len(rows) == 0 {
+			p.pollutionBox.Hide()
+		} else {
+			p.pollutionBox.Show()
+		}
+	}
+
 	p.applyTicker(pf)
 }
 

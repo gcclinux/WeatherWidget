@@ -602,6 +602,8 @@ static NSColor *wwStatusColorForLevel(int level) {
 @property (nonatomic, strong) WWAirTile  *aqiTile;
 @property (nonatomic, strong) NSArray<WWAirTile *> *pollTiles; // kPollSlots
 @property (nonatomic, copy)   NSString   *aqiName; // localized "AQI"/"Air Quality Index" label
+@property (nonatomic, strong) NSLayoutConstraint *aqiBottomConstraint;
+@property (nonatomic, strong) NSArray<NSLayoutConstraint *> *pollBottomConstraints;
 
 // Error
 @property (nonatomic, strong) NSTextField *errorLbl;
@@ -805,10 +807,17 @@ static void wwSetStr(NSString **slot, NSString *s) {
     _airRow.alignment   = NSLayoutAttributeTop;
     _airRow.spacing = 6;
     _airRow.translatesAutoresizingMaskIntoConstraints = NO;
+    _airRow.hidden = YES;
+
+    NSMutableArray *bConstraints = [NSMutableArray array];
     for (WWAirTile *pt in _pollTiles) {
-        [pt.bottomAnchor constraintEqualToAnchor:_airRow.bottomAnchor].active = YES;
+        NSLayoutConstraint *c = [pt.bottomAnchor constraintEqualToAnchor:_airRow.bottomAnchor];
+        c.active = NO;
+        [bConstraints addObject:c];
     }
-    [_aqiTile.bottomAnchor constraintEqualToAnchor:_airRow.bottomAnchor].active = YES;
+    _pollBottomConstraints = [bConstraints copy];
+    _aqiBottomConstraint = [[_aqiTile.bottomAnchor constraintEqualToAnchor:_airRow.bottomAnchor] retain];
+    _aqiBottomConstraint.active = NO;
 
     // ── Simple-mode plain-text lines ──────────────────────────────────────────
     // These mirror the classic compact widget (image "simple"): one text line
@@ -937,6 +946,7 @@ static void wwSetStr(NSString **slot, NSString *s) {
         _middle.spacing = 4;
 
         _airRow.alignment = NSLayoutAttributeTop;
+        [self updateAirRowVisibility];
 
         [_rootStack setViews:@[_headerRow, _middle, _airRow, _errorLbl]
                    inGravity:NSStackViewGravityLeading];
@@ -990,6 +1000,8 @@ static void wwSetStr(NSString **slot, NSString *s) {
     [_feelsPill release];
     [_lastFeelsLabel release];
     [_lastFeelsValue release];
+    [_aqiBottomConstraint release];
+    [_pollBottomConstraints release];
     for (int i = 0; i < 6; i++) {
         [_simpleNames[i] release];
         [_simpleValues[i] release];
@@ -1167,6 +1179,26 @@ static void wwSetStr(NSString **slot, NSString *s) {
     _feelsPill.label.stringValue = [pillText stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
 }
 
+- (void)updateAirRowVisibility {
+    BOOL hasAny = NO;
+    if (!_aqiTile.hidden) {
+        hasAny = YES;
+        _aqiBottomConstraint.active = YES;
+    } else {
+        _aqiBottomConstraint.active = NO;
+    }
+    for (int i = 0; i < kPollSlots; i++) {
+        WWAirTile *pt = _pollTiles[i];
+        if (!pt.hidden) {
+            hasAny = YES;
+            _pollBottomConstraints[i].active = YES;
+        } else {
+            _pollBottomConstraints[i].active = NO;
+        }
+    }
+    _airRow.hidden = !hasAny;
+}
+
 - (void)setAQINS:(NSString *)label iconPath:(NSString *)iconPath {
     NSString *s = label.length > 0 ? label : nil;
     if (s) {
@@ -1189,6 +1221,7 @@ static void wwSetStr(NSString **slot, NSString *s) {
         _aqiTile.hidden = YES;
         _simpleAQILine.hidden = YES;
     }
+    [self updateAirRowVisibility];
 }
 
 // Pollutant slot names for the simple-mode text lines (index matches slot).
@@ -1222,6 +1255,7 @@ static NSString *pollSlotName(int slot) {
         tile.hidden = YES;
         line.hidden = YES;
     }
+    [self updateAirRowVisibility];
 }
 
 // setMetricNamesHumidity:... updates the localized NAME labels on the enhanced

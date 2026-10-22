@@ -920,6 +920,11 @@ func (p *CityPanel) applyAirCells() {
 		p.otherAirRightRow.Refresh()
 	}
 	if p.airRow != nil {
+		if len(rows) == 0 {
+			p.airRow.Hide()
+		} else {
+			p.airRow.Show()
+		}
 		p.airRow.Refresh()
 	}
 	p.applyTicker()

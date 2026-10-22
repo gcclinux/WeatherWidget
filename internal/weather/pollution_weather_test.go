@@ -93,3 +93,52 @@ func TestStripEmoji(t *testing.T) {
 	}
 }
 
+func TestPlanPollutionTicker_ProTickerWithoutSelectedPollutants(t *testing.T) {
+	pm25 := 5.0
+	aqi := 1
+	dataWithPollution := PollutionData{
+		AQI:  &aqi,
+		PM25: &pm25,
+	}
+	dataFree := PollutionData{} // Free / Demo: no pollution data from provider
+
+	// 1. FREE / Demo = No pollution & No ticker
+	fieldsNoPollutionSelected := &config.PollutionFields{
+		ShowTicker:    true,
+		TickerProfile: config.TickerProfileEveryday,
+		// All ShowXXX are false
+	}
+	if got := PlanPollutionTicker(fieldsNoPollutionSelected, dataFree); got != nil {
+		t.Fatalf("Free/Demo: expected nil ticker, got %+v", got)
+	}
+
+	// 2. PRO with Ticker ON, but NO individual pollutions selected:
+	// should emit ONLY Opportunity and Context (no additional pollutant items)
+	itemsNoPollutants := PlanPollutionTicker(fieldsNoPollutionSelected, dataWithPollution)
+	if len(itemsNoPollutants) != 2 {
+		t.Fatalf("Pro with no pollutants selected: want 2 items (Opp & Context), got %d: %+v", len(itemsNoPollutants), itemsNoPollutants)
+	}
+	if itemsNoPollutants[0].Kind != TickerItemOpportunity {
+		t.Errorf("item 0 kind = %v, want Opportunity", itemsNoPollutants[0].Kind)
+	}
+	if itemsNoPollutants[1].Kind != TickerItemContext {
+		t.Errorf("item 1 kind = %v, want Context", itemsNoPollutants[1].Kind)
+	}
+
+	// 3. PRO with Ticker ON, and additional pollutions selected (e.g. PM2.5):
+	// should emit Opportunity, Context, PLUS the selected pollutant definitions
+	fieldsWithPM25 := &config.PollutionFields{
+		ShowTicker:    true,
+		ShowPM25:      true,
+		TickerProfile: config.TickerProfileEveryday,
+	}
+	itemsWithPM25 := PlanPollutionTicker(fieldsWithPM25, dataWithPollution)
+	if len(itemsWithPM25) != 3 {
+		t.Fatalf("Pro with PM2.5 selected: want 3 items (Opp, Context, PM2.5), got %d: %+v", len(itemsWithPM25), itemsWithPM25)
+	}
+	if itemsWithPM25[2].Metric != MetricPM25 {
+		t.Errorf("item 2 metric = %v, want PM25", itemsWithPM25[2].Metric)
+	}
+}
+
+

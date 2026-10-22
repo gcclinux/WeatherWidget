@@ -613,7 +613,8 @@ func planPollutionTicker(fields *config.PollutionFields, d PollutionData, w *Wea
 	currentlyLbl := tr(localeMgr, "pollution.ticker.currently", "Currently")
 	sourcesLbl := tr(localeMgr, "pollution.ticker.sources", "Primary sources")
 
-	var contexts []PollutionTickerItem
+	var selectedContexts []PollutionTickerItem
+	var presentContexts []PollutionTickerItem
 	for _, m := range PollutionMetricOrder {
 		var (
 			selected bool
@@ -683,9 +684,9 @@ func planPollutionTicker(fields *config.PollutionFields, d PollutionData, w *Wea
 			}
 		}
 
-		if selected && present {
+		if present {
 			meta := pollutantMeta[m]
-			contexts = append(contexts, PollutionTickerItem{
+			item := PollutionTickerItem{
 				Kind:         TickerItemContext,
 				Metric:       m,
 				Symbol:       meta.symbol,
@@ -695,17 +696,26 @@ func planPollutionTicker(fields *config.PollutionFields, d PollutionData, w *Wea
 				StatusLevel:  level,
 				SourcesLbl:   sourcesLbl,
 				SourcesText:  tr(localeMgr, meta.sourceKey, meta.sourceFallback),
-			})
+			}
+			presentContexts = append(presentContexts, item)
+			if selected {
+				selectedContexts = append(selectedContexts, item)
+			}
 		}
 	}
-	if len(contexts) == 0 {
+	if len(presentContexts) == 0 {
 		return nil
+	}
+
+	dominantPool := selectedContexts
+	if len(dominantPool) == 0 {
+		dominantPool = presentContexts
 	}
 
 	// Stable tie-breaking preserves PollutionMetricOrder, so a rerender does
 	// not make the ticker jump between equally severe pollutants.
-	dominant := contexts[0]
-	for _, item := range contexts[1:] {
+	dominant := dominantPool[0]
+	for _, item := range dominantPool[1:] {
 		if item.StatusLevel > dominant.StatusLevel {
 			dominant = item
 		}
@@ -744,7 +754,7 @@ func planPollutionTicker(fields *config.PollutionFields, d PollutionData, w *Wea
 			},
 			context,
 		}
-		return append(items, contexts...)
+		return append(items, selectedContexts...)
 	}
 
 	// Do not present moderate conditions as a positive opportunity merely
@@ -752,7 +762,7 @@ func planPollutionTicker(fields *config.PollutionFields, d PollutionData, w *Wea
 	// Show the profile's moderate-level guidance instead of the generic sources.
 	if dominant.StatusLevel > 2 {
 		context.SourcesText = advise
-		return append([]PollutionTickerItem{context}, contexts...)
+		return append([]PollutionTickerItem{context}, selectedContexts...)
 	}
 
 	// Friendly headline plus either weather-aware advice or the profile's
@@ -780,5 +790,5 @@ func planPollutionTicker(fields *config.PollutionFields, d PollutionData, w *Wea
 		SourcesText: tail,
 	}
 
-	return append([]PollutionTickerItem{opp, context}, contexts...)
+	return append([]PollutionTickerItem{opp, context}, selectedContexts...)
 }
