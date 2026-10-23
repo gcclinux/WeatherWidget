@@ -390,6 +390,9 @@ func newSimpleCityPanel(city, region, timezone string, lm *i18n.LocaleManager) (
 // rootBox returns the simple panel's top-level column box.
 func (p *simpleCityPanel) rootBox() *gtk.Box { return p.root }
 
+// tickerAllocation returns nil for simple panels — they have no pollution ticker.
+func (p *simpleCityPanel) tickerAllocation() *gtk.Allocation { return nil }
+
 // setIconSize sets the weather icon pixel size for the simple panel.
 func (p *simpleCityPanel) setIconSize(size int) { p.iconSize = size }
 

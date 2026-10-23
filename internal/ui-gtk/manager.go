@@ -536,6 +536,8 @@ func (m *manager) paintCards(cr *cairoContext) {
 		borderB     = 1.0
 		borderA     = 100.0 / 255.0 // matches Fyne NRGBA{255,255,255,100}
 	)
+	// Ticker background uses a slightly smaller radius to fit inside the header.
+	const tickerRadius = 10.0
 	for _, p := range m.panels {
 		if p == nil || p.rootBox() == nil {
 			continue
@@ -550,6 +552,20 @@ func (m *manager) paintCards(cr *cairoContext) {
 		}
 		if alpha > 0 {
 			paintRoundedRect(cr, x, y, wd, ht, radius, r, g, b, alpha)
+			// Paint the pollution ticker background. The ticker sits inside the
+			// card but its ScrolledWindow doesn't blend with our Cairo-painted
+			// card on app-paintable windows. Painting its rect here (same tint,
+			// smaller radius) makes it match the card, just like compositeOverTint
+			// does for icons.
+			if tickerAlloc := p.tickerAllocation(); tickerAlloc != nil {
+				tx := float64(tickerAlloc.GetX())
+				ty := float64(tickerAlloc.GetY())
+				tw := float64(tickerAlloc.GetWidth())
+				th := float64(tickerAlloc.GetHeight())
+				if tw > 0 && th > 0 {
+					paintRoundedRect(cr, tx, ty, tw, th, tickerRadius, r, g, b, alpha)
+				}
+			}
 			continue
 		}
 		// No-background mode: inset by half the line width so the 1px stroke
