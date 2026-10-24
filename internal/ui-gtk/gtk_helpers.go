@@ -170,13 +170,12 @@ func buildCSS(opacity int, noBackground bool, fsCityTime, fsTempIcon, fsConditio
 	lineCSS := fmt.Sprintf("rgba(255, 255, 255, %.3f)", lineAlpha)
 	sepCSS := lineCSS
 
-	// The pollution ticker banner needs an explicit background. Unlike
-	// windowless labels and tiles, the ScrolledWindow has an internal bin
-	// window that clears the underlying Cairo card tint, leaving the ticker
-	// area transparent. Supplying the tint colour through CSS means GTK paints
-	// it as part of its own background-render step — which happens BEFORE the
-	// text is drawn — so the text ends up on top rather than underneath.
-	// In no-background mode we fall back to transparent to match the card.
+	// The ScrolledWindow's viewport creates a native child GdkWindow that
+	// clears its area on app-paintable windows, which would reveal the desktop
+	// wallpaper behind the ticker. Giving the viewport the exact card tint
+	// (matching compositeOverTint used for icons) ensures it blends seamlessly
+	// with the Cairo-painted card background at all opacity levels.
+	// In no-background mode it falls back to transparent to match the card.
 	tickerBgCSS := fmt.Sprintf("rgba(20, 20, 20, %.3f)", cardAlpha)
 	if noBackground {
 		tickerBgCSS = "transparent"
@@ -205,20 +204,31 @@ window {
     background-color: transparent;
     border-radius: 12px;
 }
-/* Pollution ticker: background colour is injected via CSS so GTK paints it
-   during its own background-render step — before child text is drawn.
-   Applying it to all descendants prevents inner Box widgets from clearing
-   the tint with their own transparent background. The frame/shadow is
-   stripped so only our fill shows. */
-.pollution-ticker,
-.pollution-ticker * {
+/* Pollution ticker: ScrolledWindow's viewport creates a native child GdkWindow
+   that clears its background. Supplying the exact card tint to the viewport
+   ensures it matches the surrounding Cairo-painted card background seamlessly
+   without punching through to the desktop.
+   Inner boxes and labels remain transparent to prevent duplicate layers or
+   trailing/leading dark boxes. */
+.pollution-ticker {
+    background-color: transparent;
+    border: none;
+    box-shadow: none;
+    border-radius: 8px;
+    padding: 0;
+    margin: 0;
+}
+.pollution-ticker viewport {
     background-color: %s;
     border: none;
     box-shadow: none;
+    border-radius: 8px;
 }
-.pollution-ticker {
-    border-radius: 10px;
-    padding: 0px 8px;
+.pollution-ticker box,
+.pollution-ticker label {
+    background-color: transparent;
+    border: none;
+    box-shadow: none;
 }
 .city-label {
     font-size: %dpx;

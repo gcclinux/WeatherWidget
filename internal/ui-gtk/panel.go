@@ -102,14 +102,18 @@ type cityPanel struct {
 	descLbl *gtk.Label
 
 	// Pollution info ticker (Enhanced mode top header row, to the right of cityLbl)
-	headerBox     *gtk.Box
-	tickerScroll  *gtk.ScrolledWindow
-	tickerLbl     *gtk.Label
-	tickerItems   []weather.PollutionTickerItem
-	tickerIdx     int
-	tickerStagger int
-	tickerPos     float64
-	tickerStop    chan struct{}
+	headerBox      *gtk.Box
+	tickerScroll   *gtk.ScrolledWindow
+	tickerTrack    *gtk.Box
+	tickerLeftPad  *gtk.Box
+	tickerRightPad *gtk.Box
+	tickerLbl      *gtk.Label
+	tickerItems    []weather.PollutionTickerItem
+	tickerIdx      int
+	tickerStagger  int
+	tickerPos      float64
+	tickerPadWidth int
+	tickerStop     chan struct{}
 
 	feelsPill *gtk.Box
 	feelsIcon *gtk.Image
@@ -184,6 +188,7 @@ func newCityPanel(city, region, timezone string, lm *i18n.LocaleManager) (*cityP
 	if err != nil {
 		return nil, err
 	}
+	headerBox.SetHExpand(true)
 	p.headerBox = headerBox
 
 	cityLbl, err := gtk.LabelNew("📍 " + city + ", " + region)
@@ -202,36 +207,33 @@ func newCityPanel(city, region, timezone string, lm *i18n.LocaleManager) (*cityP
 		return nil, err
 	}
 	tickerScroll.SetPolicy(gtk.POLICY_EXTERNAL, gtk.POLICY_NEVER)
+	tickerScroll.SetHExpand(true)
+	tickerScroll.SetHAlign(gtk.ALIGN_FILL)
 	tickerScroll.SetVAlign(gtk.ALIGN_CENTER)
 	tickerScroll.SetSizeRequest(80, 20)
 	tickerScroll.SetNoShowAll(true)
-	// Drop the GTK theme's scrolledwindow frame/shadow so the ticker doesn't
-	// show a themed border (which otherwise reads as a stray coloured pill on
-	// the transparent window). The tinted background is supplied by the
-	// .pollution-ticker CSS rule, which tracks the card opacity like the rest
-	// of the interior boxes.
 	tickerScroll.SetShadowType(gtk.SHADOW_NONE)
 	if sc, err := tickerScroll.GetStyleContext(); err == nil {
 		sc.AddClass("pollution-ticker")
 	}
-	// The ticker background is supplied by the .pollution-ticker CSS rule
-	// (see buildCSS in gtk_helpers.go). CSS renders the background before
-	// GTK draws child text, so the tint sits under the text rather than over
-	// it. No additional draw-signal hook is needed here.
 
 	tickerTrack, err := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 0)
 	if err != nil {
 		return nil, err
 	}
-	// leftPad provides the blank lead-in so the text enters from the right
-	// edge.  It must be wider than any realistic visible ticker width so that
-	// initialising tickerPos = tickerLeftPad − pageSize puts the first
-	// character just off the right edge.  rightPad gives trailing blank space
-	// so the last character fully exits before the next item appears.
+	p.tickerTrack = tickerTrack
+
+	// leftPad is transparent and sized dynamically to the visible page size
+	// of tickerScroll, positioning the label's first character exactly at
+	// the right boundary of the view so it starts at point 0 on the right.
+	// rightPad provides a clean transparent pause before the next item.
 	leftPad, _ := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 0)
-	leftPad.SetSizeRequest(tickerLeftPad, 1)
+	leftPad.SetSizeRequest(240, 1)
+	p.tickerLeftPad = leftPad
+
 	rightPad, _ := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 0)
-	rightPad.SetSizeRequest(340, 1)
+	rightPad.SetSizeRequest(240+tickerTrailingGap, 1)
+	p.tickerRightPad = rightPad
 
 	tickerLbl, err := gtk.LabelNew("")
 	if err != nil {
@@ -248,7 +250,7 @@ func newCityPanel(city, region, timezone string, lm *i18n.LocaleManager) (*cityP
 	tickerTrack.ShowAll()
 	tickerScroll.Hide()
 	p.tickerScroll = tickerScroll
-	headerBox.PackEnd(tickerScroll, true, true, 0)
+	headerBox.PackStart(tickerScroll, true, true, 0)
 
 	root.PackStart(headerBox, false, false, 0)
 
@@ -788,22 +790,12 @@ func (p *cityPanel) applyTicker(pf *config.PollutionFields) {
 	p.tickerIdx = p.tickerStagger % len(p.tickerItems)
 	p.tickerLbl.SetMarkup(formatTickerItemMarkup(p.tickerItems[p.tickerIdx]))
 
-	// Position the scroll so the first character sits just off the right edge
-	// of the visible area.  tickerLeftPad − pageSize puts content position
-	// tickerLeftPad (= label start) exactly at the right boundary of the view.
-	// If pageSize is not yet available (widget not laid out) fall back to 0
-	// and let the goroutine correct it on the first item-reset.
-	var initialPos float64
+	// Start at position 0 so the first character enters from the right edge
+	// (offset by leftPad, which matches the visible page size).
+	p.tickerPos = 0
 	if hadj := p.tickerScroll.GetHAdjustment(); hadj != nil {
-		if ps := hadj.GetPageSize(); ps > 0 {
-			initialPos = float64(tickerLeftPad) - ps
-			if initialPos < 0 {
-				initialPos = 0
-			}
-		}
-		hadj.SetValue(initialPos)
+		hadj.SetValue(0)
 	}
-	p.tickerPos = initialPos
 
 	stopCh := make(chan struct{})
 	p.tickerStop = stopCh
@@ -823,17 +815,29 @@ func (p *cityPanel) applyTicker(pf *config.PollutionFields) {
 					if hadj == nil {
 						return
 					}
+					pageSize := hadj.GetPageSize()
+					if pageSize <= 0 {
+						return
+					}
+					pw := int(pageSize)
+					if pw > 0 && p.tickerPadWidth != pw {
+						p.tickerPadWidth = pw
+						if p.tickerLeftPad != nil {
+							p.tickerLeftPad.SetSizeRequest(pw, 1)
+						}
+						if p.tickerRightPad != nil {
+							p.tickerRightPad.SetSizeRequest(pw+tickerTrailingGap, 1)
+						}
+						if p.tickerPos == 0 {
+							hadj.SetValue(0)
+						}
+					}
 					p.tickerPos += 1.6
-					maxScroll := hadj.GetUpper() - hadj.GetPageSize()
-					if maxScroll > 40 && p.tickerPos >= maxScroll {
+					maxScroll := hadj.GetUpper() - pageSize
+					if maxScroll > 10 && p.tickerPos >= maxScroll {
 						p.tickerIdx = (p.tickerIdx + 1) % len(p.tickerItems)
 						p.tickerLbl.SetMarkup(formatTickerItemMarkup(p.tickerItems[p.tickerIdx]))
-						// Reset to just-off-right-edge for the new item.
-						resetPos := float64(tickerLeftPad) - hadj.GetPageSize()
-						if resetPos < 0 {
-							resetPos = 0
-						}
-						p.tickerPos = resetPos
+						p.tickerPos = 0
 					}
 					hadj.SetValue(p.tickerPos)
 				})
@@ -1034,12 +1038,10 @@ func (p *cityPanel) loadIcon(iconCode string, size int) {
 // pollutionIconSize is the pixel size for pollution metric icons rendered next to text.
 const pollutionIconSize = 48
 
-// tickerLeftPad is the width in pixels of the blank spacer placed before the
-// ticker label in the scrollable track. It must be wider than any realistic
-// visible ticker area so that initialising the scroll position to
-// (tickerLeftPad − pageSize) puts the first character of the message exactly
-// at the right edge of the visible area, ready to scroll in from the right.
-const tickerLeftPad = 1000
+// tickerTrailingGap is the pixel width of the transparent spacer placed after
+// the ticker label in the scrollable track, providing a clean pause before the
+// next item begins scrolling in from the right edge.
+const tickerTrailingGap = 60
 
 // tintPadding is the extra pixels added around the icon when compositing over
 // the card tint. This eliminates thin gaps between the icon background and the
