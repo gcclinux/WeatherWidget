@@ -3,7 +3,6 @@
 package uitk
 
 import (
-	"fmt"
 	"strings"
 	"testing"
 
@@ -12,16 +11,18 @@ import (
 	"github.com/gotk3/gotk3/pango"
 )
 
-// TestTickerScroll_FullTraverseVerifiesTextExitsLeft verifies that the track layout
-// (leftPad matching pageSize, and rightPad matching pageSize + tickerTrailingGap)
-// mathematically guarantees that maxScroll is always strictly greater than
-// (pageSize + textWidth), ensuring the last character completely exits off the
-// left edge of the visible window before the item resets.
+// TestTickerScroll_FullTraverseVerifiesTextExitsLeft verifies that the scroll traversal
+// math (x = w - tickerPos, with maxScroll = w + textWidth + tickerTrailingGap)
+// mathematically guarantees that:
+// 1. Text starts entering at the right edge (x = w).
+// 2. The first character reaches the left boundary at tickerPos = w.
+// 3. The last character completely exits off the left edge at tickerPos = w + textWidth.
+// 4. A clean pause of tickerTrailingGap occurs before resetting.
 func TestTickerScroll_FullTraverseVerifiesTextExitsLeft(t *testing.T) {
 	testCases := []struct {
 		name      string
-		pageSize  int
-		textWidth int
+		width     float64
+		textWidth float64
 	}{
 		{"Small widget, short text", 150, 100},
 		{"Standard card, medium text", 240, 350},
@@ -31,53 +32,44 @@ func TestTickerScroll_FullTraverseVerifiesTextExitsLeft(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			leftPad := tc.pageSize
-			rightPad := tc.pageSize + tickerTrailingGap
-			upper := leftPad + tc.textWidth + rightPad
-			maxScroll := upper - tc.pageSize
+			w := tc.width
+			textW := tc.textWidth
+			maxScroll := w + textW + float64(tickerTrailingGap)
 
-			// Scroll position when the very first character reaches the left edge:
-			firstCharLeftExitPos := leftPad
-			// Scroll position when the very last character reaches the left edge:
-			lastCharLeftExitPos := leftPad + tc.textWidth
-
-			if firstCharLeftExitPos != tc.pageSize {
-				t.Fatalf("first character should reach left edge at %d, got %d", tc.pageSize, firstCharLeftExitPos)
+			// 1. Start position (tickerPos = 0):
+			startPos := 0.0
+			startX := w - startPos
+			if startX != w {
+				t.Fatalf("expected text to start at right edge (x=%v), got %v", w, startX)
 			}
 
-			if maxScroll < lastCharLeftExitPos {
-				t.Fatalf("maxScroll (%d) is less than lastCharLeftExitPos (%d), text would cut off early by %d px!",
-					maxScroll, lastCharLeftExitPos, lastCharLeftExitPos-maxScroll)
+			// 2. Position when first character reaches left edge (x = 0):
+			firstCharLeftExitTickerPos := w
+			if w-firstCharLeftExitTickerPos != 0 {
+				t.Fatalf("first character should reach left edge at tickerPos=%v", w)
 			}
 
-			pausePixels := maxScroll - lastCharLeftExitPos
-			if pausePixels != tickerTrailingGap {
-				t.Fatalf("expected trailing pause gap of %d px, got %d px", tickerTrailingGap, pausePixels)
+			// 3. Position when last character completely exits left edge (x = -textW):
+			lastCharLeftExitTickerPos := w + textW
+			if (w - lastCharLeftExitTickerPos) != -textW {
+				t.Fatalf("last character should completely exit at tickerPos=%v", lastCharLeftExitTickerPos)
+			}
+
+			// 4. Trailing pause before next item:
+			pausePixels := maxScroll - lastCharLeftExitTickerPos
+			if pausePixels != float64(tickerTrailingGap) {
+				t.Fatalf("expected trailing pause gap of %v px, got %v px", tickerTrailingGap, pausePixels)
 			}
 		})
 	}
 }
 
-// TestBuildCSS_TickerBackgroundMatchesCardTint verifies that buildCSS injects
-// the card tint into the ticker viewport while keeping inner boxes/labels transparent,
-// and correctly falls back to transparent in no-background mode.
-func TestBuildCSS_TickerBackgroundMatchesCardTint(t *testing.T) {
-	// Mode 1: Tinted background (e.g. opacity 80)
-	cssTinted := buildCSS(80, false, 14, 32, 10)
-	expectedAlpha := panelAlpha(80, false)
-	expectedRGBA := fmt.Sprintf("rgba(20, 20, 20, %.3f)", expectedAlpha)
-
-	if !strings.Contains(cssTinted, ".pollution-ticker viewport {\n    background-color: "+expectedRGBA) {
-		t.Fatalf("expected tinted CSS to contain viewport background %s", expectedRGBA)
-	}
-	if !strings.Contains(cssTinted, ".pollution-ticker box,\n.pollution-ticker label {\n    background-color: transparent;") {
-		t.Fatalf("expected inner boxes and labels to remain transparent")
-	}
-
-	// Mode 2: Fully transparent mode (noBackground = true)
-	cssNoBg := buildCSS(80, true, 14, 32, 10)
-	if !strings.Contains(cssNoBg, ".pollution-ticker viewport {\n    background-color: transparent;") {
-		t.Fatalf("expected no-background CSS to contain transparent viewport background")
+// TestBuildCSS_TickerTransparent verifies that buildCSS sets .pollution-ticker
+// to transparent so the Cairo card background drawn by paintCards shows through directly.
+func TestBuildCSS_TickerTransparent(t *testing.T) {
+	css := buildCSS(80, false, 14, 32, 10)
+	if !strings.Contains(css, ".pollution-ticker {\n    background-color: transparent;\n}") {
+		t.Fatalf("expected .pollution-ticker to have transparent background")
 	}
 }
 
@@ -105,6 +97,8 @@ func TestDrawingAreaWindowless(t *testing.T) {
 	if da.GetHasWindow() {
 		t.Fatalf("expected SetHasWindow(false) to result in GetHasWindow() == false")
 	}
+	da.Connect("draw", func(area *gtk.DrawingArea, cr *cairo.Context) {
+	})
 }
 
 

@@ -10,6 +10,7 @@ import (
 	"github.com/gotk3/gotk3/gdk"
 	"github.com/gotk3/gotk3/glib"
 	"github.com/gotk3/gotk3/gtk"
+	"github.com/gotk3/gotk3/pango"
 
 	"weatherwidget/assets"
 	"weatherwidget/internal/config"
@@ -47,13 +48,12 @@ type panelView interface {
 func (p *cityPanel) rootBox() *gtk.Box { return p.root }
 
 // tickerAllocation returns the pollution ticker's screen allocation, or nil if
-// the ticker is hidden or unavailable. Used by paintCards to paint a tinted
-// background behind the scrolling ticker text.
+// the ticker is hidden or unavailable.
 func (p *cityPanel) tickerAllocation() *gtk.Allocation {
-	if p.tickerScroll == nil || !p.tickerScroll.GetVisible() {
+	if p.tickerArea == nil || !p.tickerArea.GetVisible() {
 		return nil
 	}
-	alloc := p.tickerScroll.GetAllocation()
+	alloc := p.tickerArea.GetAllocation()
 	return alloc
 }
 
@@ -102,18 +102,14 @@ type cityPanel struct {
 	descLbl *gtk.Label
 
 	// Pollution info ticker (Enhanced mode top header row, to the right of cityLbl)
-	headerBox      *gtk.Box
-	tickerScroll   *gtk.ScrolledWindow
-	tickerTrack    *gtk.Box
-	tickerLeftPad  *gtk.Box
-	tickerRightPad *gtk.Box
-	tickerLbl      *gtk.Label
-	tickerItems    []weather.PollutionTickerItem
-	tickerIdx      int
-	tickerStagger  int
-	tickerPos      float64
-	tickerPadWidth int
-	tickerStop     chan struct{}
+	headerBox     *gtk.Box
+	tickerArea    *gtk.DrawingArea
+	tickerItems   []weather.PollutionTickerItem
+	tickerIdx     int
+	tickerStagger int
+	tickerPos     float64
+	tickerTextW   float64
+	tickerStop    chan struct{}
 
 	feelsPill *gtk.Box
 	feelsIcon *gtk.Image
@@ -202,55 +198,25 @@ func newCityPanel(city, region, timezone string, lm *i18n.LocaleManager) (*cityP
 	p.cityLbl = cityLbl
 	headerBox.PackStart(cityLbl, false, false, 0)
 
-	tickerScroll, err := gtk.ScrolledWindowNew(nil, nil)
+	tickerArea, err := gtk.DrawingAreaNew()
 	if err != nil {
 		return nil, err
 	}
-	tickerScroll.SetPolicy(gtk.POLICY_EXTERNAL, gtk.POLICY_NEVER)
-	tickerScroll.SetHExpand(true)
-	tickerScroll.SetHAlign(gtk.ALIGN_FILL)
-	tickerScroll.SetVAlign(gtk.ALIGN_CENTER)
-	tickerScroll.SetSizeRequest(80, 20)
-	tickerScroll.SetNoShowAll(true)
-	tickerScroll.SetShadowType(gtk.SHADOW_NONE)
-	if sc, err := tickerScroll.GetStyleContext(); err == nil {
+	tickerArea.SetHasWindow(false)
+	tickerArea.SetHExpand(true)
+	tickerArea.SetHAlign(gtk.ALIGN_FILL)
+	tickerArea.SetVAlign(gtk.ALIGN_CENTER)
+	tickerArea.SetSizeRequest(80, 20)
+	tickerArea.SetNoShowAll(true)
+	if sc, err := tickerArea.GetStyleContext(); err == nil {
 		sc.AddClass("pollution-ticker")
 	}
-
-	tickerTrack, err := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 0)
-	if err != nil {
-		return nil, err
-	}
-	p.tickerTrack = tickerTrack
-
-	// leftPad is transparent and sized dynamically to the visible page size
-	// of tickerScroll, positioning the label's first character exactly at
-	// the right boundary of the view so it starts at point 0 on the right.
-	// rightPad provides a clean transparent pause before the next item.
-	leftPad, _ := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 0)
-	leftPad.SetSizeRequest(240, 1)
-	p.tickerLeftPad = leftPad
-
-	rightPad, _ := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 0)
-	rightPad.SetSizeRequest(240+tickerTrailingGap, 1)
-	p.tickerRightPad = rightPad
-
-	tickerLbl, err := gtk.LabelNew("")
-	if err != nil {
-		return nil, err
-	}
-	tickerLbl.SetSingleLineMode(true)
-	tickerLbl.SetVAlign(gtk.ALIGN_CENTER)
-	p.tickerLbl = tickerLbl
-
-	tickerTrack.PackStart(leftPad, false, false, 0)
-	tickerTrack.PackStart(tickerLbl, false, false, 0)
-	tickerTrack.PackStart(rightPad, false, false, 0)
-	tickerScroll.Add(tickerTrack)
-	tickerTrack.ShowAll()
-	tickerScroll.Hide()
-	p.tickerScroll = tickerScroll
-	headerBox.PackStart(tickerScroll, true, true, 0)
+	tickerArea.Connect("draw", func(da *gtk.DrawingArea, cr *cairoContext) {
+		p.drawTicker(cr)
+	})
+	tickerArea.Hide()
+	p.tickerArea = tickerArea
+	headerBox.PackStart(tickerArea, true, true, 0)
 
 	root.PackStart(headerBox, false, false, 0)
 
@@ -763,8 +729,8 @@ func (p *cityPanel) applyTicker(pf *config.PollutionFields) {
 	if len(items) == 0 {
 		p.stopTicker()
 		p.tickerItems = nil
-		if p.tickerScroll != nil {
-			p.tickerScroll.Hide()
+		if p.tickerArea != nil {
+			p.tickerArea.Hide()
 		}
 		return
 	}
@@ -779,8 +745,9 @@ func (p *cityPanel) applyTicker(pf *config.PollutionFields) {
 		}
 	}
 	p.tickerItems = items
-	if p.tickerScroll != nil {
-		p.tickerScroll.Show()
+	if p.tickerArea != nil {
+		p.tickerArea.Show()
+		p.tickerArea.QueueDraw()
 	}
 	if same && p.tickerStop != nil {
 		return
@@ -788,14 +755,7 @@ func (p *cityPanel) applyTicker(pf *config.PollutionFields) {
 
 	p.stopTicker()
 	p.tickerIdx = p.tickerStagger % len(p.tickerItems)
-	p.tickerLbl.SetMarkup(formatTickerItemMarkup(p.tickerItems[p.tickerIdx]))
-
-	// Start at position 0 so the first character enters from the right edge
-	// (offset by leftPad, which matches the visible page size).
 	p.tickerPos = 0
-	if hadj := p.tickerScroll.GetHAdjustment(); hadj != nil {
-		hadj.SetValue(0)
-	}
 
 	stopCh := make(chan struct{})
 	p.tickerStop = stopCh
@@ -808,42 +768,76 @@ func (p *cityPanel) applyTicker(pf *config.PollutionFields) {
 				return
 			case <-ticker.C:
 				runOnUI(func() {
-					if len(p.tickerItems) == 0 || p.tickerScroll == nil || !p.tickerScroll.GetVisible() {
+					if len(p.tickerItems) == 0 || p.tickerArea == nil || !p.tickerArea.GetVisible() {
 						return
 					}
-					hadj := p.tickerScroll.GetHAdjustment()
-					if hadj == nil {
+					alloc := p.tickerArea.GetAllocation()
+					w := float64(alloc.GetWidth())
+					if w <= 0 {
 						return
-					}
-					pageSize := hadj.GetPageSize()
-					if pageSize <= 0 {
-						return
-					}
-					pw := int(pageSize)
-					if pw > 0 && p.tickerPadWidth != pw {
-						p.tickerPadWidth = pw
-						if p.tickerLeftPad != nil {
-							p.tickerLeftPad.SetSizeRequest(pw, 1)
-						}
-						if p.tickerRightPad != nil {
-							p.tickerRightPad.SetSizeRequest(pw+tickerTrailingGap, 1)
-						}
-						if p.tickerPos == 0 {
-							hadj.SetValue(0)
-						}
 					}
 					p.tickerPos += 1.6
-					maxScroll := hadj.GetUpper() - pageSize
-					if maxScroll > 10 && p.tickerPos >= maxScroll {
+					textW := p.tickerTextW
+					if textW <= 0 {
+						textW = 200
+					}
+					maxScroll := w + textW + float64(tickerTrailingGap)
+					if p.tickerPos >= maxScroll {
 						p.tickerIdx = (p.tickerIdx + 1) % len(p.tickerItems)
-						p.tickerLbl.SetMarkup(formatTickerItemMarkup(p.tickerItems[p.tickerIdx]))
 						p.tickerPos = 0
 					}
-					hadj.SetValue(p.tickerPos)
+					p.tickerArea.QueueDraw()
 				})
 			}
 		}
 	}(stopCh)
+}
+
+// drawTicker renders the current ticker item using Pango directly onto the card's
+// Cairo context. Because tickerArea is windowless (SetHasWindow(false)), the card
+// background sits directly behind the text, eliminating punch-through and seams.
+func (p *cityPanel) drawTicker(cr *cairoContext) {
+	if len(p.tickerItems) == 0 || p.tickerArea == nil {
+		return
+	}
+	alloc := p.tickerArea.GetAllocation()
+	w := float64(alloc.GetWidth())
+	h := float64(alloc.GetHeight())
+	if w <= 0 || h <= 0 {
+		return
+	}
+
+	cr.Save()
+	defer cr.Restore()
+
+	// Clip strictly to the ticker area bounds
+	cr.Rectangle(0, 0, w, h)
+	cr.Clip()
+
+	if p.tickerIdx < 0 || p.tickerIdx >= len(p.tickerItems) {
+		p.tickerIdx = 0
+	}
+	markup := formatTickerItemMarkup(p.tickerItems[p.tickerIdx])
+
+	layout := pango.CairoCreateLayout(cr)
+	desc := pango.FontDescriptionFromString("Sans 11")
+	layout.SetFontDescription(desc)
+	layout.SetMarkup(markup, -1)
+
+	pw, ph := layout.GetSize()
+	textW := float64(pw) / float64(pango.SCALE)
+	textH := float64(ph) / float64(pango.SCALE)
+	p.tickerTextW = textW
+
+	y := (h - textH) / 2
+	if y < 0 {
+		y = 0
+	}
+
+	// Starts at the far right edge of the ticker area and scrolls to the left
+	x := w - p.tickerPos
+	cr.MoveTo(x, y)
+	pango.CairoShowLayout(cr, layout)
 }
 
 func (p *cityPanel) stopTicker() {
