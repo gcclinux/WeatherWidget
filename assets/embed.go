@@ -12,6 +12,11 @@ var Icons embed.FS
 //go:embed demo.png
 var DemoPNG []byte
 
+// AppICO embeds the Windows application icon containing multi-resolution images.
+//
+//go:embed app.ico
+var AppICO []byte
+
 // Fonts embeds custom TTF font files for crisp UI typography.
 //
 //go:embed fonts/*.ttf
