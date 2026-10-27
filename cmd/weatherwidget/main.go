@@ -1,7 +1,5 @@
-// Package main is the entry point for the WeatherWidget application.
-// This file handles Windows, using the Fyne UI layer.
-// See main_darwin.go for the macOS (native AppKit) entry point and
-// cmd/weatherwidget-gtk for the Linux (native GTK3) entry point.
+// Package main is the entry point for the WeatherWidget application on Windows.
+// It uses the native Windows UI layer (uiwindows).
 
 //go:build windows
 
@@ -13,11 +11,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"fyne.io/fyne/v2/app"
-	"fyne.io/fyne/v2/theme"
-
-	appmanager "weatherwidget/internal/app"
-	"weatherwidget/internal/ui"
+	uiwindows "weatherwidget/internal/ui-windows"
 )
 
 // version is set at build time via -ldflags "-X main.version=1.0.6"
@@ -25,13 +19,8 @@ var version = "dev"
 
 func main() {
 	debugFlag := flag.Bool("debug", false, "Enable debug logging to a file")
-	softwareFlag := flag.Bool("software", false, "Use software rendering (fixes OpenGL driver issues)")
 	settingsFlag := flag.Bool("settings", false, "Open the settings window on launch")
 	flag.Parse()
-
-	if *softwareFlag {
-		os.Setenv("FYNE_RENDER", "software")
-	}
 
 	appDataDir := appDataDirectory()
 
@@ -50,19 +39,9 @@ func main() {
 		}
 	}
 
-	fyneApp := app.NewWithID("com.weatherwidget")
-	fyneApp.Settings().SetTheme(ui.NewWidgetTheme(theme.DefaultTheme()))
-
-	manager := appmanager.NewAppManager(fyneApp, appDataDir)
-	if err := manager.Run(); err != nil {
+	if err := uiwindows.Run(appDataDir, *settingsFlag); err != nil {
 		log.Fatalf("failed to start WeatherWidget: %v", err)
 	}
-
-	if *settingsFlag {
-		manager.OpenSettings()
-	}
-
-	fyneApp.Run()
 }
 
 // appDataDirectory returns the base directory for application data.
