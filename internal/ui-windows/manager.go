@@ -321,12 +321,9 @@ func (m *Manager) manualRefresh() {
 	}
 }
 
-// openSettings opens the WebView2 settings window (Phase 4 hook).
+// openSettings opens the WebView2 settings window.
 func (m *Manager) openSettings() {
-	m.mu.Lock()
-	m.isSettingsOpen = true
-	m.mu.Unlock()
-	log.Println("uiwindows: open settings requested")
+	m.OpenSettings()
 }
 
 // shutdown tears down components and posts WM_QUIT to terminate the message loop.

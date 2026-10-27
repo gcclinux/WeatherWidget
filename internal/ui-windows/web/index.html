@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WeatherWidget Settings</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="app-container">
+    <!-- Sidebar Navigation -->
+    <nav class="sidebar">
+      <div class="sidebar-header">
+        <div class="app-icon">⛅</div>
+        <div class="app-title-group">
+          <span class="app-title">WeatherWidget</span>
+          <span class="app-subtitle">Settings</span>
+        </div>
+      </div>
+      <ul class="nav-tabs">
+        <li class="nav-item active" data-tab="tab-cities">
+          <span class="nav-icon">📍</span>
+          <span class="nav-label">Cities</span>
+        </li>
+        <li class="nav-item" data-tab="tab-appearance">
+          <span class="nav-icon">🎨</span>
+          <span class="nav-label">Appearance</span>
+        </li>
+        <li class="nav-item" data-tab="tab-display">
+          <span class="nav-icon">📊</span>
+          <span class="nav-label">Display & Metrics</span>
+        </li>
+        <li class="nav-item" data-tab="tab-api">
+          <span class="nav-icon">🔑</span>
+          <span class="nav-label">Data & Provider</span>
+        </li>
+        <li class="nav-item" data-tab="tab-about">
+          <span class="nav-icon">ℹ️</span>
+          <span class="nav-label">About</span>
+        </li>
+      </ul>
+      <div class="sidebar-footer">
+        <button id="btn-save" class="btn btn-primary">Save Changes</button>
+        <button id="btn-cancel" class="btn btn-secondary">Close</button>
+      </div>
+    </nav>
+
+    <!-- Content Area -->
+    <main class="content-area">
+      <!-- Status Toast -->
+      <div id="toast" class="toast hidden"></div>
+
+      <!-- Tab 1: Cities -->
+      <section id="tab-cities" class="tab-pane active">
+        <h2 class="pane-title">Configured Cities</h2>
+        <p class="pane-desc">Manage the locations displayed on your desktop weather widget.</p>
+
+        <div class="card">
+          <div class="city-add-bar">
+            <input type="text" id="new-city-name" placeholder="City name (e.g. London)" class="input-text">
+            <input type="text" id="new-city-region" placeholder="Region / Country (e.g. UK)" class="input-text">
+            <input type="text" id="new-city-tz" placeholder="Timezone (e.g. Europe/London)" class="input-text">
+            <button id="btn-add-city" class="btn btn-accent">+ Add City</button>
+          </div>
+          <ul id="city-list" class="city-list"></ul>
+        </div>
+      </section>
+
+      <!-- Tab 2: Appearance -->
+      <section id="tab-appearance" class="tab-pane">
+        <h2 class="pane-title">Appearance & Styling</h2>
+        <p class="pane-desc">Customize layout, transparency, and typography.</p>
+
+        <div class="card">
+          <div class="setting-row">
+            <div class="setting-info">
+              <label class="setting-label">View Layout</label>
+              <span class="setting-hint">Choose between horizontal columns or stacked cards</span>
+            </div>
+            <select id="sel-view-mode" class="input-select">
+              <option value="enhanced">Enhanced (Stacked Cards)</option>
+              <option value="simple">Simple (Vertical Columns)</option>
+            </select>
+          </div>
+
+          <div class="setting-row">
+            <div class="setting-info">
+              <label class="setting-label">Widget Transparency</label>
+              <span class="setting-hint" id="opacity-hint">Background opacity (100%)</span>
+            </div>
+            <input type="range" id="slider-opacity" min="25" max="100" step="5" value="100" class="input-range">
+          </div>
+
+          <div class="setting-row">
+            <div class="setting-info">
+              <label class="setting-label">Borderless Mode</label>
+              <span class="setting-hint">Hide card background panel completely</span>
+            </div>
+            <label class="switch">
+              <input type="checkbox" id="chk-no-bg">
+              <span class="slider"></span>
+            </label>
+          </div>
+
+          <div class="setting-row">
+            <div class="setting-info">
+              <label class="setting-label">Temperature Unit</label>
+              <span class="setting-hint">Display temperatures in Celsius, Fahrenheit, or Kelvin</span>
+            </div>
+            <select id="sel-temp-unit" class="input-select">
+              <option value="celsius">Celsius (°C)</option>
+              <option value="fahrenheit">Fahrenheit (°F)</option>
+              <option value="kelvin">Kelvin (K)</option>
+            </select>
+          </div>
+
+          <div class="setting-row">
+            <div class="setting-info">
+              <label class="setting-label">Wind Speed Unit</label>
+              <span class="setting-hint">Display wind speeds in km/h, mph, or knots</span>
+            </div>
+            <select id="sel-wind-unit" class="input-select">
+              <option value="kmh">Kilometres per hour (km/h)</option>
+              <option value="mph">Miles per hour (mph)</option>
+              <option value="knots">Knots (kn)</option>
+            </select>
+          </div>
+
+          <div class="setting-row">
+            <div class="setting-info">
+              <label class="setting-label">Corner Pinning</label>
+              <span class="setting-hint">Default desktop placement corner</span>
+            </div>
+            <select id="sel-corner" class="input-select">
+              <option value="top-left">Top Left</option>
+              <option value="top-right">Top Right</option>
+              <option value="bottom-left">Bottom Left</option>
+              <option value="bottom-right">Bottom Right</option>
+            </select>
+          </div>
+        </div>
+      </section>
+
+      <!-- Tab 3: Display & Metrics -->
+      <section id="tab-display" class="tab-pane">
+        <h2 class="pane-title">Metrics & Fields</h2>
+        <p class="pane-desc">Toggle the weather and pollution metrics visible on cards.</p>
+
+        <div class="card">
+          <h3 class="card-subtitle">Weather Metrics</h3>
+          <div class="toggle-grid">
+            <label class="checkbox-pill"><input type="checkbox" id="df-feels-like"> Feels Like</label>
+            <label class="checkbox-pill"><input type="checkbox" id="df-humidity"> Humidity</label>
+            <label class="checkbox-pill"><input type="checkbox" id="df-wind"> Wind Speed</label>
+            <label class="checkbox-pill"><input type="checkbox" id="df-gust"> Wind Gust</label>
+            <label class="checkbox-pill"><input type="checkbox" id="df-dew"> Dew Point</label>
+            <label class="checkbox-pill"><input type="checkbox" id="df-pressure"> Pressure</label>
+            <label class="checkbox-pill"><input type="checkbox" id="df-uv"> UV Index</label>
+          </div>
+
+          <h3 class="card-subtitle" style="margin-top: 24px;">Air Quality & Pollutants</h3>
+          <div class="toggle-grid">
+            <label class="checkbox-pill"><input type="checkbox" id="pf-aqi"> Air Quality Index (AQI)</label>
+            <label class="checkbox-pill"><input type="checkbox" id="pf-pm25"> PM2.5</label>
+            <label class="checkbox-pill"><input type="checkbox" id="pf-pm10"> PM10</label>
+            <label class="checkbox-pill"><input type="checkbox" id="pf-o3"> Ozone (O3)</label>
+            <label class="checkbox-pill"><input type="checkbox" id="pf-no2"> Nitrogen Dioxide (NO2)</label>
+            <label class="checkbox-pill"><input type="checkbox" id="pf-so2"> Sulphur Dioxide (SO2)</label>
+            <label class="checkbox-pill"><input type="checkbox" id="pf-co"> Carbon Monoxide (CO)</label>
+          </div>
+        </div>
+      </section>
+
+      <!-- Tab 4: API & Provider -->
+      <section id="tab-api" class="tab-pane">
+        <h2 class="pane-title">Data Source & Provider</h2>
+        <p class="pane-desc">Configure where WeatherWidget retrieves weather data.</p>
+
+        <div class="card">
+          <div class="setting-row">
+            <div class="setting-info">
+              <label class="setting-label">Weather Provider</label>
+              <span class="setting-hint">Choose your preferred weather data provider</span>
+            </div>
+            <select id="sel-provider" class="input-select">
+              <option value="openmeteo">Open-Meteo (Free, No Key Required)</option>
+              <option value="easyweatherwidget">EasyWeatherWidget Gateway</option>
+              <option value="openweathermap">OpenWeatherMap</option>
+              <option value="weatherunderground">Weather Underground</option>
+            </select>
+          </div>
+
+          <div class="setting-row" id="row-api-key">
+            <div class="setting-info">
+              <label class="setting-label">API Key</label>
+              <span class="setting-hint">Required for OpenWeatherMap / Weather Underground</span>
+            </div>
+            <input type="password" id="input-api-key" placeholder="Enter API Key" class="input-text" style="width: 260px;">
+          </div>
+
+          <div class="setting-row">
+            <div class="setting-info">
+              <label class="setting-label">Refresh Interval</label>
+              <span class="setting-hint">Minutes between automatic weather updates</span>
+            </div>
+            <select id="sel-refresh-interval" class="input-select">
+              <option value="5">5 Minutes</option>
+              <option value="15">15 Minutes</option>
+              <option value="30">30 Minutes</option>
+              <option value="60">60 Minutes</option>
+            </select>
+          </div>
+
+          <div style="margin-top: 16px;">
+            <button id="btn-test-connection" class="btn btn-secondary">Test Connection</button>
+            <span id="test-result" style="margin-left: 12px; font-size: 13px;"></span>
+          </div>
+        </div>
+      </section>
+
+      <!-- Tab 5: About -->
+      <section id="tab-about" class="tab-pane">
+        <h2 class="pane-title">About WeatherWidget</h2>
+        <p class="pane-desc">System information, autostart, and credits.</p>
+
+        <div class="card">
+          <div class="about-hero">
+            <div class="about-icon">⛅</div>
+            <div>
+              <div class="about-name">Weather Widget for Windows</div>
+              <div class="about-version" id="about-version">Version 2.1.0 (Native Win32 & WebView2)</div>
+              <div class="about-copyright">© 2026 Ricardo Wagemaker. All rights reserved.</div>
+            </div>
+          </div>
+
+          <div class="setting-row" style="margin-top: 24px;">
+            <div class="setting-info">
+              <label class="setting-label">Start with Windows</label>
+              <span class="setting-hint">Automatically launch WeatherWidget on user logon</span>
+            </div>
+            <label class="switch">
+              <input type="checkbox" id="chk-autostart">
+              <span class="slider"></span>
+            </label>
+          </div>
+
+          <div class="about-links" style="margin-top: 20px;">
+            <a href="https://easysmartapps.co.uk" target="_blank" class="about-link">Website</a>
+            <span class="dot">•</span>
+            <a href="https://easysmartapps.co.uk/contact" target="_blank" class="about-link">Support</a>
+            <span class="dot">•</span>
+            <a href="https://github.com/ricardowagemaker/WeatherWidget" target="_blank" class="about-link">GitHub</a>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
