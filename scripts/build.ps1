@@ -70,7 +70,7 @@ function Set-CompilerForArch {
 
     $env:GOOS = "windows"
     $env:GOARCH = $TargetArch
-    $env:CGO_ENABLED = "1"
+    $env:CGO_ENABLED = "0"
 
     if ($TargetArch -eq "arm64") {
         if (Test-Path "C:\msys64\clangarm64\bin\clang.exe") {
