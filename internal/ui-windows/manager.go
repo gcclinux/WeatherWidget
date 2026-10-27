@@ -45,9 +45,18 @@ type Manager struct {
 	sched      *scheduler.RefreshScheduler
 	guard      *guard.SingleInstanceGuard
 
-	tray            *Tray
+	tray   *Tray
+	widget *Widget
+	drawer *WidgetDrawer
+
 	isWidgetVisible bool
 	isSettingsOpen  bool
+
+	results   []weather.WeatherResult
+	resultsMu sync.Mutex
+
+	dragTimer *time.Timer
+	stopClock chan struct{}
 
 	mu sync.Mutex
 }
@@ -62,6 +71,8 @@ func Run(appDataDir string, openSettings bool) error {
 	m := &Manager{
 		appDataDir:      appDataDir,
 		isWidgetVisible: true,
+		stopClock:       make(chan struct{}),
+		drawer:          NewWidgetDrawer(),
 	}
 
 	// 1. Acquire single-instance guard.
@@ -93,7 +104,29 @@ func Run(appDataDir string, openSettings bool) error {
 		}
 	}
 
-	// 4. Initialize weather service and scheduler.
+	// 4. Initialize Desktop Layered Window.
+	widget, err := NewWidget(m.onWidgetDragEnd, m.onWidgetContextMenu)
+	if err != nil {
+		log.Printf("uiwindows: failed to create desktop widget window: %v", err)
+	} else {
+		m.widget = widget
+		defer m.widget.Destroy()
+
+		// Initial render to establish dimensions and surface
+		m.redraw()
+
+		// Apply placement (custom X/Y or corner pinning)
+		m.widget.ApplyPlacement(cfg.CustomX, cfg.CustomY, cfg.CornerPosition, cfg.MonitorIndex)
+
+		if m.isWidgetVisible {
+			m.widget.Show()
+		}
+	}
+
+	// 5. Initialize 1-second clock ticker for live local times.
+	go m.startClockLoop()
+
+	// 6. Initialize weather service and scheduler.
 	provider := m.buildProvider(cfg)
 	m.weatherSvc = weather.NewWeatherService(provider)
 
@@ -109,7 +142,7 @@ func Run(appDataDir string, openSettings bool) error {
 	m.sched.Start()
 	defer m.sched.Stop()
 
-	// 5. Initialize power resume listener to immediately refresh when waking from sleep.
+	// 7. Initialize power resume listener to immediately refresh when waking from sleep.
 	resumeCh := power.ResumeNotifier()
 	go func() {
 		for range resumeCh {
@@ -118,7 +151,7 @@ func Run(appDataDir string, openSettings bool) error {
 		}
 	}()
 
-	// 6. Setup system tray icon and menu.
+	// 8. Setup system tray icon and menu.
 	trayCallbacks := TrayCallbacks{
 		OnShowWidget: func() { m.showWidget() },
 		OnHideWidget: func() { m.hideWidget() },
@@ -142,7 +175,7 @@ func Run(appDataDir string, openSettings bool) error {
 
 	log.Println("uiwindows: entering main message loop")
 
-	// 7. Win32 Message pump.
+	// 9. Win32 Message pump.
 	var winMsg msg
 	for {
 		ret, _, _ := procGetMessageW.Call(
@@ -150,7 +183,6 @@ func Run(appDataDir string, openSettings bool) error {
 			0, 0, 0,
 		)
 		if ret == 0 || ret == ^uintptr(0) {
-			// WM_QUIT or error
 			break
 		}
 		procTranslateMessage.Call(uintptr(unsafe.Pointer(&winMsg)))
@@ -159,6 +191,76 @@ func Run(appDataDir string, openSettings bool) error {
 
 	log.Println("uiwindows: main message loop terminated cleanly")
 	return nil
+}
+
+// redraw renders all cards and updates the layered window surface.
+func (m *Manager) redraw() {
+	if m.widget == nil || m.drawer == nil || m.cfg == nil {
+		return
+	}
+
+	m.resultsMu.Lock()
+	res := m.results
+	m.resultsMu.Unlock()
+
+	img := m.drawer.Render(m.cfg.Cities, res, m.cfg, m.lm, time.Now())
+	m.widget.UpdateSurface(img)
+}
+
+// startClockLoop runs a 1-second ticker that updates clocks on the widget.
+func (m *Manager) startClockLoop() {
+	ticker := time.NewTicker(1 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-m.stopClock:
+			return
+		case <-ticker.C:
+			if m.isWidgetVisible {
+				m.redraw()
+			}
+		}
+	}
+}
+
+// onWeatherUpdate is called by the scheduler whenever new weather data is received.
+func (m *Manager) onWeatherUpdate(results []weather.WeatherResult) {
+	log.Printf("uiwindows: received weather update for %d cities", len(results))
+	m.resultsMu.Lock()
+	m.results = results
+	m.resultsMu.Unlock()
+	m.redraw()
+}
+
+// onWidgetDragEnd debounces and persists custom coordinates to config.
+func (m *Manager) onWidgetDragEnd(x, y int) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if m.dragTimer != nil {
+		m.dragTimer.Stop()
+	}
+
+	m.dragTimer = time.AfterFunc(400*time.Millisecond, func() {
+		m.mu.Lock()
+		defer m.mu.Unlock()
+
+		m.cfg.CustomX = &x
+		m.cfg.CustomY = &y
+		if err := m.cfgSvc.Save(m.cfg); err != nil {
+			log.Printf("uiwindows: failed to save custom position (%d, %d): %v", x, y, err)
+		} else {
+			log.Printf("uiwindows: saved custom position: (%d, %d)", x, y)
+		}
+	})
+}
+
+// onWidgetContextMenu displays the tray context menu on right click.
+func (m *Manager) onWidgetContextMenu() {
+	if m.tray != nil {
+		m.tray.showContextMenu()
+	}
 }
 
 // buildProvider creates a WeatherProvider based on the config.
@@ -185,25 +287,35 @@ func (m *Manager) t(key string) string {
 	return m.lm.T(key)
 }
 
-// showWidget makes the widget window visible (Phase 2 hook).
+// showWidget makes the widget window visible.
 func (m *Manager) showWidget() {
 	m.mu.Lock()
 	m.isWidgetVisible = true
 	m.mu.Unlock()
+
+	if m.widget != nil {
+		m.widget.Show()
+		m.redraw()
+	}
 	log.Println("uiwindows: show widget requested")
 }
 
-// hideWidget hides the widget window (Phase 2 hook).
+// hideWidget hides the widget window.
 func (m *Manager) hideWidget() {
 	m.mu.Lock()
 	m.isWidgetVisible = false
 	m.mu.Unlock()
+
+	if m.widget != nil {
+		m.widget.Hide()
+	}
 	log.Println("uiwindows: hide widget requested")
 }
 
-// manualRefresh triggers an immediate weather data fetch.
+// manualRefresh triggers an immediate weather data fetch and re-renders clocks.
 func (m *Manager) manualRefresh() {
 	log.Println("uiwindows: manual weather refresh triggered")
+	m.redraw()
 	if m.sched != nil {
 		m.sched.FetchNow()
 	}
@@ -220,15 +332,22 @@ func (m *Manager) openSettings() {
 // shutdown tears down components and posts WM_QUIT to terminate the message loop.
 func (m *Manager) shutdown() {
 	log.Println("uiwindows: shutting down application")
+
+	select {
+	case <-m.stopClock:
+	default:
+		close(m.stopClock)
+	}
+
+	if m.widget != nil {
+		m.widget.Destroy()
+		m.widget = nil
+	}
+
 	if m.tray != nil {
 		m.tray.Destroy()
 		m.tray = nil
 	}
-	procPostQuitMessage.Call(0)
-}
 
-// onWeatherUpdate is called by the scheduler whenever new weather data is received.
-func (m *Manager) onWeatherUpdate(results []weather.WeatherResult) {
-	log.Printf("uiwindows: received weather update for %d cities", len(results))
-	// In Phase 2/3 this will redraw the widget window.
+	procPostQuitMessage.Call(0)
 }
