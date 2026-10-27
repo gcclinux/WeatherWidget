@@ -112,11 +112,11 @@ func Run(appDataDir string, openSettings bool) error {
 		m.widget = widget
 		defer m.widget.Destroy()
 
-		// Initial render to establish dimensions and surface
-		m.redraw()
-
-		// Apply placement (custom X/Y or corner pinning)
+		// Apply placement (custom X/Y or corner pinning, clamped to monitor bounds)
 		m.widget.ApplyPlacement(cfg.CustomX, cfg.CustomY, cfg.CornerPosition, cfg.MonitorIndex)
+
+		// Initial render to establish dimensions and surface at placement
+		m.redraw()
 
 		if m.isWidgetVisible {
 			m.widget.Show()
@@ -195,15 +195,27 @@ func Run(appDataDir string, openSettings bool) error {
 
 // redraw renders all cards and updates the layered window surface.
 func (m *Manager) redraw() {
-	if m.widget == nil || m.drawer == nil || m.cfg == nil {
+	if m.widget == nil || m.drawer == nil {
 		return
 	}
 
+	m.mu.Lock()
+	cfg := m.cfg
+	if cfg == nil {
+		m.mu.Unlock()
+		return
+	}
+	cities := make([]config.CityConfig, len(cfg.Cities))
+	copy(cities, cfg.Cities)
+	cfgCopy := *cfg
+	m.mu.Unlock()
+
 	m.resultsMu.Lock()
-	res := m.results
+	res := make([]weather.WeatherResult, len(m.results))
+	copy(res, m.results)
 	m.resultsMu.Unlock()
 
-	img := m.drawer.Render(m.cfg.Cities, res, m.cfg, m.lm, time.Now())
+	img := m.drawer.Render(cities, res, &cfgCopy, m.lm, time.Now())
 	m.widget.UpdateSurface(img)
 }
 
