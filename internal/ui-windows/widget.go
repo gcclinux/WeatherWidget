@@ -5,6 +5,7 @@ package uiwindows
 import (
 	"image"
 	"log"
+	"sync"
 	"syscall"
 	"unsafe"
 
@@ -42,11 +43,9 @@ const (
 	wsExToolWindow = 0x00000080
 	wsPopup        = 0x80000000
 
-	hwndBottom  = uintptr(1)  // (HWND)1 == HWND_BOTTOM
-	hwndTopMost = ^uintptr(0) // (HWND)-1 == HWND_TOPMOST
-
 	swpNoSize       = 0x0001
 	swpNoMove       = 0x0002
+	swpNoZOrder     = 0x0004
 	swpNoActivate   = 0x0010
 	swpShowWindow   = 0x0040
 	swpHideWindow   = 0x0080
@@ -117,6 +116,8 @@ type monitorInfoW struct {
 
 // Widget manages the transparent, borderless, draggable desktop layered window.
 type Widget struct {
+	mu sync.Mutex
+
 	hwnd      uintptr
 	hdcScreen uintptr
 	hdcMem    uintptr
@@ -186,7 +187,14 @@ func NewWidget(onPosChanged func(x, y int), onContextMenu func()) (*Widget, erro
 
 // UpdateSurface updates the layered window with the provided 32-bit ARGB image.
 func (w *Widget) UpdateSurface(img *image.RGBA) {
-	if w.hwnd == 0 || img == nil {
+	if img == nil {
+		return
+	}
+
+	w.mu.Lock()
+	defer w.mu.Unlock()
+
+	if w.hwnd == 0 {
 		return
 	}
 
@@ -269,7 +277,7 @@ func (w *Widget) UpdateSurface(img *image.RGBA) {
 		AlphaFormat:         acSrcAlpha,
 	}
 
-	procUpdateLayeredWindow.Call(
+	ret, _, err := procUpdateLayeredWindow.Call(
 		w.hwnd,
 		w.hdcScreen,
 		uintptr(unsafe.Pointer(&ptDst)),
@@ -280,57 +288,98 @@ func (w *Widget) UpdateSurface(img *image.RGBA) {
 		uintptr(unsafe.Pointer(&blend)),
 		ulwAlpha,
 	)
+	if ret == 0 {
+		log.Printf("uiwindows: UpdateLayeredWindow failed: %v (hwnd=%#x, w=%d, h=%d)", err, w.hwnd, imgW, imgH)
+	} else {
+		log.Printf("uiwindows: UpdateLayeredWindow succeeded (hwnd=%#x, pos=(%d,%d), size=(%d,%d))", w.hwnd, w.posX, w.posY, imgW, imgH)
+	}
 }
 
-// SetPosition moves the widget window to screen coordinates (x, y) maintaining HWND_BOTTOM.
+// SetPosition moves the widget window to screen coordinates (x, y) maintaining Z-order.
 func (w *Widget) SetPosition(x, y int) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+
 	w.posX = x
 	w.posY = y
 	if w.hwnd != 0 {
 		procSetWindowPos.Call(
 			w.hwnd,
-			hwndBottom,
+			0,
 			uintptr(x),
 			uintptr(y),
 			0, 0,
-			swpNoSize|swpNoActivate,
+			swpNoSize|swpNoActivate|swpNoZOrder,
 		)
 	}
 }
 
 // ApplyPlacement calculates screen placement based on custom coordinates or corner position.
 func (w *Widget) ApplyPlacement(customX, customY *int, corner string, monitorIndex int) {
-	if customX != nil && customY != nil {
-		w.SetPosition(*customX, *customY)
-		return
-	}
-
 	monLeft, monTop, monWidth, monHeight := getMonitorBounds(monitorIndex)
 	const margin = 20
+
+	cardW := w.width
+	if cardW <= 0 {
+		cardW = 380
+	}
+	cardH := w.height
+	if cardH <= 0 {
+		cardH = 250
+	}
+
+	if customX != nil && customY != nil {
+		x := *customX
+		y := *customY
+
+		// Check if coordinates fall outside the monitor work area
+		maxX := monLeft + monWidth - 80
+		maxY := monTop + monHeight - 80
+
+		if x < monLeft || x > maxX || y < monTop || y > maxY {
+			log.Printf("uiwindows: saved coordinates (%d, %d) outside work area (%d, %d, %dx%d); safely clamping",
+				x, y, monLeft, monTop, monWidth, monHeight)
+			if x > monLeft+monWidth-cardW {
+				x = monLeft + monWidth - cardW - margin
+			}
+			if x < monLeft {
+				x = monLeft + margin
+			}
+			if y > monTop+monHeight-cardH {
+				y = monTop + monHeight - cardH - margin
+			}
+			if y < monTop {
+				y = monTop + margin
+			}
+		}
+
+		w.SetPosition(x, y)
+		return
+	}
 
 	targetX := monLeft + margin
 	targetY := monTop + margin
 
 	switch corner {
 	case "top-right":
-		targetX = monLeft + monWidth - w.width - margin
+		targetX = monLeft + monWidth - cardW - margin
 		targetY = monTop + margin
 	case "bottom-left":
 		targetX = monLeft + margin
-		targetY = monTop + monHeight - w.height - margin
+		targetY = monTop + monHeight - cardH - margin
 	case "bottom-right":
-		targetX = monLeft + monWidth - w.width - margin
-		targetY = monTop + monHeight - w.height - margin
+		targetX = monLeft + monWidth - cardW - margin
+		targetY = monTop + monHeight - cardH - margin
 	default: // "top-left"
 		targetX = monLeft + margin
 		targetY = monTop + margin
 	}
 
 	if targetX < monLeft {
-		targetX = monLeft
+		targetX = monLeft + margin
 	}
 	if targetY < monTop {
-		targetY = monTop
+		targetY = monTop + margin
 	}
 
 	w.SetPosition(targetX, targetY)
@@ -338,14 +387,20 @@ func (w *Widget) ApplyPlacement(customX, customY *int, corner string, monitorInd
 
 // Show makes the layered window visible on the desktop.
 func (w *Widget) Show() {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+
 	if w.hwnd != 0 {
 		procShowWindow.Call(w.hwnd, uintptr(swShowNA))
-		procSetWindowPos.Call(w.hwnd, hwndBottom, 0, 0, 0, 0, swpNoMove|swpNoSize|swpNoActivate|swpShowWindow)
+		procSetWindowPos.Call(w.hwnd, 0, 0, 0, 0, 0, swpNoMove|swpNoSize|swpNoActivate|swpShowWindow|swpNoZOrder)
 	}
 }
 
 // Hide hides the layered window.
 func (w *Widget) Hide() {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+
 	if w.hwnd != 0 {
 		procShowWindow.Call(w.hwnd, uintptr(swHide))
 	}
@@ -353,6 +408,9 @@ func (w *Widget) Hide() {
 
 // Destroy cleans up window handles, bitmaps, and DCs.
 func (w *Widget) Destroy() {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+
 	if w.hBitmap != 0 {
 		procDeleteObject.Call(w.hBitmap)
 		w.hBitmap = 0
@@ -402,7 +460,7 @@ func widgetWndProc(hwnd uintptr, umsg uint32, wparam, lparam uintptr) uintptr {
 			newY := int(w.dragStartWin.Y + dy)
 			w.posX = newX
 			w.posY = newY
-			procSetWindowPos.Call(hwnd, hwndBottom, uintptr(newX), uintptr(newY), 0, 0, swpNoSize|swpNoActivate)
+			procSetWindowPos.Call(hwnd, 0, uintptr(newX), uintptr(newY), 0, 0, swpNoSize|swpNoActivate|swpNoZOrder)
 		}
 		return 0
 

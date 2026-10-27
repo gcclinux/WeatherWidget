@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"runtime"
 	"strings"
 	"sync"
 	"time"
@@ -37,6 +38,9 @@ func (m *Manager) OpenSettings() {
 	settingsMu.Unlock()
 
 	go func() {
+		runtime.LockOSThread()
+		defer runtime.UnlockOSThread()
+
 		wv := webview2.NewWithOptions(webview2.WebViewOptions{
 			Debug:     false,
 			DataPath:  m.appDataDir,
@@ -81,7 +85,7 @@ func (m *Manager) OpenSettings() {
 				return fmt.Sprintf("invalid config json: %v", err), nil
 			}
 
-			// Save to config service
+			// Save to config file
 			if err := m.cfgSvc.Save(&newCfg); err != nil {
 				return fmt.Sprintf("failed to save config: %v", err), nil
 			}
@@ -96,11 +100,13 @@ func (m *Manager) OpenSettings() {
 				m.sched.SetCities(newCfg.Cities)
 			}
 
-			// Update widget placement and redraw
-			if m.widget != nil {
-				m.widget.ApplyPlacement(newCfg.CustomX, newCfg.CustomY, newCfg.CornerPosition, newCfg.MonitorIndex)
-			}
-			m.manualRefresh()
+			// Update widget placement and refresh asynchronously so WebView2 is never blocked
+			go func() {
+				if m.widget != nil {
+					m.widget.ApplyPlacement(newCfg.CustomX, newCfg.CustomY, newCfg.CornerPosition, newCfg.MonitorIndex)
+				}
+				m.manualRefresh()
+			}()
 
 			log.Println("uiwindows: settings saved successfully")
 			return "", nil
@@ -112,14 +118,16 @@ func (m *Manager) OpenSettings() {
 				return
 			}
 			m.mu.Lock()
-			m.cfg.ViewMode = previewCfg.ViewMode
-			m.cfg.Opacity = previewCfg.Opacity
-			m.cfg.NoBackground = previewCfg.NoBackground
-			m.cfg.TemperatureUnit = previewCfg.TemperatureUnit
-			m.cfg.WindSpeedUnit = previewCfg.WindSpeedUnit
+			if m.cfg != nil {
+				m.cfg.ViewMode = previewCfg.ViewMode
+				m.cfg.Opacity = previewCfg.Opacity
+				m.cfg.NoBackground = previewCfg.NoBackground
+				m.cfg.TemperatureUnit = previewCfg.TemperatureUnit
+				m.cfg.WindSpeedUnit = previewCfg.WindSpeedUnit
+			}
 			m.mu.Unlock()
 
-			m.redraw()
+			go m.redraw()
 		})
 
 		_ = wv.Bind("goCloseSettings", func() {
