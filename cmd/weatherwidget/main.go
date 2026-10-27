@@ -24,12 +24,13 @@ func main() {
 
 	appDataDir := appDataDirectory()
 
-	if err := os.MkdirAll(appDataDir, 0755); err != nil {
+	widgetDir := filepath.Join(appDataDir, "WeatherWidget")
+	if err := os.MkdirAll(widgetDir, 0755); err != nil {
 		log.Printf("failed to create app data directory: %v", err)
 	}
 
 	if *debugFlag {
-		logPath := filepath.Join(appDataDir, "debug.log")
+		logPath := filepath.Join(widgetDir, "debug.log")
 		logFile, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
 		if err == nil {
 			log.SetOutput(logFile)
