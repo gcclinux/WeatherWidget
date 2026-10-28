@@ -136,7 +136,7 @@
   "settings.about.knownIssue": "⚠ Problema conhecido na versão 1.0.6: posição persistente do pacote snapcraft não está funcionando, deve ser corrigido na nova versão.",
   "settings.about.manualLabel": "Manual:",
   "settings.about.previewLabel": "Visualização",
-  "settings.about.version": "**Versão:** 2.1.0",
+  "settings.about.version": "**Versão:** 2.2.0",
   "settings.about.websiteLabel": "Website:",
   "settings.background.enable": "Mostrar papel de parede de fundo",
   "settings.cancel": "Cancelar",

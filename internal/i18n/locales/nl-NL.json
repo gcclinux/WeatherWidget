@@ -136,7 +136,7 @@
   "settings.about.knownIssue": "⚠ Bekend probleem in versie 1.0.6: persistente positie van het snapcraft-pakket werkt niet, verwacht te worden opgelost in een nieuwe versie.",
   "settings.about.manualLabel": "Handleiding:",
   "settings.about.previewLabel": "Voorbeeld",
-  "settings.about.version": "**Versie:** 2.1.0",
+  "settings.about.version": "**Versie:** 2.2.0",
   "settings.about.websiteLabel": "Website:",
   "settings.background.enable": "Achtergrondachtergrond weergeven",
   "settings.cancel": "Annuleren",

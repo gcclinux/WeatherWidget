@@ -136,7 +136,7 @@
   "settings.about.knownIssue": "⚠ Version 1.0.6 bekanntes Problem: Persistente Position im Snapcraft-Paket funktioniert nicht, wird voraussichtlich in einer neuen Version behoben.",
   "settings.about.manualLabel": "Handbuch:",
   "settings.about.previewLabel": "Vorschau",
-  "settings.about.version": "**Version:** 2.1.0",
+  "settings.about.version": "**Version:** 2.2.0",
   "settings.about.websiteLabel": "Website:",
   "settings.background.enable": "Hintergrundbild anzeigen",
   "settings.cancel": "Abbrechen",

@@ -136,7 +136,7 @@
   "settings.about.knownIssue": "⚠ Znany problem w wersji 1.0.6: trwała pozycja w pakiecie snapcraft nie działa, oczekiwane naprawienie w nowej wersji.",
   "settings.about.manualLabel": "Instrukcja:",
   "settings.about.previewLabel": "Podgląd",
-  "settings.about.version": "**Wersja:** 2.1.0",
+  "settings.about.version": "**Wersja:** 2.2.0",
   "settings.about.websiteLabel": "Strona:",
   "settings.background.enable": "Pokaż tapetę tła",
   "settings.cancel": "Anuluj",

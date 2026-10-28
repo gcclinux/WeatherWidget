@@ -137,7 +137,7 @@
   "settings.about.knownIssue": "⚠ 1.0.6 版本已知问题: snapcraft 包在某些环境下位置持久化可能异常。",
   "settings.about.manualLabel": "用户手册:",
   "settings.about.previewLabel": "效果预览",
-  "settings.about.version": "**版本:** 2.1.0",
+  "settings.about.version": "**版本:** 2.2.0",
   "settings.about.websiteLabel": "官方网站:",
   "settings.background.enable": "显示背景壁纸",
   "settings.cancel": "取消",

@@ -136,7 +136,7 @@
   "settings.about.knownIssue": "⚠ Sürüm 1.0.6 bilinen sorun: snapcraft paketi kalıcı konum çalışmıyor, yeni sürümde düzeltilmesi bekleniyor.",
   "settings.about.manualLabel": "Kılavuz:",
   "settings.about.previewLabel": "Önizleme",
-  "settings.about.version": "**Sürüm:** 2.1.0",
+  "settings.about.version": "**Sürüm:** 2.2.0",
   "settings.about.websiteLabel": "Web sitesi:",
   "settings.background.enable": "Arka plan duvar kağıdını göster",
   "settings.cancel": "İptal",

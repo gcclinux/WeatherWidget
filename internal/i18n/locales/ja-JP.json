@@ -137,7 +137,7 @@
   "settings.about.knownIssue": "⚠ バージョン 1.0.6 の既知の問題: snapcraft パッケージで位置の永続化が機能しない場合があります。",
   "settings.about.manualLabel": "マニュアル:",
   "settings.about.previewLabel": "プレビュー",
-  "settings.about.version": "**バージョン:** 2.1.0",
+  "settings.about.version": "**バージョン:** 2.2.0",
   "settings.about.websiteLabel": "ウェブサイト:",
   "settings.background.enable": "背景壁紙を表示",
   "settings.cancel": "キャンセル",
