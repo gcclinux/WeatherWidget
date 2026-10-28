@@ -23,6 +23,9 @@ $glEs = Join-Path $fyneDir "internal\painter\gl\gl_es.go"
 $shaders = Join-Path $fyneDir "internal\painter\gl\shaders.go"
 $shadersEs = Join-Path $fyneDir "internal\painter\gl\shaders_es.go"
 
+# 4. Window Resize/Show viewport sync
+$glfwWindow = Join-Path $fyneDir "internal\driver\glfw\window.go"
+
 function Patch-File {
     param([string]$Path, [string]$Pattern, [string]$Replacement)
     if (-not (Test-Path $Path)) { return }
@@ -44,3 +47,30 @@ Patch-File $glEs '!darwin && !wasm && !test_web_driver' '!darwin && !windows && 
 
 Patch-File $shaders 'darwin && !mobile && !ios && !wasm && !test_web_driver\)' '(darwin || windows) && !mobile && !ios && !wasm && !test_web_driver)'
 Patch-File $shadersEs '!darwin && !wasm && !test_web_driver' '!darwin && !windows && !wasm && !test_web_driver'
+
+Patch-File $glfwWindow '(?m)^\t\tif runtime\.GOOS != "js" \{\r?\n\t\t\tw\.view\(\)\.SetSize\(width, height\)\r?\n\t\t\tw\.processResized\(width, height\)\r?\n\t\t\}' @"
+		if runtime.GOOS != "js" {
+			w.view().SetSize(width, height)
+			if !w.fixedSize {
+				if actualW, actualH := w.view().GetSize(); actualW > 0 && actualH > 0 {
+					width, height = actualW, actualH
+					w.shouldWidth, w.shouldHeight = actualW, actualH
+					w.width, w.height = actualW, actualH
+				}
+			}
+			w.processResized(width, height)
+		}
+"@
+
+Patch-File $glfwWindow '(?m)^\t\tview\.Show\(\)\r?\n\r?\n\t\t// save coordinates' @"
+		view.Show()
+		if !w.fixedSize {
+			if actualW, actualH := view.GetSize(); actualW > 0 && actualH > 0 {
+				w.width, w.height = actualW, actualH
+				w.shouldWidth, w.shouldHeight = actualW, actualH
+				w.canvas.Resize(w.computeCanvasSize(actualW, actualH))
+			}
+		}
+
+		// save coordinates
+"@

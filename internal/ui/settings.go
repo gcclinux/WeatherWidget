@@ -182,9 +182,13 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 		u.showSettingsInfo(title, msg, win, settingsTh)
 	}
 
-	screenW, screenH := getScreenSize()
+	var fallbackScale float32 = 1.0
+	if u.widget != nil && u.widget.Canvas() != nil && u.widget.Canvas().Scale() > 0 {
+		fallbackScale = u.widget.Canvas().Scale()
+	}
+	screenW, screenH := getLogicalWorkArea(cfg.MonitorIndex, fallbackScale)
 	winW := float32(945)
-	if float32(screenW) < winW {
+	if float32(screenW)*0.9 < winW {
 		winW = float32(screenW) * 0.9
 	}
 	winH := float32(screenH) * 0.605
@@ -195,10 +199,16 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 	if winH < 700 {
 		winH = 700
 	}
-	if winH > float32(screenH)*0.9 {
-		winH = float32(screenH) * 0.9
+	// Reserve room for native window title bar and borders (~48 dp) within the work area.
+	maxH := float32(screenH) * 0.88
+	if float32(screenH)-48 < maxH {
+		maxH = float32(screenH) - 48
+	}
+	if maxH > 400 && winH > maxH {
+		winH = maxH
 	}
 	win.Resize(fyne.NewSize(winW, winH))
+	win.CenterOnScreen()
 
 	state := &settingsState{
 		cities:            copyCities(cfg.Cities),
@@ -2026,6 +2036,7 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 	}
 
 	buildSettingsUI()
+	win.Resize(fyne.NewSize(winW, winH))
 
 	win.SetOnClosed(func() {
 		// Stop preview panel clocks.
@@ -2052,6 +2063,14 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 		u.settings = nil
 	})
 	win.Show()
+	syncSettingsWindow(win, cfg.MonitorIndex)
+	time.AfterFunc(50*time.Millisecond, func() {
+		fyne.Do(func() {
+			if u.settings == win {
+				syncSettingsWindow(win, cfg.MonitorIndex)
+			}
+		})
+	})
 }
 
 // buildConfigFromUI reads all form fields and constructs a Config struct.

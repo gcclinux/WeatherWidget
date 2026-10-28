@@ -3,24 +3,31 @@
 package ui
 
 import (
+	"math"
 	"unsafe"
 
 	"golang.org/x/sys/windows"
 
 	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/driver"
 )
 
 var (
 	user32                         = windows.NewLazySystemDLL("user32.dll")
+	shcore                         = windows.NewLazySystemDLL("shcore.dll")
 	procFindWindowW                = user32.NewProc("FindWindowW")
 	procGetWindowLongW             = user32.NewProc("GetWindowLongW")
 	procSetWindowLongW             = user32.NewProc("SetWindowLongW")
 	procSetWindowPos               = user32.NewProc("SetWindowPos")
 	procGetSystemMetrics           = user32.NewProc("GetSystemMetrics")
 	procGetWindowRect              = user32.NewProc("GetWindowRect")
+	procGetClientRect              = user32.NewProc("GetClientRect")
+	procGetDpiForWindow            = user32.NewProc("GetDpiForWindow")
+	procGetDpiForSystem            = user32.NewProc("GetDpiForSystem")
 	procSetLayeredWindowAttributes = user32.NewProc("SetLayeredWindowAttributes")
 	procEnumDisplayMonitors        = user32.NewProc("EnumDisplayMonitors")
 	procGetMonitorInfoW            = user32.NewProc("GetMonitorInfoW")
+	procGetDpiForMonitor           = shcore.NewProc("GetDpiForMonitor")
 )
 
 const (
@@ -36,6 +43,7 @@ const (
 	hwndBottom      = uintptr(1)  // (HWND)1  == HWND_BOTTOM — behind all other windows
 	swpNoSize       = 0x0001
 	swpNoMove       = 0x0002
+	swpNoZOrder     = 0x0004
 	swpNoActivate   = 0x0010
 	swpFrameChanged = 0x0020
 	swpShowWindow   = 0x0040
@@ -213,4 +221,135 @@ func getMonitorBounds(index int) (int, int, int, int) {
 	work := mi.RcWork
 	return int(work.Left), int(work.Top),
 		int(work.Right - work.Left), int(work.Bottom - work.Top)
+}
+
+// getMonitorDPIScale returns the DPI scale factor (e.g., 1.0, 1.5, 2.0) for
+// the monitor at the given 0-based index, falling back to GetDpiForSystem
+// and then fallbackScale if needed.
+func getMonitorDPIScale(index int, fallbackScale float32) float32 {
+	enumeratedMonitors = nil
+	cb := windows.NewCallback(monitorEnumProc)
+	procEnumDisplayMonitors.Call(0, 0, cb, 0)
+
+	if len(enumeratedMonitors) > 0 {
+		if index < 0 || index >= len(enumeratedMonitors) {
+			index = 0
+		}
+		hMon := enumeratedMonitors[index]
+		if procGetDpiForMonitor.Find() == nil {
+			var dpiX, dpiY uint32
+			// MDT_EFFECTIVE_DPI = 0
+			ret, _, _ := procGetDpiForMonitor.Call(hMon, 0, uintptr(unsafe.Pointer(&dpiX)), uintptr(unsafe.Pointer(&dpiY)))
+			if ret == 0 && dpiX >= 96 {
+				raw := float64(dpiX) / 96.0
+				return float32(math.Round(raw*10.0)) / 10.0
+			}
+		}
+	}
+
+	if procGetDpiForSystem.Find() == nil {
+		dpi, _, _ := procGetDpiForSystem.Call()
+		if dpi >= 96 {
+			raw := float64(dpi) / 96.0
+			return float32(math.Round(raw*10.0)) / 10.0
+		}
+	}
+
+	if fallbackScale >= 1.0 {
+		return fallbackScale
+	}
+	return 1.0
+}
+
+// getLogicalWorkArea returns the monitor's usable work-area dimensions
+// (excluding the Windows taskbar) in Fyne device-independent pixels (dp).
+func getLogicalWorkArea(index int, fallbackScale float32) (int, int) {
+	_, _, workW, workH := getMonitorBounds(index)
+	scale := getMonitorDPIScale(index, fallbackScale)
+	if scale <= 0 {
+		scale = 1.0
+	}
+	return int(float32(workW) / scale), int(float32(workH) / scale)
+}
+
+// syncSettingsWindow ensures that after the Settings window is shown on Windows:
+// 1. Its outer frame fits within and is centered inside the monitor's work area
+//    (preventing the title bar or bottom Save bar from clipping off-screen or behind the taskbar).
+// 2. A 1px SetWindowPos pulse forces GLFW's WM_SIZE handler to fire _glfwInputFramebufferSize
+//    and _glfwInputWindowSize with the actual Win32 client area, fixing the Fyne/OpenGL
+//    viewport desync where the top of the tab bar is clipped until manually resized.
+func syncSettingsWindow(win fyne.Window, monitorIndex int) {
+	if win == nil {
+		return
+	}
+
+	var hwnd uintptr
+	if nw, ok := win.(driver.NativeWindow); ok {
+		nw.RunNative(func(ctx any) {
+			if wctx, ok := ctx.(driver.WindowsWindowContext); ok {
+				hwnd = wctx.HWND
+			}
+		})
+	}
+	if hwnd == 0 {
+		hwnd = findHWND(win.Title())
+	}
+	if hwnd == 0 {
+		return
+	}
+
+	workX, workY, workW, workH := getMonitorBounds(monitorIndex)
+	var winRect rect
+	procGetWindowRect.Call(hwnd, uintptr(unsafe.Pointer(&winRect)))
+	outerW := int(winRect.Right - winRect.Left)
+	outerH := int(winRect.Bottom - winRect.Top)
+	if outerW <= 0 || outerH <= 0 {
+		return
+	}
+
+	if outerW > workW {
+		outerW = workW
+	}
+	if outerH > workH {
+		outerH = workH
+	}
+
+	newX := workX + (workW-outerW)/2
+	newY := workY + (workH-outerH)/2
+	if newX < workX {
+		newX = workX
+	}
+	if newY < workY {
+		newY = workY
+	}
+
+	// Pulse height by -1px and back to outerH so GLFW's WM_SIZE check
+	// (width != window->win32.width || height != window->win32.height)
+	// unconditionally fires _glfwInputFramebufferSize and _glfwInputWindowSize
+	// with the real Win32 client area dimensions.
+	if outerH > 2 {
+		procSetWindowPos.Call(hwnd, 0,
+			uintptr(newX), uintptr(newY),
+			uintptr(outerW), uintptr(outerH-1),
+			swpNoZOrder|swpNoActivate)
+	}
+	procSetWindowPos.Call(hwnd, 0,
+		uintptr(newX), uintptr(newY),
+		uintptr(outerW), uintptr(outerH),
+		swpNoZOrder|swpNoActivate|swpFrameChanged)
+
+	var clientRect rect
+	procGetClientRect.Call(hwnd, uintptr(unsafe.Pointer(&clientRect)))
+	clientW := int(clientRect.Right - clientRect.Left)
+	clientH := int(clientRect.Bottom - clientRect.Top)
+	if clientW > 0 && clientH > 0 && win.Canvas() != nil && win.Content() != nil {
+		scale := win.Canvas().Scale()
+		if scale <= 0 {
+			scale = getMonitorDPIScale(monitorIndex, 1.0)
+		}
+		dpW := float32(clientW) / scale
+		dpH := float32(clientH) / scale
+		win.Content().Resize(fyne.NewSize(dpW, dpH))
+		win.Content().Refresh()
+	}
 }

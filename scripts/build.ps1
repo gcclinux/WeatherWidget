@@ -137,11 +137,9 @@ switch ($Target) {
         Update-LocaleVersions -Ver $Version
         Update-WinresVersion -Ver $Version
 
-        if ("arm64" -in $TargetArches) {
-            $patchScript = Join-Path $PSScriptRoot "patch-fyne.ps1"
-            if (Test-Path $patchScript) {
-                & $patchScript
-            }
+        $patchScript = Join-Path $PSScriptRoot "patch-fyne.ps1"
+        if (Test-Path $patchScript) {
+            & $patchScript
         }
 
         $successList = @()
