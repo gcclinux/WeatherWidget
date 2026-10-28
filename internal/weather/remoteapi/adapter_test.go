@@ -252,6 +252,17 @@ func TestTestConnection_OWM_InvalidKey(t *testing.T) {
 	}
 }
 
+func TestTestConnection_OWM_EmptyKey(t *testing.T) {
+	adapter := NewRemoteAPIAdapter("openweathermap", "   ")
+	err := adapter.TestConnection(context.Background())
+	if err == nil {
+		t.Fatal("expected error for empty key")
+	}
+	if err.Error() != "API key is required" {
+		t.Errorf("error = %q, want %q", err.Error(), "API key is required")
+	}
+}
+
 func TestTestConnection_WU_Success(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -539,6 +550,17 @@ func TestTestConnection_EWW_InvalidKey(t *testing.T) {
 	}
 	if err.Error() != "invalid API key" {
 		t.Errorf("error = %q, want %q", err.Error(), "invalid API key")
+	}
+}
+
+func TestTestConnection_EWW_EmptyKey(t *testing.T) {
+	adapter := NewRemoteAPIAdapter("easyweatherwidget", "")
+	err := adapter.TestConnection(context.Background())
+	if err == nil {
+		t.Fatal("expected error for empty key")
+	}
+	if err.Error() != "API key is required" {
+		t.Errorf("error = %q, want %q", err.Error(), "API key is required")
 	}
 }
 
