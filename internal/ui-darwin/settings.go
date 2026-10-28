@@ -48,6 +48,10 @@ func openSettingsWindow(m *manager) {
 		return
 	}
 
+	if len(m.cfg.Cities) == 0 {
+		m.cfg.Cities = config.DefaultCities()
+	}
+
 	// Serialize current config to JSON for the ObjC layer.
 	cfgBytes, err := json.Marshal(m.cfg)
 	if err != nil {
@@ -159,6 +163,10 @@ func (m *manager) settingsStrings() map[string]string {
 		"settings.provider.label", "settings.provider.apiKeyLabel",
 		"settings.provider.apiKeyPlaceholder", "settings.interval.title",
 		"settings.provider.getFreeApi", "settings.provider.getProApi",
+		"settings.provider.checkConnection", "settings.provider.checkingConnection",
+		"settings.provider.connectionSuccessTitle", "settings.provider.connectionSuccessMsg",
+		"settings.provider.connectionFailedTitle", "settings.provider.connectionFailedMsg",
+		"settings.provider.apiKeyEmpty",
 		"settings.provider.note",
 		"settings.provider.apiKeyActivation.title",
 		"settings.provider.apiKeyActivation.message",
@@ -363,6 +371,9 @@ func mergeSettingsJSON(base *config.Config, data []byte) (*config.Config, error)
 		} else if err != nil {
 			log.Printf("uidarwin: settings save: ignoring malformed cities payload: %v; raw cities = %s", err, string(raw))
 		}
+	}
+	if len(out.Cities) == 0 {
+		out.Cities = config.DefaultCities()
 	}
 
 	return &out, nil

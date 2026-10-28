@@ -143,11 +143,13 @@ static inline NSNumber *jbool(BOOL v) { return v ? @YES : @NO; }
 @property (nonatomic, strong) NSPopUpButton *providerPop;
 @property (nonatomic, strong) NSButton      *getApiBtn;
 @property (nonatomic, strong) NSTextField   *apiKeyField;
+@property (nonatomic, strong) NSButton      *checkConnBtn;
 @property (nonatomic, strong) NSTextField   *intervalField;
 @property (nonatomic, strong) NSView        *activationCard;
 @property (nonatomic, strong) NSTextField   *activationKeyLbl;
 
 // Locations tab
+@property (nonatomic, strong) NSView        *demoBanner;
 @property (nonatomic, strong) NSMutableArray *cities;      // array of NSMutableDictionary
 @property (nonatomic, strong) NSStackView    *cityListStack;
 @property (nonatomic, strong) NSTextField    *addNameField;
@@ -371,6 +373,12 @@ static WWSettingsController *g_settingsController = nil;
     [_tabView addTabViewItem:[self buildAppearanceTab]];
     [_tabView addTabViewItem:[self buildAboutTab]];
 
+    if ([self hasLicense]) {
+        [_tabView selectTabViewItemAtIndex:4];
+    } else {
+        [_tabView selectTabViewItemAtIndex:0];
+    }
+
     // Save / Cancel buttons at the bottom.
     NSButton *saveBtn = [NSButton buttonWithTitle:[self L:@"settings.save" fallback:@"Save"]
         target:self action:@selector(onSave:)];
@@ -410,10 +418,15 @@ static WWSettingsController *g_settingsController = nil;
     y -= 40;
 
     [v addSubview:[self label:[self L:@"settings.provider.apiKeyLabel" fallback:@"API Key"] frame:NSMakeRect(16, y, 120, 20) bold:NO]];
-    _apiKeyField = [[NSTextField alloc] initWithFrame:NSMakeRect(140, y - 2, 420, 24)];
+    _apiKeyField = [[NSTextField alloc] initWithFrame:NSMakeRect(140, y - 2, 216, 24)];
     _apiKeyField.placeholderString = [self L:@"settings.provider.apiKeyPlaceholder" fallback:@"API Key"];
     _apiKeyField.delegate = self;
     [v addSubview:_apiKeyField];
+
+    _checkConnBtn = [NSButton buttonWithTitle:[self L:@"settings.provider.checkConnection" fallback:@"Check Connection"]
+        target:self action:@selector(onCheckConnectionClicked:)];
+    _checkConnBtn.frame = NSMakeRect(364, y - 2, 196, 26);
+    [v addSubview:_checkConnBtn];
     y -= 40;
 
     [v addSubview:[self label:[self L:@"settings.interval.title" fallback:@"Refresh Interval"] frame:NSMakeRect(16, y, 200, 20) bold:NO]];
@@ -503,6 +516,72 @@ static WWSettingsController *g_settingsController = nil;
     }
 }
 
+- (void)onCheckConnectionClicked:(id)sender {
+    NSString *apiKey = [_apiKeyField.stringValue
+        stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
+    if (apiKey.length == 0) {
+        [self showAlert:[self L:@"settings.provider.connectionFailedTitle" fallback:@"Connection Failed"]
+                   info:[self L:@"settings.provider.apiKeyEmpty" fallback:@"API key cannot be empty"]];
+        return;
+    }
+
+    _checkConnBtn.enabled = NO;
+    _checkConnBtn.title = [self L:@"settings.provider.checkingConnection" fallback:@"Checking..."];
+
+    BOOL isOwm = (_providerPop.indexOfSelectedItem == 1);
+    NSString *testURL = nil;
+    if (isOwm) {
+        testURL = [NSString stringWithFormat:@"https://api.openweathermap.org/data/2.5/weather?q=London&appid=%@",
+            [apiKey stringByAddingPercentEncodingWithAllowedCharacters:[NSCharacterSet URLQueryAllowedCharacterSet]]];
+    } else {
+        testURL = [NSString stringWithFormat:@"https://weather-gateway-ricardo.web.app/api/weather/live?city=London&license=%@",
+            [apiKey stringByAddingPercentEncodingWithAllowedCharacters:[NSCharacterSet URLQueryAllowedCharacterSet]]];
+    }
+
+    WWSettingsController *weakSelf = self;
+    NSURL *url = [NSURL URLWithString:testURL];
+    NSURLRequest *req = [NSURLRequest requestWithURL:url cachePolicy:NSURLRequestReloadIgnoringLocalCacheData timeoutInterval:10.0];
+
+    NSURLSessionDataTask *task = [[NSURLSession sharedSession] dataTaskWithRequest:req
+        completionHandler:^(NSData *data, NSURLResponse *response, NSError *error) {
+            dispatch_async(dispatch_get_main_queue(), ^{
+                WWSettingsController *s = weakSelf;
+                if (!s) return;
+                s.checkConnBtn.enabled = YES;
+                s.checkConnBtn.title = [s L:@"settings.provider.checkConnection" fallback:@"Check Connection"];
+
+                if (error) {
+                    NSString *msg = [NSString stringWithFormat:@"%@: %@",
+                        [s L:@"settings.provider.connectionFailedMsg" fallback:@"Failed to connect to weather provider"],
+                        error.localizedDescription];
+                    [s showAlert:[s L:@"settings.provider.connectionFailedTitle" fallback:@"Connection Failed"] info:msg];
+                    return;
+                }
+
+                NSHTTPURLResponse *httpResp = (NSHTTPURLResponse *)response;
+                if (httpResp && (httpResp.statusCode == 200)) {
+                    [s showAlert:[s L:@"settings.provider.connectionSuccessTitle" fallback:@"Connection Successful"]
+                            info:[s L:@"settings.provider.connectionSuccessMsg" fallback:@"Successfully connected to weather provider!"]];
+                } else {
+                    NSInteger code = httpResp ? httpResp.statusCode : 0;
+                    NSString *detail = @"";
+                    if (data && data.length > 0) {
+                        NSDictionary *errJson = [NSJSONSerialization JSONObjectWithData:data options:0 error:nil];
+                        if ([errJson isKindOfClass:[NSDictionary class]]) {
+                            if (errJson[@"message"]) detail = [NSString stringWithFormat:@" (%@)", errJson[@"message"]];
+                            else if (errJson[@"error"]) detail = [NSString stringWithFormat:@" (%@)", errJson[@"error"]];
+                        }
+                    }
+                    NSString *msg = [NSString stringWithFormat:@"%@ (HTTP %ld)%@",
+                        [s L:@"settings.provider.connectionFailedMsg" fallback:@"Failed to connect to weather provider"],
+                        (long)code, detail];
+                    [s showAlert:[s L:@"settings.provider.connectionFailedTitle" fallback:@"Connection Failed"] info:msg];
+                }
+            });
+        }];
+    [task resume];
+}
+
 - (void)triggerGetProAPI {
     [self.providerPop selectItemAtIndex:0];
     [self updateGetApiBtnTitle];
@@ -527,6 +606,7 @@ static WWSettingsController *g_settingsController = nil;
     NSString *updated = [self buildUpdatedJSON];
     settingsSaveCB([updated UTF8String]);
     self.cfgJSON = updated;
+    [self updateLocationsUnlockedState];
 
     NSString *stripeURL = [NSString stringWithFormat:
         @"https://buy.stripe.com/bJe3cvaJOa650fQ8cPdZ603?client_reference_id=%@", clientRef];
@@ -594,6 +674,7 @@ static WWSettingsController *g_settingsController = nil;
             [banner addSubview:freeBtn];
 
             [doc addSubview:banner];
+            s.demoBanner = banner;
             y -= 128;
         }
 
@@ -719,18 +800,25 @@ static WWSettingsController *g_settingsController = nil;
                                lat.length > 0 && lon.length > 0 && tz.length > 0);
 }
 
+- (void)updateLocationsUnlockedState {
+    BOOL hasLic = [self hasLicense];
+    if (self.demoBanner) {
+        self.demoBanner.hidden = hasLic;
+    }
+    if (self.addNameField)   self.addNameField.enabled   = hasLic;
+    if (self.addRegionField) self.addRegionField.enabled = hasLic;
+    if (self.searchCityBtn)  self.searchCityBtn.enabled  = hasLic;
+    [self refreshCityList];
+    [self updateAddCityBtn];
+}
+
 // NSControlTextDidChangeNotification delegate — fired whenever the user edits
 // addNameField or addRegionField. Invalidates any previous Auto-Fill coordinates
 // so the user must run Auto-Fill again before Add City becomes enabled.
 - (void)controlTextDidChange:(NSNotification *)aNotification {
     id obj = [aNotification object];
     if (obj == self.apiKeyField) {
-        BOOL hasLic = [self hasLicense];
-        if (self.addNameField)   self.addNameField.enabled   = hasLic;
-        if (self.addRegionField) self.addRegionField.enabled = hasLic;
-        if (self.searchCityBtn)  self.searchCityBtn.enabled  = hasLic;
-        [self refreshCityList];
-        [self updateAddCityBtn];
+        [self updateLocationsUnlockedState];
         return;
     }
     if ((obj == self.addNameField || obj == self.addRegionField) && self.cityAutoFilled) {
@@ -1899,6 +1987,7 @@ static WWSettingsController *g_settingsController = nil;
     NSString *updated = [self buildUpdatedJSON];
     settingsSaveCB([updated UTF8String]);
     _cfgJSON = updated;
+    [self updateLocationsUnlockedState];
     [self close];
 }
 
@@ -1921,6 +2010,8 @@ static WWSettingsController *g_settingsController = nil;
     [_languages release];
     [_langCards release];
     [_selectedLangCode release];
+    [_checkConnBtn release];
+    [_demoBanner release];
     [super dealloc];
 }
 

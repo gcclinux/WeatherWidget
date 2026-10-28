@@ -22,6 +22,7 @@ import (
 
 	"weatherwidget/assets"
 	"weatherwidget/internal/config"
+	"weatherwidget/internal/weather/remoteapi"
 )
 
 // ewwAPIKeyLen is the expected length of an EasyWeatherWidget API key (UUID v4).
@@ -66,15 +67,34 @@ func showSettingsDialog(m *manager) {
 	// ── Notebook (tabs) ───────────────────────────────────────────────────
 	nb, _ := gtk.NotebookNew()
 
+	var getCities func() []config.CityConfig
+	var unlockLocations func()
+
 	// --- API / Provider tab ---
-	providerBox, triggerProFromBanner, selectFreeFromBanner := buildProviderTab(m, dlg)
+	providerBox, triggerProFromBanner, selectFreeFromBanner := buildProviderTab(m, dlg, func() []config.CityConfig {
+		if getCities != nil {
+			return getCities()
+		}
+		if len(m.cfg.Cities) > 0 {
+			return m.cfg.Cities
+		}
+		return config.DefaultCities()
+	}, func() {
+		if unlockLocations != nil {
+			unlockLocations()
+		}
+	})
 	providerLabel, _ := gtk.LabelNew(m.t("settings.tab.provider"))
 	nb.AppendPage(providerBox, providerLabel)
 
 	// --- Locations tab ---
 	cities := make([]config.CityConfig, len(m.cfg.Cities))
 	copy(cities, m.cfg.Cities)
-	locationsBox, getCities := buildLocationsTab(m, dlg, cities, func() {
+	if len(cities) == 0 {
+		cities = config.DefaultCities()
+	}
+	var locationsBox *gtk.Box
+	locationsBox, getCities, unlockLocations = buildLocationsTab(m, dlg, cities, func() {
 		nb.SetCurrentPage(0)
 	}, func() {
 		triggerProFromBanner()
@@ -111,6 +131,13 @@ func showSettingsDialog(m *manager) {
 	nb.AppendPage(aboutBox, aboutLabel)
 
 	box.PackStart(nb, true, true, 0)
+
+	// If no API is configured, open on "Data Provider" (page 0); if configured, open on "Display/Appearance" (page 4).
+	if m.cfg.HasLicense() {
+		nb.SetCurrentPage(4)
+	} else {
+		nb.SetCurrentPage(0)
+	}
 
 	// ── Action buttons ────────────────────────────────────────────────────
 	dlg.AddButton(m.t("settings.save"), gtk.RESPONSE_OK)
@@ -151,6 +178,9 @@ func showSettingsDialog(m *manager) {
 			// Window decorations are always hidden; persist the flag for consistency.
 			newCfg.NoBorder = true
 			newCfg.Cities = getCities()                   // collect current city list from the locations tab
+			if len(newCfg.Cities) == 0 {
+				newCfg.Cities = config.DefaultCities()
+			}
 			newCfg.Locale = getLocale()                   // collect selected language
 			newCfg.DisplayFields = getDisplayFields()     // collect panel visibility
 			newCfg.PollutionFields = getPollutionFields() // collect pollution metrics
@@ -173,6 +203,10 @@ func showSettingsDialog(m *manager) {
 			saving = true
 			_ = m.onSettingsSave(&newCfg)
 			saving = false
+
+			if newCfg.HasLicense() && unlockLocations != nil {
+				unlockLocations()
+			}
 
 			// After a successful save the font sizes are now committed; update
 			// the snapshot so Cancel can only revert post-save live changes.
@@ -217,7 +251,7 @@ func snapOpacity(v int) int {
 }
 
 // buildProviderTab creates the API / Provider settings tab.
-func buildProviderTab(m *manager, parent *gtk.Dialog) (*gtk.Box, func(), func()) {
+func buildProviderTab(m *manager, parent *gtk.Dialog, getCities func() []config.CityConfig, onSaved func()) (*gtk.Box, func(), func()) {
 	vbox, _ := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 8)
 	vbox.SetMarginTop(8)
 	vbox.SetMarginStart(4)
@@ -244,17 +278,56 @@ func buildProviderTab(m *manager, parent *gtk.Dialog) (*gtk.Box, func(), func())
 	providerRow.PackStart(getApiBtn, false, false, 0)
 	vbox.PackStart(providerRow, false, false, 0)
 
-	// API key entry.
+	// API key entry + Check Connection button.
 	apiKeyLabel, _ := gtk.LabelNew(m.t("settings.provider.apiKeyLabel") + ":")
 	apiKeyLabel.SetHAlign(gtk.ALIGN_START)
 	vbox.PackStart(apiKeyLabel, false, false, 0)
 
+	apiKeyRow, _ := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 6)
 	apiKeyEntry, _ := gtk.EntryNew()
 	apiKeyEntry.SetPlaceholderText(m.t("settings.provider.apiKeyPlaceholder"))
 	if m.cfg.APIConfig != nil {
 		apiKeyEntry.SetText(m.cfg.APIConfig.APIKey)
 	}
-	vbox.PackStart(apiKeyEntry, false, false, 0)
+	apiKeyRow.PackStart(apiKeyEntry, true, true, 0)
+
+	checkConnBtn, _ := gtk.ButtonNewWithLabel(m.t("settings.provider.checkConnection"))
+	apiKeyRow.PackStart(checkConnBtn, false, false, 0)
+	vbox.PackStart(apiKeyRow, false, false, 0)
+
+	checkConnBtn.Connect("clicked", func() {
+		provIdx := providerCombo.GetActive()
+		providerValue := "easyweatherwidget"
+		if provIdx == 1 {
+			providerValue = "openweathermap"
+		}
+		apiKey, _ := apiKeyEntry.GetText()
+		apiKey = strings.TrimSpace(apiKey)
+		if apiKey == "" {
+			showErrorDialog(parent, m.t("settings.provider.apiKeyEmpty"))
+			return
+		}
+
+		checkConnBtn.SetSensitive(false)
+		checkConnBtn.SetLabel(m.t("settings.provider.checkingConnection"))
+
+		go func() {
+			adapter := remoteapi.NewRemoteAPIAdapter(providerValue, apiKey)
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			err := adapter.TestConnection(ctx)
+
+			runOnUI(func() {
+				checkConnBtn.SetSensitive(true)
+				checkConnBtn.SetLabel(m.t("settings.provider.checkConnection"))
+				if err != nil {
+					showErrorDialog(parent, fmt.Sprintf("%s: %v", m.t("settings.provider.connectionFailedMsg"), err))
+				} else {
+					showInfoDialog(parent, m.t("settings.provider.connectionSuccessMsg"))
+				}
+			})
+		}()
+	})
 
 	// Activation card frame — shown when a Pro API key is active or just generated.
 	activationFrame, _ := gtk.FrameNew("")
@@ -385,12 +458,20 @@ func buildProviderTab(m *manager, parent *gtk.Dialog) (*gtk.Box, func(), func())
 			Provider: providerValue,
 			APIKey:   strings.TrimSpace(apiKey),
 		}
+		if getCities != nil {
+			newCfg.Cities = getCities()
+		}
+		if len(newCfg.Cities) == 0 {
+			newCfg.Cities = config.DefaultCities()
+		}
 		intervalStr, _ := intervalEntry.GetText()
 		if v, err := strconv.Atoi(strings.TrimSpace(intervalStr)); err == nil && v >= 10 && v <= 120 {
 			newCfg.RefreshInterval = v
 		}
 		if err := m.onSettingsSave(&newCfg); err != nil {
 			showErrorDialog(parent, fmt.Sprintf(m.t("error.settings.saveFailed"), err))
+		} else if onSaved != nil {
+			onSaved()
 		}
 	})
 	vbox.PackStart(saveAPIBtn, false, false, 0)
@@ -644,6 +725,13 @@ func showErrorDialog(parent *gtk.Dialog, msg string) {
 	ed := gtk.MessageDialogNew(parent, gtk.DIALOG_MODAL, gtk.MESSAGE_ERROR, gtk.BUTTONS_OK, "%s", msg)
 	ed.Run()
 	ed.Destroy()
+}
+
+// showInfoDialog shows a simple info message dialog.
+func showInfoDialog(parent *gtk.Dialog, msg string) {
+	id := gtk.MessageDialogNew(parent, gtk.DIALOG_MODAL, gtk.MESSAGE_INFO, gtk.BUTTONS_OK, "%s", msg)
+	id.Run()
+	id.Destroy()
 }
 
 // showProUpgradeDialog displays an eye-candy modal dialog highlighting the benefits of Pro tier.
@@ -1156,9 +1244,12 @@ func buildWidgetTab(m *manager) (*gtk.Box, func() *config.DisplayFields, func() 
 // buildLocationsTab builds the city management tab.
 // Returns the tab widget and a getCities() func that returns the current list
 // at the time of calling (used by the Save button in showSettingsDialog).
-func buildLocationsTab(m *manager, dlg *gtk.Dialog, initialCities []config.CityConfig, onGoToProvider func(), onGetPro func(), onSelectFree func()) (*gtk.Box, func() []config.CityConfig) {
+func buildLocationsTab(m *manager, dlg *gtk.Dialog, initialCities []config.CityConfig, onGoToProvider func(), onGetPro func(), onSelectFree func()) (*gtk.Box, func() []config.CityConfig, func()) {
 	cities := make([]config.CityConfig, len(initialCities))
 	copy(cities, initialCities)
+	if len(cities) == 0 {
+		cities = config.DefaultCities()
+	}
 
 	hasLicense := m.cfg.HasLicense()
 
@@ -1167,6 +1258,7 @@ func buildLocationsTab(m *manager, dlg *gtk.Dialog, initialCities []config.CityC
 	outer.SetMarginStart(4)
 	outer.SetMarginEnd(4)
 
+	var bannerBox *gtk.Box
 	// ── Demo Mode Banner (when no API key is configured) ─────────────────
 	if !hasLicense {
 		bannerCSS := `
@@ -1191,7 +1283,7 @@ func buildLocationsTab(m *manager, dlg *gtk.Dialog, initialCities []config.CityC
 		bannerProvider, _ := gtk.CssProviderNew()
 		bannerProvider.LoadFromData(bannerCSS)
 
-		bannerBox, _ := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 6)
+		bannerBox, _ = gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 6)
 		bannerSc, _ := bannerBox.GetStyleContext()
 		bannerSc.AddProvider(bannerProvider, gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
 		bannerSc.AddClass("demo-banner-box")
@@ -1456,6 +1548,18 @@ func buildLocationsTab(m *manager, dlg *gtk.Dialog, initialCities []config.CityC
 		addBtn.SetSensitive(ready)
 	}
 
+	unlockLocations := func() {
+		hasLicense = true
+		if bannerBox != nil {
+			bannerBox.Hide()
+		}
+		nameEntry.SetSensitive(true)
+		regionEntry.SetSensitive(true)
+		searchBtn.SetSensitive(true)
+		refreshList()
+		updateAddBtnState()
+	}
+
 	onManualFieldEdit := func() {
 		if suppressEntryChange {
 			return
@@ -1559,7 +1663,7 @@ func buildLocationsTab(m *manager, dlg *gtk.Dialog, initialCities []config.CityC
 				foundTZ = lookupTimezone(foundLat, foundLon)
 
 			default: // openweathermap
-				uStr := fmt.Sprintf("http://api.openweathermap.org/geo/1.0/direct?q=%s&limit=1&appid=%s",
+				uStr := fmt.Sprintf("https://api.openweathermap.org/geo/1.0/direct?q=%s&limit=1&appid=%s",
 					url.QueryEscape(name), url.QueryEscape(apiKey))
 				ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 				defer cancel()
@@ -1689,7 +1793,7 @@ func buildLocationsTab(m *manager, dlg *gtk.Dialog, initialCities []config.CityC
 
 	return outer, func() []config.CityConfig {
 		return cities
-	}
+	}, unlockLocations
 }
 
 // lookupTimezone attempts to find the IANA timezone for the given coordinates
