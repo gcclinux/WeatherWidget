@@ -433,7 +433,7 @@ func newMetricTile(emoji, name string) *metricTileWidget {
 	valueText.TextStyle = fyne.TextStyle{Bold: true}
 
 	// Center the header (emoji + name) and value text within the cell
-	header := container.NewHBox(emojiObj, nameText)
+	header := container.New(&spacedHBoxLayout{spacing: 2}, emojiObj, nameText)
 	centeredHeader := container.NewCenter(header)
 	centeredValue := container.NewCenter(valueText)
 	content := container.NewVBox(centeredHeader, centeredValue)
@@ -443,8 +443,8 @@ func newMetricTile(emoji, name string) *metricTileWidget {
 	border.StrokeColor = metricBorderColor
 	border.StrokeWidth = 1
 
-	// Use compact padding (reduced vertical padding for ~10% shorter cells)
-	compactPad := container.New(&compactPaddingLayout{hPad: 8, vPad: 4}, container.NewCenter(content))
+	// Use compact horizontal and vertical padding so cells stay narrow without crowding text.
+	compactPad := container.New(&compactPaddingLayout{hPad: 3, vPad: 4}, container.NewCenter(content))
 	tile := container.NewStack(border, compactPad)
 	return &metricTileWidget{container: tile, value: valueText}
 }
@@ -603,11 +603,144 @@ func NewCityPanel(lm *i18n.LocaleManager) *CityPanel {
 
 // metricsGridWidth is the fixed width for the right-hand metrics grid so that
 // all city panels have consistent grid sizing regardless of content width.
-const metricsGridWidth = 380
+const metricsGridWidth = 320
+
+// metricsGridLayout arranges up to 3 columns of metric tiles within a fixed
+// total width, giving the middle column (Wind / Pressure) a wider baseline
+// allocation than the outer columns (Humidity / Dew Point and Wind Gust / UV)
+// so that wind speed + compass direction fits comfortably without forcing the
+// outer columns to waste horizontal space.
+type metricsGridLayout struct {
+	cols       int
+	totalWidth float32
+	colGap     float32
+	rowGap     float32
+	colBaseW   [3]float32
+}
+
+func (m *metricsGridLayout) visibleObjects(objects []fyne.CanvasObject) []fyne.CanvasObject {
+	var vis []fyne.CanvasObject
+	for _, o := range objects {
+		if o.Visible() {
+			vis = append(vis, o)
+		}
+	}
+	return vis
+}
+
+func (m *metricsGridLayout) MinSize(objects []fyne.CanvasObject) fyne.Size {
+	vis := m.visibleObjects(objects)
+	if len(vis) == 0 {
+		return fyne.NewSize(0, 0)
+	}
+	cols := m.cols
+	if len(vis) < cols {
+		cols = len(vis)
+	}
+	rows := (len(vis) + cols - 1) / cols
+	var maxCellH float32
+	for _, o := range vis {
+		s := o.MinSize()
+		if s.Height > maxCellH {
+			maxCellH = s.Height
+		}
+	}
+	totalH := maxCellH*float32(rows) + m.rowGap*float32(rows-1)
+	return fyne.NewSize(m.totalWidth, totalH)
+}
+
+func (m *metricsGridLayout) Layout(objects []fyne.CanvasObject, size fyne.Size) {
+	vis := m.visibleObjects(objects)
+	if len(vis) == 0 {
+		return
+	}
+	cols := m.cols
+	if len(vis) < cols {
+		cols = len(vis)
+	}
+	rows := (len(vis) + cols - 1) / cols
+
+	availW := size.Width - m.colGap*float32(cols-1)
+	if availW < 0 {
+		availW = 0
+	}
+
+	colWidths := make([]float32, cols)
+	if cols == 3 {
+		var colMin [3]float32
+		for i, o := range vis {
+			c := i % 3
+			if w := o.MinSize().Width; w > colMin[c] {
+				colMin[c] = w
+			}
+		}
+		var baseSum float32
+		for c := 0; c < 3; c++ {
+			colWidths[c] = fyne.Max(colMin[c], m.colBaseW[c])
+			baseSum += colWidths[c]
+		}
+		if baseSum <= availW {
+			extra := (availW - baseSum) / 3
+			for c := 0; c < 3; c++ {
+				colWidths[c] += extra
+			}
+		} else {
+			minSum := colMin[0] + colMin[1] + colMin[2]
+			if minSum <= availW {
+				rem := availW - minSum
+				var slackSum float32
+				var slack [3]float32
+				for c := 0; c < 3; c++ {
+					if m.colBaseW[c] > colMin[c] {
+						slack[c] = m.colBaseW[c] - colMin[c]
+						slackSum += slack[c]
+					}
+				}
+				for c := 0; c < 3; c++ {
+					if slackSum > 0 {
+						colWidths[c] = colMin[c] + rem*(slack[c]/slackSum)
+					} else {
+						colWidths[c] = colMin[c] + rem/3
+					}
+				}
+			} else if minSum > 0 {
+				for c := 0; c < 3; c++ {
+					colWidths[c] = availW * (colMin[c] / minSum)
+				}
+			}
+		}
+	} else {
+		w := availW / float32(cols)
+		for c := 0; c < cols; c++ {
+			colWidths[c] = w
+		}
+	}
+
+	availH := size.Height - m.rowGap*float32(rows-1)
+	if availH < 0 {
+		availH = 0
+	}
+	rowH := availH / float32(rows)
+
+	var y float32
+	for r := 0; r < rows; r++ {
+		var x float32
+		for c := 0; c < cols; c++ {
+			idx := r*cols + c
+			if idx >= len(vis) {
+				break
+			}
+			vis[idx].Resize(fyne.NewSize(colWidths[c], rowH))
+			vis[idx].Move(fyne.NewPos(x, y))
+			x += colWidths[c] + m.colGap
+		}
+		y += rowH + m.rowGap
+	}
+}
 
 // metricGrid builds the right-hand three-column grid of metric tiles based on
 // the current display-field visibility (up to six tiles form a 3×2 grid).
-// The grid is wrapped in a fixed-width container to ensure consistent sizing.
+// The grid uses a compact fixed-width layout with proportional columns.
 func (p *CityPanel) metricGrid() fyne.CanvasObject {
 	var cells []fyne.CanvasObject
 
@@ -628,13 +761,16 @@ func (p *CityPanel) metricGrid() fyne.CanvasObject {
 		return layout.NewSpacer()
 	}
 
-	grid := container.NewGridWithColumns(3, cells...)
-	// Wrap the grid in a fixed-width container for consistent sizing across all city panels,
-	// then add a 6px right margin spacer
-	gridWithWidth := container.New(&fixedWidthLayout{width: metricsGridWidth}, grid)
+	grid := container.New(&metricsGridLayout{
+		cols:       3,
+		totalWidth: metricsGridWidth,
+		colGap:     2,
+		rowGap:     2,
+		colBaseW:   [3]float32{88, 140, 88},
+	}, cells...)
 	gridRightSpacer := canvas.NewRectangle(color.Transparent)
-	gridRightSpacer.SetMinSize(fyne.NewSize(6, 1))
-	return container.NewBorder(nil, nil, nil, gridRightSpacer, gridWithWidth)
+	gridRightSpacer.SetMinSize(fyne.NewSize(2, 1))
+	return container.New(&spacedHBoxLayout{spacing: 0}, grid, gridRightSpacer)
 }
 
 // buildLayout constructs the horizontal card: a left info block (weather icon

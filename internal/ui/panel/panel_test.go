@@ -354,4 +354,51 @@ func TestCityPanel_CardBorderAndNoBackground(t *testing.T) {
 	}
 }
 
+func TestCityPanel_CompactMetricsGridWidth(t *testing.T) {
+	test.NewApp()
+	p := NewCityPanel(nil)
+
+	data := &weather.WeatherData{
+		CityName:      "London",
+		Region:        "GB",
+		Temperature:   13,
+		Description:   "Broken Clouds",
+		Humidity:      88,
+		WindSpeed:     18.5,
+		WindDirection: 247, // WSW
+		WindGust:      23.1,
+		DewPoint:      10.8,
+		Pressure:      1028,
+		UVIndex:       0.0,
+		LocalTime:     time.Now(),
+		FetchedAt:     time.Now(),
+	}
+	p.Update(data, config.TemperatureUnitCelsius, config.WindSpeedUnitKmh)
+
+	// Resize container to its MinSize so child layouts run
+	minSz := p.Container().MinSize()
+	p.Container().Resize(minSz)
+
+	// Verify total card width is significantly narrower than the old 612px card width
+	if minSz.Width > 550 {
+		t.Errorf("card MinSize().Width = %v, want <= 550", minSz.Width)
+	}
+
+	// Verify every metric tile is wide enough for its content without clipping
+	for name, tile := range map[string]*metricTileWidget{
+		"humidity":  p.humidTile,
+		"wind":      p.windTile,
+		"windGust":  p.windGustTile,
+		"dewPoint":  p.dewPointTile,
+		"pressure":  p.pressureTile,
+		"uvIndex":   p.uvTile,
+	} {
+		if tile.container.Size().Width < tile.container.MinSize().Width {
+			t.Errorf("%s tile allocated width %v < MinSize width %v",
+				name, tile.container.Size().Width, tile.container.MinSize().Width)
+		}
+	}
+}
+
+
 
