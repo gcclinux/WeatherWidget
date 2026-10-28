@@ -1,11 +1,22 @@
 # Weather Widget Build Script for Windows
-# Usage: .\scripts\build.ps1 [build|test|clean|vet]
-# Automatically builds for the current host architecture (amd64 or arm64).
+# Usage: .\scripts\build.ps1 [build|test|clean|vet] [-Arch amd64|arm64|both]
+# Without -Arch, builds for the current host architecture (amd64 or arm64)
+# and produces weatherwidget.exe.
+#
+# -Arch amd64  -> weatherwidget.exe + weatherwidget-amd64.exe (both amd64)
+# -Arch arm64  -> weatherwidget.exe + weatherwidget-arm64.exe (both arm64)
+# -Arch both   -> weatherwidget-amd64.exe + weatherwidget-arm64.exe
+#
+# -Arch only affects the "build" target; test/vet always use the host architecture.
 
 param(
     [Parameter(Position = 0)]
     [ValidateSet("build", "test", "clean", "vet")]
-    [string]$Target = "build"
+    [string]$Target = "build",
+
+    [Parameter(Position = 1)]
+    [ValidateSet("amd64", "arm64", "both")]
+    [string]$Arch
 )
 
 $CmdPath = "./cmd/weatherwidget/"
@@ -33,13 +44,22 @@ else {
     "amd64"
 }
 
-# Configure compiler and environment variables for the current host architecture
-function Set-CompilerForHost {
+# Remember the original PATH so per-architecture toolchains don't accumulate.
+$OriginalPath = $env:PATH
+
+# Configure compiler and environment variables for the given target architecture
+function Set-CompilerForArch {
+    param([string]$TargetArch)
+
+    $env:PATH = $OriginalPath
+    Remove-Item Env:CC -ErrorAction SilentlyContinue
+    Remove-Item Env:CXX -ErrorAction SilentlyContinue
+
     $env:GOOS = "windows"
-    $env:GOARCH = $HostArch
+    $env:GOARCH = $TargetArch
     $env:CGO_ENABLED = "1"
 
-    if ($HostArch -eq "arm64") {
+    if ($TargetArch -eq "arm64") {
         if (Test-Path "C:\msys64\clangarm64\bin\clang.exe") {
             $env:PATH = "C:\msys64\clangarm64\bin;$env:PATH"
             $env:CC = "clang"
@@ -51,7 +71,7 @@ function Set-CompilerForHost {
             $env:CXX = "g++"
         }
     }
-    elseif ($HostArch -eq "amd64") {
+    elseif ($TargetArch -eq "amd64") {
         if (Test-Path "C:\msys64\ucrt64\bin\gcc.exe") {
             $env:PATH = "C:\msys64\ucrt64\bin;$env:PATH"
             $env:CC = "gcc"
@@ -98,7 +118,40 @@ function Update-WinresVersion {
 }
 
 $BuildDir = Join-Path $PSScriptRoot "build"
-$BinaryPath = Join-Path $BuildDir "weatherwidget.exe"
+
+# Build a single binary for the given architecture. Exits on failure.
+function Invoke-ArchBuild {
+    param(
+        [string]$TargetArch,
+        [string]$OutputName
+    )
+    $outPath = Join-Path $BuildDir $OutputName
+
+    Write-Host "Building $OutputName v$Version ($TargetArch)..." -ForegroundColor Cyan
+    Set-CompilerForArch -TargetArch $TargetArch
+
+    go build -ldflags="$LdFlags" -o $outPath $CmdPath
+    if ($LASTEXITCODE -eq 0) {
+        Write-Host "Build successful: $outPath (v$Version, $TargetArch)" -ForegroundColor Green
+    }
+    else {
+        Write-Host "Build failed for $TargetArch" -ForegroundColor Red
+        exit 1
+    }
+    return $outPath
+}
+
+# Copy an already-built binary to another name in the build directory.
+function Copy-ArchBuild {
+    param(
+        [string]$SourcePath,
+        [string]$OutputName,
+        [string]$TargetArch
+    )
+    $outPath = Join-Path $BuildDir $OutputName
+    Copy-Item -Path $SourcePath -Destination $outPath -Force
+    Write-Host "Build successful: $outPath (v$Version, $TargetArch)" -ForegroundColor Green
+}
 
 switch ($Target) {
     "build" {
@@ -114,21 +167,29 @@ switch ($Target) {
             & $patchScript
         }
 
-        Write-Host "Building weatherwidget.exe v$Version ($HostArch)..." -ForegroundColor Cyan
-        Set-CompilerForHost
-
-        go build -ldflags="$LdFlags" -o $BinaryPath $CmdPath
-        if ($LASTEXITCODE -eq 0) {
-            Write-Host "Build successful: $BinaryPath (v$Version, $HostArch)" -ForegroundColor Green
+        switch ($Arch) {
+            "amd64" {
+                $built = Invoke-ArchBuild -TargetArch "amd64" -OutputName "weatherwidget-amd64.exe"
+                Copy-ArchBuild -SourcePath $built -OutputName "weatherwidget.exe" -TargetArch "amd64"
+            }
+            "arm64" {
+                $built = Invoke-ArchBuild -TargetArch "arm64" -OutputName "weatherwidget-arm64.exe"
+                Copy-ArchBuild -SourcePath $built -OutputName "weatherwidget.exe" -TargetArch "arm64"
+            }
+            "both" {
+                Invoke-ArchBuild -TargetArch "arm64" -OutputName "weatherwidget-arm64.exe" | Out-Null
+                Invoke-ArchBuild -TargetArch "amd64" -OutputName "weatherwidget-amd64.exe" | Out-Null
+            }
+            default {
+                # No -Arch flag: build for host architecture as weatherwidget.exe
+                Invoke-ArchBuild -TargetArch $HostArch -OutputName "weatherwidget.exe" | Out-Null
+            }
         }
-        else {
-            Write-Host "Build failed for $HostArch" -ForegroundColor Red
-            exit 1
-        }
+        $env:PATH = $OriginalPath
     }
     "test" {
         Write-Host "Running tests ($HostArch)..."
-        Set-CompilerForHost
+        Set-CompilerForArch -TargetArch $HostArch
         go test ./...
     }
     "clean" {
@@ -149,7 +210,7 @@ switch ($Target) {
     }
     "vet" {
         Write-Host "Running go vet ($HostArch)..."
-        Set-CompilerForHost
+        Set-CompilerForArch -TargetArch $HostArch
         go vet ./...
     }
 }
