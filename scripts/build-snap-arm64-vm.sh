@@ -1,0 +1,291 @@
+#!/bin/bash
+set -e
+
+# WeatherWidget Snap Build Script (Local arm64 VM Build)
+# Builds a strict-confinement Snap package for Linux using the GTK3 native binary
+# DIRECTLY ON THIS MACHINE (no Docker), using snapcraft's default LXD build
+# provider. This is intended for an arm64 (aarch64) VM that does NOT have Docker.
+#
+# It produces a package in EXACTLY the same way as scripts/build-snap-using-docker.sh
+# (identical snap/gui/*.desktop, snap/gui/*.png and snap/snapcraft.yaml are
+# generated here), the only difference being:
+#   * the build runs locally via `snapcraft pack` (LXD provider) instead of in
+#     the ghcr.io/canonical/snapcraft Docker image, and
+#   * it builds natively for the host architecture (arm64 on this VM).
+#
+# snapcraft.yaml is architecture-neutral: it uses $CRAFT_ARCH_TRIPLET_BUILD_FOR,
+# which snapcraft expands at build time, so running `snapcraft pack` on aarch64
+# yields an arm64 snap with the same layout and contents as the amd64/arm64
+# Docker builds.
+#
+# NOTE: This does NOT use the gnome extension (kept consistent with the Docker
+# build). GTK3 libraries are bundled directly via stage-packages.
+
+APP_NAME="WeatherWidget"
+BINARY_NAME="weatherwidget"
+GTK_CMD_PATH="./cmd/weatherwidget-gtk/"
+APP_ICON="assets/icons/day/clear_day.png"
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+VERSION=$(cat "$PROJECT_ROOT/release" 2>/dev/null | tr -d '[:space:]')
+if [ -z "$VERSION" ]; then
+    echo "Error: could not read version from 'release' file"
+    exit 1
+fi
+
+ARCH="$(uname -m)"
+echo "==> Preparing WeatherWidget $VERSION Snap package build (Local VM / Core24 GTK3 native, arch: $ARCH)..."
+
+# 1. Verify local build tooling (snapcraft + a build provider)
+if ! command -v snapcraft >/dev/null 2>&1; then
+    echo "Error: snapcraft is not installed or not in PATH."
+    echo "Install it with:"
+    echo "    sudo snap install snapcraft --channel=8.x/stable --classic"
+    exit 1
+fi
+
+# Pin to snapcraft 8.x to match the Docker image (ghcr.io/canonical/snapcraft:8_core24).
+# snapcraft 9.x changed how the app 'desktop:' key is resolved and fails this
+# project's core24 build with: "Failed to generate desktop file
+# '.../snap/meta/gui/weatherwidget.desktop': file does not exist". Guard against
+# that so the failure is obvious rather than cryptic.
+SNAPCRAFT_MAJOR=$(snapcraft --version 2>/dev/null | grep -oE '[0-9]+' | head -n 1)
+if [ -n "$SNAPCRAFT_MAJOR" ] && [ "$SNAPCRAFT_MAJOR" != "8" ]; then
+    echo "Error: snapcraft $(snapcraft --version 2>/dev/null | awk '{print $2}') detected, but this script"
+    echo "       requires the 8.x track to match the Docker build (8_core24)."
+    echo "       snapcraft 9.x fails to resolve the app 'desktop:' entry for this snap."
+    echo "Switch tracks with:"
+    echo "    sudo snap refresh snapcraft --channel=8.x/stable"
+    exit 1
+fi
+
+# snapcraft on Linux defaults to the LXD build provider. Make sure LXD is
+# available and initialised; otherwise builds fail with an opaque error.
+if ! command -v lxd >/dev/null 2>&1 && ! command -v lxc >/dev/null 2>&1; then
+    echo "Error: LXD is not installed. snapcraft uses LXD as its build provider on Linux."
+    echo "Install and initialise it with:"
+    echo "    sudo snap install lxd"
+    echo "    sudo lxd init --auto"
+    echo "    sudo usermod -aG lxd \$USER"
+    echo "    (Log out and log back in for group changes to take effect)"
+    exit 1
+fi
+
+# Warn (don't fail) if the current user isn't in the lxd group, since snapcraft
+# needs to talk to the LXD daemon socket.
+if command -v id >/dev/null 2>&1 && ! id -nG 2>/dev/null | tr ' ' '\n' | grep -qx lxd; then
+    echo "Warning: user '$(id -un)' is not in the 'lxd' group."
+    echo "         If the build cannot reach the LXD daemon, run:"
+    echo "             sudo usermod -aG lxd \$USER   (then re-login)"
+fi
+
+# 2. Ensure snap/gui directory exists
+mkdir -p "$PROJECT_ROOT/snap/gui"
+
+# 3. Copy app icon
+if [ -f "$PROJECT_ROOT/$APP_ICON" ]; then
+    echo "==> Copying app icon..."
+    cp "$PROJECT_ROOT/$APP_ICON" "$PROJECT_ROOT/snap/gui/$BINARY_NAME.png"
+fi
+
+# 4. Create desktop entry
+DESKTOP_FILE="$PROJECT_ROOT/snap/gui/$BINARY_NAME.desktop"
+echo "==> Writing snap/gui/$BINARY_NAME.desktop..."
+cat > "$DESKTOP_FILE" <<EOF
+[Desktop Entry]
+Name=$APP_NAME
+GenericName=Weather Widget
+Comment=Compact desktop weather widget
+Exec=$BINARY_NAME
+Icon=\${SNAP}/meta/gui/$BINARY_NAME.png
+Terminal=false
+Type=Application
+Categories=Utility;Clock;Weather;
+StartupWMClass=$BINARY_NAME
+X-GNOME-Autostart-enabled=true
+EOF
+
+# 5. Build the snapcraft.yaml (GTK3 native build for Ubuntu Core24)
+SNAPCRAFT_YAML="$PROJECT_ROOT/snap/snapcraft.yaml"
+echo "==> Writing snap/snapcraft.yaml..."
+
+cat > "$SNAPCRAFT_YAML" <<EOF
+name: $BINARY_NAME
+title: $APP_NAME
+summary: Compact desktop weather widget (GTK3 native)
+description: |
+  WeatherWidget is a compact, customizable weather widget for your Linux desktop.
+  Native GTK3 build with true transparency, system tray via appindicator3,
+  and first-class X11/XWayland support. Supports multiple city locations,
+  opacity/transparency, and customizable weather providers.
+
+confinement: strict
+base: core24
+adopt-info: $BINARY_NAME
+
+license: AGPL-3.0
+source-code: https://github.com/gcclinux/weatherwidget
+website: https://easysmartapps.co.uk/weatherwidget
+contact: https://easysmartapps.co.uk/contact
+issues: https://github.com/gcclinux/weatherwidget/issues
+donation: https://buy.stripe.com/bJe3cvaJOa650fQ8cPdZ603
+
+plugs:
+  gnome-46-2404:
+    interface: content
+    target: \$SNAP/gnome-platform
+    default-provider: gnome-46-2404
+  gtk-3-themes:
+    interface: content
+    target: \$SNAP/data-dir/themes
+    default-provider: gtk-common-themes
+  icon-themes:
+    interface: content
+    target: \$SNAP/data-dir/icons
+    default-provider: gtk-common-themes
+  sound-themes:
+    interface: content
+    target: \$SNAP/data-dir/sounds
+    default-provider: gtk-common-themes
+
+environment:
+  # Library paths — arch-aware. \$CRAFT_ARCH_TRIPLET_BUILD_FOR is expanded by
+  # snapcraft at build time (core22+) and baked into meta/snap.yaml, so this
+  # resolves to e.g. aarch64-linux-gnu on arm64 and x86_64-linux-gnu on amd64.
+  LD_LIBRARY_PATH: \$SNAP/gnome-platform/usr/lib/\$CRAFT_ARCH_TRIPLET_BUILD_FOR:\$SNAP/usr/lib/\$CRAFT_ARCH_TRIPLET_BUILD_FOR:\$SNAP/gnome-platform/usr/lib:\$SNAP/usr/lib:\$LD_LIBRARY_PATH
+  # GTK and GDK configuration
+  GTK_PATH: \$SNAP/gnome-platform/usr/lib/\$CRAFT_ARCH_TRIPLET_BUILD_FOR/gtk-3.0
+  GTK_EXE_PREFIX: \$SNAP/gnome-platform/usr
+  GTK_IM_MODULE_DIR: \$SNAP/gnome-platform/usr/lib/\$CRAFT_ARCH_TRIPLET_BUILD_FOR/gtk-3.0/3.0.0/immodules
+  GTK_IM_MODULE_FILE: \$SNAP/gnome-platform/usr/lib/\$CRAFT_ARCH_TRIPLET_BUILD_FOR/gtk-3.0/3.0.0/immodules.cache
+  GDK_PIXBUF_MODULE_FILE: \$SNAP/gnome-platform/usr/lib/\$CRAFT_ARCH_TRIPLET_BUILD_FOR/gdk-pixbuf-2.0/2.10.0/loaders.cache
+  # XDG paths for themes, icons, and data
+  XDG_DATA_DIRS: \$SNAP/data-dir:\$SNAP/gnome-platform/usr/share:\$XDG_DATA_DIRS
+  XDG_CONFIG_DIRS: \$SNAP/gnome-platform/etc/xdg:\$XDG_CONFIG_DIRS
+  # Font configuration
+  FONTCONFIG_PATH: \$SNAP/gnome-platform/etc/fonts
+  FONTCONFIG_FILE: \$SNAP/gnome-platform/etc/fonts/fonts.conf
+  # GIO/GLib
+  # Point at our own (empty) GIO modules dir instead of the gnome-platform one.
+  # The gnome-46-2404 platform ships libgiolibproxy.so without its libpxbackend
+  # backend, which triggers a harmless-but-noisy "cannot open shared object
+  # file: libpxbackend-1.0.so" warning at startup. This app uses Go's net/http
+  # directly and needs no GIO modules, so an empty dir silences it.
+  GIO_MODULE_DIR: \$SNAP/usr/lib/\$CRAFT_ARCH_TRIPLET_BUILD_FOR/gio/modules
+  GI_TYPELIB_PATH: \$SNAP/gnome-platform/usr/lib/\$CRAFT_ARCH_TRIPLET_BUILD_FOR/girepository-1.0:\$SNAP/usr/lib/\$CRAFT_ARCH_TRIPLET_BUILD_FOR/girepository-1.0
+  # Locale
+  LOCPATH: \$SNAP/gnome-platform/usr/lib/locale
+  # Force X11 for window positioning
+  GDK_BACKEND: x11
+
+apps:
+  $BINARY_NAME:
+    command: bin/$BINARY_NAME
+    desktop: meta/gui/$BINARY_NAME.desktop
+    autostart: $BINARY_NAME.desktop
+    plugs:
+      - home
+      - network
+      - network-bind
+      - desktop
+      - desktop-legacy
+      - x11
+      - wayland
+      - unity7
+      - opengl
+      - gsettings
+
+layout:
+  /usr/lib/\$CRAFT_ARCH_TRIPLET_BUILD_FOR/gdk-pixbuf-2.0:
+    bind: \$SNAP/gnome-platform/usr/lib/\$CRAFT_ARCH_TRIPLET_BUILD_FOR/gdk-pixbuf-2.0
+  /usr/lib/\$CRAFT_ARCH_TRIPLET_BUILD_FOR/gtk-3.0:
+    bind: \$SNAP/gnome-platform/usr/lib/\$CRAFT_ARCH_TRIPLET_BUILD_FOR/gtk-3.0
+  /usr/share/glib-2.0:
+    bind: \$SNAP/gnome-platform/usr/share/glib-2.0
+  /usr/share/icons:
+    bind: \$SNAP/data-dir/icons
+  /usr/share/mime:
+    bind: \$SNAP/gnome-platform/usr/share/mime
+  /usr/share/xml/iso-codes:
+    bind: \$SNAP/gnome-platform/usr/share/xml/iso-codes
+  /etc/fonts:
+    bind: \$SNAP/gnome-platform/etc/fonts
+  /etc/gtk-3.0:
+    bind: \$SNAP/gnome-platform/etc/gtk-3.0
+
+parts:
+  $BINARY_NAME:
+    plugin: nil
+    source: .
+    source-type: local
+    build-packages:
+      - golang
+      - gcc
+      - g++
+      - pkg-config
+      - libgtk-3-dev
+      - libglib2.0-dev
+      - libcairo2-dev
+      - libayatana-appindicator3-dev
+    stage-packages:
+      - libayatana-appindicator3-1
+      - libayatana-indicator3-7
+      - libdbusmenu-glib4
+      - libdbusmenu-gtk3-4
+      - librsvg2-common
+      - shared-mime-info
+    override-build: |
+      VERSION=\$(cat release 2>/dev/null | tr -d '[:space:]')
+      if [ -z "\$VERSION" ]; then
+        VERSION="dev"
+      fi
+      craftctl set-version "\$VERSION" 2>/dev/null || snapcraftctl set-version "\$VERSION"
+      GO_BIN=\$(command -v go || echo "/usr/local/go/bin/go")
+      DEST_DIR="\${CRAFT_PART_INSTALL:-\$SNAPCRAFT_PART_INSTALL}"
+      mkdir -p "\$DEST_DIR/bin"
+      mkdir -p "\$DEST_DIR/data-dir/themes"
+      mkdir -p "\$DEST_DIR/data-dir/icons"
+      mkdir -p "\$DEST_DIR/data-dir/sounds"
+      mkdir -p "\$DEST_DIR/gnome-platform"
+      # Empty GIO modules dir so GIO_MODULE_DIR points somewhere valid but
+      # without the broken libgiolibproxy.so from the gnome platform snap.
+      mkdir -p "\$DEST_DIR/usr/lib/\$CRAFT_ARCH_TRIPLET_BUILD_FOR/gio/modules"
+      unset CFLAGS CPPFLAGS LDFLAGS
+      export CGO_CFLAGS="-Wno-deprecated-declarations \$(pkg-config --cflags gtk+-3.0 ayatana-appindicator3-0.1 2>/dev/null)"
+      export CGO_LDFLAGS="\$(pkg-config --libs gtk+-3.0 ayatana-appindicator3-0.1 2>/dev/null)"
+      CGO_ENABLED=1 \$GO_BIN build -buildvcs=false -p 1 -v \\
+        -ldflags="-s -w -X main.version=\$VERSION" \\
+        -o "\$DEST_DIR/bin/$BINARY_NAME" \\
+        $GTK_CMD_PATH
+EOF
+
+echo "    Snap metadata written."
+echo ""
+
+# 6. Clean previous build artifacts to avoid stale state
+# Local build runs as the host user, so artifacts are owned by us — no Docker
+# needed to remove them (unlike the Docker variant).
+echo "==> Cleaning previous snapcraft build state..."
+rm -rf "$PROJECT_ROOT/parts" "$PROJECT_ROOT/stage" "$PROJECT_ROOT/prime"
+
+# 7. Execute build locally with snapcraft (LXD build provider, native arch)
+echo "==> Executing Snapcraft locally (LXD provider, native $ARCH build)..."
+cd "$PROJECT_ROOT"
+
+snapcraft pack --verbosity=brief
+
+echo ""
+mkdir -p "$SCRIPT_DIR/build"
+SNAP_FILE=$(find "$PROJECT_ROOT" -maxdepth 1 -name "${BINARY_NAME}_*.snap" | head -n 1)
+
+if [ -n "$SNAP_FILE" ] && [ -f "$SNAP_FILE" ]; then
+    mv "$SNAP_FILE" "$SCRIPT_DIR/build/" 2>/dev/null || cp "$SNAP_FILE" "$SCRIPT_DIR/build/"
+    FINAL_SNAP="$SCRIPT_DIR/build/$(basename "$SNAP_FILE")"
+    echo "==> Snap package build complete!"
+    echo "    Saved: $FINAL_SNAP"
+else
+    echo "==> Snap package build complete!"
+    echo "    Check $PROJECT_ROOT for ${BINARY_NAME}_${VERSION}_*.snap"
+fi
