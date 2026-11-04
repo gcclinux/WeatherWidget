@@ -12,12 +12,12 @@
   <developer id="uk.co.easysmartapps">
     <name>WeatherWidget Team</name>
   </developer>
-
+  
   <branding>
     <color type="primary" scheme_preference="light">#3584e4</color>
     <color type="primary" scheme_preference="dark">#182d46</color>
   </branding>
-
+  
   <description>
     <p>
       WeatherWidget puts live weather and world clocks on your desktop — a
@@ -38,13 +38,13 @@
       <li>Real-time clocks showing each city's local time and date</li>
       <li>Enhanced and Simple views with selectable data fields</li>
       <li>Temperature, description, humidity, wind speed and direction, gusts</li>
-      <li>Dew point, pressure, UV index, pollution and Air Quality Index</li>
+      <li>Dew point, pressure, UV index, pollution and Air Quality Index, Feels Like</li>
       <li>Adjustable background transparency (25% / 50% / 75% / 100%)</li>
       <li>Snap to any screen corner or drag to a custom position</li>
-      <li>Multi-monitor support</li>
+      <li>Multi-monitor support &amp; 12 languages supported</li>
       <li>Celsius or Fahrenheit, plus km/h, mph or knots for wind</li>
-      <li>12 languages supported</li>
-      <li>Feels like temperature</li>
+      <li>Air Quality News, Definition and Profiles ticker</li>
+      <li>AQI: graded context: Good, Fair, Moderate, and beyond, PM2.5, PM10, NO₂, Ozone, CO</li>
     </ul>
   </description>
 
@@ -87,13 +87,13 @@
   <content_rating type="oars-1.1" />
 
   <releases>
-    <release version="2.2.0" date="2026-11-04">
+      <release version="2.2.0" date="2026-11-04">
       <description>
           <p>Linux Snap package autostart permanant fix</p>
-          <p>Windows Software rendering running without GPU (AMD64 & AMR64)</p>
+          <p>Windows Software rendering running without GPU (AMD64 &amp; AMR64)</p>
           <p>Everyday Outdoors: General atmospheric context for daily commutes and stepping out.</p>
-          <p>Runner & Cyclist: Real-time feedback on whether conditions and air quality are optimal for outdoor cardio.</p>
-          <p>Family & School Run: Practical checks when heading out with children and family.</p>
+          <p>Runner &amp; Cyclist: Real-time feedback on whether conditions and air quality are optimal for outdoor cardio.</p>
+          <p>Family &amp; School Run: Practical checks when heading out with children and family.</p>
           <p>Sensitive Airways: Targeted alerts for asthma, allergy, and pollutant sensitivity.</p>
           <p>Open Windows: Quick guidance on whether bringing fresh outdoor air inside is a good idea.</p>
           <p>Replaces raw microgram density confusion with clear, graded context: Good, Fair, Moderate, and beyond.</p>
@@ -101,7 +101,7 @@
           <p>Granular toggles remain available if you prefer tracking individual components directly (PM2.5, PM10, NO₂, Ozone, CO).</p>
       </description>
     </release>
-  <release version="2.1.0" date="2026-10-14">
+    <release version="2.1.0" date="2026-10-14">
       <description>
         <p>WeatgherWidget new data no include feels like in the desktop view.</p>
         <p>Feels like in the enhanced view</p>
@@ -109,11 +109,6 @@
         <p>System Improvements</p>
         <p>Complete redesign of the tray menu with a modern, native look.</p>
         <p>Fully working tray menu on KDE Plasma</p>
-      </description>
-    </release>
-    <release version="2.0.8" date="2026-09-30">
-      <description>
-        <p>Maintenance release.</p>
       </description>
     </release>
     <release version="2.0.7" date="2026-09-29">
