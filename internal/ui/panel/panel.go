@@ -195,6 +195,62 @@ type metricTileWidget struct {
 	value     *canvas.Text
 }
 
+// tickerTrackLayout positions the 4 styled text segments of the current ticker
+// item side by side starting at offsetX, while reporting zero minimum width so
+// the clipped ticker area fills the remaining space in the header row.
+type tickerTrackLayout struct {
+	offsetX float32
+}
+
+func (t *tickerTrackLayout) MinSize(objects []fyne.CanvasObject) fyne.Size {
+	var h float32 = 20
+	for _, o := range objects {
+		if o.Visible() {
+			h = fyne.Max(h, o.MinSize().Height)
+		}
+	}
+	return fyne.NewSize(0, h)
+}
+
+func (t *tickerTrackLayout) Layout(objects []fyne.CanvasObject, size fyne.Size) {
+	x := t.offsetX
+	for _, o := range objects {
+		if !o.Visible() {
+			continue
+		}
+		ms := o.MinSize()
+		y := (size.Height - ms.Height) / 2
+		o.Resize(ms)
+		o.Move(fyne.NewPos(x, y))
+		x += ms.Width
+	}
+}
+
+func (t *tickerTrackLayout) totalWidth(objects []fyne.CanvasObject) float32 {
+	var w float32
+	for _, o := range objects {
+		if o.Visible() {
+			w += o.MinSize().Width
+		}
+	}
+	return w
+}
+
+func statusColorForLevel(level int) color.Color {
+	switch level {
+	case 1:
+		return color.NRGBA{R: 52, G: 211, B: 153, A: 255} // #34D399 Good
+	case 2:
+		return color.NRGBA{R: 251, G: 191, B: 36, A: 255} // #FBBF24 Fair
+	case 3:
+		return color.NRGBA{R: 251, G: 146, B: 60, A: 255} // #FB923C Moderate
+	case 4:
+		return color.NRGBA{R: 248, G: 113, B: 113, A: 255} // #F87171 Poor
+	default:
+		return color.NRGBA{R: 192, G: 132, B: 252, A: 255} // #C084FC Very Poor
+	}
+}
+
 // CityPanel renders weather data for a single city within the widget.
 //
 // The card is laid out horizontally: a left "info" block (location, weather
@@ -222,10 +278,22 @@ type CityPanel struct {
 	dewPointTile, pressureTile, uvTile *metricTileWidget
 
 	// Air-quality row (bottom of the card).
-	airCells        map[weather.PollutionMetric]*airMetricCell
-	airRow          *fyne.Container // full bottom row container
-	aqiLeftRow      *fyne.Container // AQI cell on the left
+	airCells         map[weather.PollutionMetric]*airMetricCell
+	airRow           *fyne.Container // full bottom row container
+	aqiLeftRow       *fyne.Container // AQI cell on the left
 	otherAirRightRow *fyne.Container // other pollution cells on the right
+
+	// Pollution info ticker (top header row, to the right of cityText).
+	tickerLayout  *tickerTrackLayout
+	tickerTrack   *fyne.Container
+	tickerClip    fyne.CanvasObject
+	tickerHead    *canvas.Text
+	tickerStatus  *canvas.Text
+	tickerTail    *canvas.Text
+	tickerItems   []weather.PollutionTickerItem
+	tickerIdx     int
+	tickerStagger int
+	tickerStopCh  chan struct{}
 
 	errorIcon *canvas.Image
 
@@ -365,7 +433,7 @@ func newMetricTile(emoji, name string) *metricTileWidget {
 	valueText.TextStyle = fyne.TextStyle{Bold: true}
 
 	// Center the header (emoji + name) and value text within the cell
-	header := container.NewHBox(emojiObj, nameText)
+	header := container.New(&spacedHBoxLayout{spacing: 2}, emojiObj, nameText)
 	centeredHeader := container.NewCenter(header)
 	centeredValue := container.NewCenter(valueText)
 	content := container.NewVBox(centeredHeader, centeredValue)
@@ -375,8 +443,8 @@ func newMetricTile(emoji, name string) *metricTileWidget {
 	border.StrokeColor = metricBorderColor
 	border.StrokeWidth = 1
 
-	// Use compact padding (reduced vertical padding for ~10% shorter cells)
-	compactPad := container.New(&compactPaddingLayout{hPad: 8, vPad: 4}, container.NewCenter(content))
+	// Use compact horizontal and vertical padding so cells stay narrow without crowding text.
+	compactPad := container.New(&compactPaddingLayout{hPad: 3, vPad: 4}, container.NewCenter(content))
 	tile := container.NewStack(border, compactPad)
 	return &metricTileWidget{container: tile, value: valueText}
 }
@@ -408,6 +476,8 @@ func (p *CityPanel) shortPollutionName(m weather.PollutionMetric) string {
 	return full
 }
 
+var fyneTickerStaggerCounter int
+
 // NewCityPanel creates a new CityPanel with placeholder content.
 // If lm is nil, hardcoded English defaults are used for placeholder text.
 func NewCityPanel(lm *i18n.LocaleManager) *CityPanel {
@@ -415,7 +485,9 @@ func NewCityPanel(lm *i18n.LocaleManager) *CityPanel {
 		lm:              lm,
 		displayFields:   config.DefaultDisplayFields(),
 		pollutionFields: config.DefaultPollutionFields(),
+		tickerStagger:   fyneTickerStaggerCounter,
 	}
+	fyneTickerStaggerCounter++
 
 	// Weather icon — start with the default cloudy icon.
 	p.iconWidget = canvas.NewImageFromResource(loadIconFromAssets(weather.IconCloudy))
@@ -434,6 +506,21 @@ func NewCityPanel(lm *i18n.LocaleManager) *CityPanel {
 	p.cityText.TextSize = 18
 	p.cityText.TextStyle = fyne.TextStyle{Bold: true}
 	p.cityText.Alignment = fyne.TextAlignLeading
+
+	// Pollution info ticker widgets (clipped horizontal marquee to the right of cityText).
+	tickerCyan := color.NRGBA{R: 0, G: 190, B: 255, A: 255}
+	p.tickerHead = canvas.NewText("", color.White)
+	p.tickerHead.TextSize = 12
+	p.tickerHead.TextStyle = fyne.TextStyle{Bold: true}
+	p.tickerStatus = canvas.NewText("", color.White)
+	p.tickerStatus.TextSize = 12
+	p.tickerStatus.TextStyle = fyne.TextStyle{Bold: true}
+	p.tickerTail = canvas.NewText("", tickerCyan)
+	p.tickerTail.TextSize = 12
+	p.tickerLayout = &tickerTrackLayout{offsetX: 360}
+	p.tickerTrack = container.New(p.tickerLayout, p.tickerHead, p.tickerStatus, p.tickerTail)
+	p.tickerClip = container.NewClip(p.tickerTrack)
+	p.tickerClip.Hide()
 
 	p.tempText = canvas.NewText(p.translate("panel.placeholder.temp", "--°C"), color.White)
 	p.tempText.TextSize = 36
@@ -495,10 +582,16 @@ func NewCityPanel(lm *i18n.LocaleManager) *CityPanel {
 			name:  name,
 			value: value,
 		}
-		cell.container = container.NewVBox(
+		topPart := container.NewVBox(
 			container.NewCenter(icon),
 			container.NewCenter(name),
+		)
+		cell.container = container.NewBorder(
+			topPart,
 			container.NewCenter(value),
+			nil,
+			nil,
+			layout.NewSpacer(),
 		)
 		cell.container.Hide()
 		p.airCells[m] = cell
@@ -510,11 +603,144 @@ func NewCityPanel(lm *i18n.LocaleManager) *CityPanel {
 
 // metricsGridWidth is the fixed width for the right-hand metrics grid so that
 // all city panels have consistent grid sizing regardless of content width.
-const metricsGridWidth = 380
+const metricsGridWidth = 320
+
+// metricsGridLayout arranges up to 3 columns of metric tiles within a fixed
+// total width, giving the middle column (Wind / Pressure) a wider baseline
+// allocation than the outer columns (Humidity / Dew Point and Wind Gust / UV)
+// so that wind speed + compass direction fits comfortably without forcing the
+// outer columns to waste horizontal space.
+type metricsGridLayout struct {
+	cols       int
+	totalWidth float32
+	colGap     float32
+	rowGap     float32
+	colBaseW   [3]float32
+}
+
+func (m *metricsGridLayout) visibleObjects(objects []fyne.CanvasObject) []fyne.CanvasObject {
+	var vis []fyne.CanvasObject
+	for _, o := range objects {
+		if o.Visible() {
+			vis = append(vis, o)
+		}
+	}
+	return vis
+}
+
+func (m *metricsGridLayout) MinSize(objects []fyne.CanvasObject) fyne.Size {
+	vis := m.visibleObjects(objects)
+	if len(vis) == 0 {
+		return fyne.NewSize(0, 0)
+	}
+	cols := m.cols
+	if len(vis) < cols {
+		cols = len(vis)
+	}
+	rows := (len(vis) + cols - 1) / cols
+	var maxCellH float32
+	for _, o := range vis {
+		s := o.MinSize()
+		if s.Height > maxCellH {
+			maxCellH = s.Height
+		}
+	}
+	totalH := maxCellH*float32(rows) + m.rowGap*float32(rows-1)
+	return fyne.NewSize(m.totalWidth, totalH)
+}
+
+func (m *metricsGridLayout) Layout(objects []fyne.CanvasObject, size fyne.Size) {
+	vis := m.visibleObjects(objects)
+	if len(vis) == 0 {
+		return
+	}
+	cols := m.cols
+	if len(vis) < cols {
+		cols = len(vis)
+	}
+	rows := (len(vis) + cols - 1) / cols
+
+	availW := size.Width - m.colGap*float32(cols-1)
+	if availW < 0 {
+		availW = 0
+	}
+
+	colWidths := make([]float32, cols)
+	if cols == 3 {
+		var colMin [3]float32
+		for i, o := range vis {
+			c := i % 3
+			if w := o.MinSize().Width; w > colMin[c] {
+				colMin[c] = w
+			}
+		}
+		var baseSum float32
+		for c := 0; c < 3; c++ {
+			colWidths[c] = fyne.Max(colMin[c], m.colBaseW[c])
+			baseSum += colWidths[c]
+		}
+		if baseSum <= availW {
+			extra := (availW - baseSum) / 3
+			for c := 0; c < 3; c++ {
+				colWidths[c] += extra
+			}
+		} else {
+			minSum := colMin[0] + colMin[1] + colMin[2]
+			if minSum <= availW {
+				rem := availW - minSum
+				var slackSum float32
+				var slack [3]float32
+				for c := 0; c < 3; c++ {
+					if m.colBaseW[c] > colMin[c] {
+						slack[c] = m.colBaseW[c] - colMin[c]
+						slackSum += slack[c]
+					}
+				}
+				for c := 0; c < 3; c++ {
+					if slackSum > 0 {
+						colWidths[c] = colMin[c] + rem*(slack[c]/slackSum)
+					} else {
+						colWidths[c] = colMin[c] + rem/3
+					}
+				}
+			} else if minSum > 0 {
+				for c := 0; c < 3; c++ {
+					colWidths[c] = availW * (colMin[c] / minSum)
+				}
+			}
+		}
+	} else {
+		w := availW / float32(cols)
+		for c := 0; c < cols; c++ {
+			colWidths[c] = w
+		}
+	}
+
+	availH := size.Height - m.rowGap*float32(rows-1)
+	if availH < 0 {
+		availH = 0
+	}
+	rowH := availH / float32(rows)
+
+	var y float32
+	for r := 0; r < rows; r++ {
+		var x float32
+		for c := 0; c < cols; c++ {
+			idx := r*cols + c
+			if idx >= len(vis) {
+				break
+			}
+			vis[idx].Resize(fyne.NewSize(colWidths[c], rowH))
+			vis[idx].Move(fyne.NewPos(x, y))
+			x += colWidths[c] + m.colGap
+		}
+		y += rowH + m.rowGap
+	}
+}
 
 // metricGrid builds the right-hand three-column grid of metric tiles based on
 // the current display-field visibility (up to six tiles form a 3×2 grid).
-// The grid is wrapped in a fixed-width container to ensure consistent sizing.
+// The grid uses a compact fixed-width layout with proportional columns.
 func (p *CityPanel) metricGrid() fyne.CanvasObject {
 	var cells []fyne.CanvasObject
 
@@ -535,13 +761,16 @@ func (p *CityPanel) metricGrid() fyne.CanvasObject {
 		return layout.NewSpacer()
 	}
 
-	grid := container.NewGridWithColumns(3, cells...)
-	// Wrap the grid in a fixed-width container for consistent sizing across all city panels,
-	// then add a 6px right margin spacer
-	gridWithWidth := container.New(&fixedWidthLayout{width: metricsGridWidth}, grid)
+	grid := container.New(&metricsGridLayout{
+		cols:       3,
+		totalWidth: metricsGridWidth,
+		colGap:     2,
+		rowGap:     2,
+		colBaseW:   [3]float32{88, 140, 88},
+	}, cells...)
 	gridRightSpacer := canvas.NewRectangle(color.Transparent)
-	gridRightSpacer.SetMinSize(fyne.NewSize(6, 1))
-	return container.NewBorder(nil, nil, nil, gridRightSpacer, gridWithWidth)
+	gridRightSpacer.SetMinSize(fyne.NewSize(2, 1))
+	return container.New(&spacedHBoxLayout{spacing: 0}, grid, gridRightSpacer)
 }
 
 // buildLayout constructs the horizontal card: a left info block (weather icon
@@ -626,10 +855,17 @@ func (p *CityPanel) buildLayout() fyne.CanvasObject {
 	p.airRow = container.NewBorder(nil, nil, aqiWithPadding, otherWithPadding, nil)
 	bottom := p.airRow
 
-	// Build the final content: city name on top, then middle row, then air row.
+	// Build the final content: header row (city name + pollution ticker) on top,
+	// then middle row, then air row.
 	var contentObjects []fyne.CanvasObject
 	if p.displayFields.ShowCity {
-		contentObjects = append(contentObjects, p.cityText)
+		headerSpacer := canvas.NewRectangle(color.Transparent)
+		headerSpacer.SetMinSize(fyne.NewSize(16, 1))
+		leftCity := container.NewHBox(p.cityText, headerSpacer)
+		headerRow := container.NewBorder(nil, nil, leftCity, nil, p.tickerClip)
+		contentObjects = append(contentObjects, headerRow)
+	} else {
+		contentObjects = append(contentObjects, p.tickerClip)
 	}
 	contentObjects = append(contentObjects, middle, bottom)
 	content := container.New(&gapVBoxLayout{gap: 2}, contentObjects...)
@@ -820,7 +1056,113 @@ func (p *CityPanel) applyAirCells() {
 		p.otherAirRightRow.Refresh()
 	}
 	if p.airRow != nil {
+		if len(rows) == 0 {
+			p.airRow.Hide()
+		} else {
+			p.airRow.Show()
+		}
 		p.airRow.Refresh()
+	}
+	p.applyTicker()
+}
+
+func (p *CityPanel) setTickerItemSegments(it weather.PollutionTickerItem) {
+	if it.FullName != "" && it.FullName != it.Symbol {
+		p.tickerHead.Text = it.Symbol + " (" + it.FullName + "): "
+	} else {
+		p.tickerHead.Text = it.Symbol + ": "
+	}
+	// Fyne text rendering has no colour-emoji support, so drop emoji from the
+	// friendly messages (the wording still reads naturally without them).
+	p.tickerStatus.Text = weather.StripEmoji(it.StatusText)
+	p.tickerStatus.Color = statusColorForLevel(it.StatusLevel)
+	p.tickerTail.Text = " • " + weather.StripEmoji(it.SourcesText)
+	p.tickerHead.Refresh()
+	p.tickerStatus.Refresh()
+	p.tickerTail.Refresh()
+}
+
+func (p *CityPanel) applyTicker() {
+	items := weather.PlanPollutionTickerWithWeather(p.pollutionFields, p.lastData, p.lastTempUnit, p.lm)
+	if len(items) == 0 {
+		p.stopTicker()
+		p.tickerItems = nil
+		if p.tickerClip != nil {
+			p.tickerClip.Hide()
+		}
+		return
+	}
+
+	// Check if items are identical to avoid resetting scroll position on routine refreshes.
+	same := len(items) == len(p.tickerItems)
+	if same {
+		for i := range items {
+			if items[i] != p.tickerItems[i] {
+				same = false
+				break
+			}
+		}
+	}
+	p.tickerItems = items
+	if p.tickerClip != nil {
+		p.tickerClip.Show()
+	}
+	if same && p.tickerStopCh != nil {
+		return
+	}
+
+	p.stopTicker()
+	p.tickerIdx = p.tickerStagger % len(p.tickerItems)
+	p.setTickerItemSegments(p.tickerItems[p.tickerIdx])
+	w := p.tickerClip.Size().Width
+	if w < 20 {
+		w = 360
+	}
+	p.tickerLayout.offsetX = w
+	p.tickerTrack.Refresh()
+
+	p.mu.Lock()
+	stopCh := make(chan struct{})
+	p.tickerStopCh = stopCh
+	p.mu.Unlock()
+
+	go func(stopCh chan struct{}) {
+		ticker := time.NewTicker(33 * time.Millisecond)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-stopCh:
+				return
+			case <-ticker.C:
+				fyne.Do(func() {
+					if len(p.tickerItems) == 0 || p.tickerClip == nil || !p.tickerClip.Visible() {
+						return
+					}
+					totalW := p.tickerLayout.totalWidth(p.tickerTrack.Objects)
+					p.tickerLayout.offsetX -= 1.6
+					if p.tickerLayout.offsetX+totalW < -12 {
+						p.tickerIdx = (p.tickerIdx + 1) % len(p.tickerItems)
+						p.setTickerItemSegments(p.tickerItems[p.tickerIdx])
+						cw := p.tickerClip.Size().Width
+						if cw < 20 {
+							cw = 360
+						}
+						p.tickerLayout.offsetX = cw
+					}
+					p.tickerLayout.Layout(p.tickerTrack.Objects, p.tickerTrack.Size())
+					canvas.Refresh(p.tickerTrack)
+				})
+			}
+		}
+	}(stopCh)
+}
+
+func (p *CityPanel) stopTicker() {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.tickerStopCh != nil {
+		close(p.tickerStopCh)
+		p.tickerStopCh = nil
 	}
 }
 
@@ -986,6 +1328,7 @@ func (p *CityPanel) StartClock(timezone string) {
 // StopClock stops the time ticker goroutine and any icon animation.
 func (p *CityPanel) StopClock() {
 	p.StopAnimation()
+	p.stopTicker()
 
 	p.mu.Lock()
 	defer p.mu.Unlock()

@@ -22,6 +22,7 @@ import (
 
 	"weatherwidget/assets"
 	"weatherwidget/internal/config"
+	"weatherwidget/internal/weather/remoteapi"
 )
 
 // ewwAPIKeyLen is the expected length of an EasyWeatherWidget API key (UUID v4).
@@ -53,7 +54,12 @@ func showSettingsDialog(m *manager) {
 	// Don't set transient-for — the main window is a positioned desktop widget
 	// and making the dialog transient causes them to move together.
 	dlg.SetModal(false)
-	dlg.SetDefaultSize(600, 660)
+	// Default size is a starting point only; each tab's content is wrapped in a
+	// scrolled window (see appendScrolledPage below) so the dialog's minimum
+	// height stays small and the user can freely drag it smaller to fit shorter
+	// screens. The action buttons (Save/Cancel) therefore always stay visible.
+	dlg.SetDefaultSize(600, 800)
+	dlg.SetResizable(true)
 	dlg.SetPosition(gtk.WIN_POS_CENTER)
 
 	box, _ := dlg.GetContentArea()
@@ -66,24 +72,72 @@ func showSettingsDialog(m *manager) {
 	// ── Notebook (tabs) ───────────────────────────────────────────────────
 	nb, _ := gtk.NotebookNew()
 
+	// appendScrolledPage wraps a tab's content in a vertically-scrolling window
+	// before adding it to the notebook. This keeps the notebook's (and thus the
+	// dialog's) minimum height small so the window can be dragged shorter than
+	// the tallest tab's natural height; overflow scrolls instead of forcing the
+	// whole dialog taller than the screen.
+	appendScrolledPage := func(content gtk.IWidget, label *gtk.Label) {
+		sc, _ := gtk.ScrolledWindowNew(nil, nil)
+		sc.SetPolicy(gtk.POLICY_NEVER, gtk.POLICY_AUTOMATIC)
+		// Propagate natural width so tabs aren't horizontally clipped, and allow
+		// the content to request its natural height (the scrolled window still
+		// permits shrinking below it).
+		sc.SetPropagateNaturalWidth(true)
+		sc.Add(content)
+		nb.AppendPage(sc, label)
+	}
+
+	var getCities func() []config.CityConfig
+	var unlockLocations func()
+	var unlockPollution func()
+
 	// --- API / Provider tab ---
-	providerBox := buildProviderTab(m, dlg)
+	providerBox, triggerProFromBanner, selectFreeFromBanner := buildProviderTab(m, dlg, func() []config.CityConfig {
+		if getCities != nil {
+			return getCities()
+		}
+		if len(m.cfg.Cities) > 0 {
+			return m.cfg.Cities
+		}
+		return config.DefaultCities()
+	}, func() {
+		if unlockLocations != nil {
+			unlockLocations()
+		}
+		// Air Quality & Pollution is Pro-only; unlockPollution no-ops when the
+		// newly saved config isn't Pro, so it's safe to always call here.
+		if unlockPollution != nil {
+			unlockPollution()
+		}
+	})
 	providerLabel, _ := gtk.LabelNew(m.t("settings.tab.provider"))
-	nb.AppendPage(providerBox, providerLabel)
+	appendScrolledPage(providerBox, providerLabel)
 
 	// --- Locations tab ---
 	cities := make([]config.CityConfig, len(m.cfg.Cities))
 	copy(cities, m.cfg.Cities)
-	locationsBox, getCities := buildLocationsTab(m, dlg, cities, func() {
+	if len(cities) == 0 {
+		cities = config.DefaultCities()
+	}
+	var locationsBox *gtk.Box
+	locationsBox, getCities, unlockLocations = buildLocationsTab(m, dlg, cities, func() {
+		nb.SetCurrentPage(0)
+	}, func() {
+		triggerProFromBanner()
+		nb.SetCurrentPage(0)
+	}, func() {
+		selectFreeFromBanner()
 		nb.SetCurrentPage(0)
 	})
 	locationsLabel, _ := gtk.LabelNew(m.t("settings.tab.locations"))
-	nb.AppendPage(locationsBox, locationsLabel)
+	appendScrolledPage(locationsBox, locationsLabel)
 
 	// --- Widget tab ---
-	widgetBox, getDisplayFields, getPollutionFields, getTempUnit, getWindUnit := buildWidgetTab(m)
+	widgetBox, getDisplayFields, getPollutionFields, getTempUnit, getWindUnit, unlockPollutionFn := buildWidgetTab(m)
+	unlockPollution = unlockPollutionFn
 	widgetLabel, _ := gtk.LabelNew(m.t("settings.tab.widget"))
-	nb.AppendPage(widgetBox, widgetLabel)
+	appendScrolledPage(widgetBox, widgetLabel)
 
 	// --- Language tab ---
 	selectedLocale := m.cfg.Locale
@@ -92,19 +146,26 @@ func showSettingsDialog(m *manager) {
 	}
 	langBox, getLocale := buildLanguageTab(m, selectedLocale)
 	langLabel, _ := gtk.LabelNew(m.t("settings.tab.language"))
-	nb.AppendPage(langBox, langLabel)
+	appendScrolledPage(langBox, langLabel)
 
 	// --- Appearance tab ---
-	appearanceBox, opacityScale, noBgCheck, iconThemeCombo, getViewMode := buildAppearanceTab(m)
+	appearanceBox, opacityScale, noBgCheck, iconThemeCombo, getViewMode, getFontSizes := buildAppearanceTab(m)
 	appearanceLabel, _ := gtk.LabelNew(m.t("settings.tab.appearance"))
-	nb.AppendPage(appearanceBox, appearanceLabel)
+	appendScrolledPage(appearanceBox, appearanceLabel)
 
 	// --- About tab ---
-	aboutBox, getFontSizes := buildAboutTab(m)
+	aboutBox := buildAboutTab(m)
 	aboutLabel, _ := gtk.LabelNew(m.t("settings.tab.about"))
-	nb.AppendPage(aboutBox, aboutLabel)
+	appendScrolledPage(aboutBox, aboutLabel)
 
 	box.PackStart(nb, true, true, 0)
+
+	// If no API is configured, open on "Data Provider" (page 0); if configured, open on "Display/Appearance" (page 4).
+	if m.cfg.HasLicense() {
+		nb.SetCurrentPage(4)
+	} else {
+		nb.SetCurrentPage(0)
+	}
 
 	// ── Action buttons ────────────────────────────────────────────────────
 	dlg.AddButton(m.t("settings.save"), gtk.RESPONSE_OK)
@@ -145,6 +206,9 @@ func showSettingsDialog(m *manager) {
 			// Window decorations are always hidden; persist the flag for consistency.
 			newCfg.NoBorder = true
 			newCfg.Cities = getCities()                   // collect current city list from the locations tab
+			if len(newCfg.Cities) == 0 {
+				newCfg.Cities = config.DefaultCities()
+			}
 			newCfg.Locale = getLocale()                   // collect selected language
 			newCfg.DisplayFields = getDisplayFields()     // collect panel visibility
 			newCfg.PollutionFields = getPollutionFields() // collect pollution metrics
@@ -167,6 +231,16 @@ func showSettingsDialog(m *manager) {
 			saving = true
 			_ = m.onSettingsSave(&newCfg)
 			saving = false
+
+			if newCfg.HasLicense() && unlockLocations != nil {
+				unlockLocations()
+			}
+			// Unlock the Pro-only Air Quality & Pollution controls live if the
+			// saved config is now Pro (no-op otherwise), so the section leaves
+			// read-only mode without reopening Settings.
+			if unlockPollution != nil {
+				unlockPollution()
+			}
 
 			// After a successful save the font sizes are now committed; update
 			// the snapshot so Cancel can only revert post-save live changes.
@@ -211,11 +285,25 @@ func snapOpacity(v int) int {
 }
 
 // buildProviderTab creates the API / Provider settings tab.
-func buildProviderTab(m *manager, parent *gtk.Dialog) *gtk.Box {
+func buildProviderTab(m *manager, parent *gtk.Dialog, getCities func() []config.CityConfig, onSaved func()) (*gtk.Box, func(), func()) {
 	vbox, _ := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 8)
 	vbox.SetMarginTop(8)
 	vbox.SetMarginStart(4)
 	vbox.SetMarginEnd(4)
+
+	// Autostart toggle — shown at the top of the Data Provider tab, above the
+	// Provider selector. (Moved here from the Appearance tab.)
+	autostartCheck, _ := gtk.CheckButtonNewWithLabel(m.t("settings.startup.autostart"))
+	autostartCheck.SetActive(isAutoStartEnabled())
+	autostartCheck.Connect("toggled", func() {
+		if err := setAutoStartEnabled(autostartCheck.GetActive()); err != nil {
+			autostartCheck.SetActive(isAutoStartEnabled())
+		}
+	})
+	vbox.PackStart(autostartCheck, false, false, 0)
+
+	autostartSep, _ := gtk.SeparatorNew(gtk.ORIENTATION_HORIZONTAL)
+	vbox.PackStart(autostartSep, false, false, 4)
 
 	// Provider selector.
 	providerLabel, _ := gtk.LabelNew(m.t("settings.provider.label") + ":")
@@ -238,17 +326,56 @@ func buildProviderTab(m *manager, parent *gtk.Dialog) *gtk.Box {
 	providerRow.PackStart(getApiBtn, false, false, 0)
 	vbox.PackStart(providerRow, false, false, 0)
 
-	// API key entry.
+	// API key entry + Check Connection button.
 	apiKeyLabel, _ := gtk.LabelNew(m.t("settings.provider.apiKeyLabel") + ":")
 	apiKeyLabel.SetHAlign(gtk.ALIGN_START)
 	vbox.PackStart(apiKeyLabel, false, false, 0)
 
+	apiKeyRow, _ := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 6)
 	apiKeyEntry, _ := gtk.EntryNew()
 	apiKeyEntry.SetPlaceholderText(m.t("settings.provider.apiKeyPlaceholder"))
 	if m.cfg.APIConfig != nil {
 		apiKeyEntry.SetText(m.cfg.APIConfig.APIKey)
 	}
-	vbox.PackStart(apiKeyEntry, false, false, 0)
+	apiKeyRow.PackStart(apiKeyEntry, true, true, 0)
+
+	checkConnBtn, _ := gtk.ButtonNewWithLabel(m.t("settings.provider.checkConnection"))
+	apiKeyRow.PackStart(checkConnBtn, false, false, 0)
+	vbox.PackStart(apiKeyRow, false, false, 0)
+
+	checkConnBtn.Connect("clicked", func() {
+		provIdx := providerCombo.GetActive()
+		providerValue := "easyweatherwidget"
+		if provIdx == 1 {
+			providerValue = "openweathermap"
+		}
+		apiKey, _ := apiKeyEntry.GetText()
+		apiKey = strings.TrimSpace(apiKey)
+		if apiKey == "" {
+			showErrorDialog(parent, m.t("settings.provider.apiKeyEmpty"))
+			return
+		}
+
+		checkConnBtn.SetSensitive(false)
+		checkConnBtn.SetLabel(m.t("settings.provider.checkingConnection"))
+
+		go func() {
+			adapter := remoteapi.NewRemoteAPIAdapter(providerValue, apiKey)
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			err := adapter.TestConnection(ctx)
+
+			runOnUI(func() {
+				checkConnBtn.SetSensitive(true)
+				checkConnBtn.SetLabel(m.t("settings.provider.checkConnection"))
+				if err != nil {
+					showErrorDialog(parent, fmt.Sprintf("%s: %v", m.t("settings.provider.connectionFailedMsg"), err))
+				} else {
+					showInfoDialog(parent, m.t("settings.provider.connectionSuccessMsg"))
+				}
+			})
+		}()
+	})
 
 	// Activation card frame — shown when a Pro API key is active or just generated.
 	activationFrame, _ := gtk.FrameNew("")
@@ -379,32 +506,45 @@ func buildProviderTab(m *manager, parent *gtk.Dialog) *gtk.Box {
 			Provider: providerValue,
 			APIKey:   strings.TrimSpace(apiKey),
 		}
+		if getCities != nil {
+			newCfg.Cities = getCities()
+		}
+		if len(newCfg.Cities) == 0 {
+			newCfg.Cities = config.DefaultCities()
+		}
 		intervalStr, _ := intervalEntry.GetText()
 		if v, err := strconv.Atoi(strings.TrimSpace(intervalStr)); err == nil && v >= 10 && v <= 120 {
 			newCfg.RefreshInterval = v
 		}
 		if err := m.onSettingsSave(&newCfg); err != nil {
 			showErrorDialog(parent, fmt.Sprintf(m.t("error.settings.saveFailed"), err))
+		} else if onSaved != nil {
+			onSaved()
 		}
 	})
 	vbox.PackStart(saveAPIBtn, false, false, 0)
 
-	return vbox
+	triggerPro := func() {
+		providerCombo.SetActive(0)
+		updateGetApiBtn()
+		handleGetProAPI()
+	}
+	selectFree := func() {
+		providerCombo.SetActive(1)
+		updateGetApiBtn()
+	}
+
+	return vbox, triggerPro, selectFree
 }
 
 // buildAppearanceTab creates the Appearance settings tab.
-func buildAppearanceTab(m *manager) (*gtk.Box, *gtk.Scale, *gtk.CheckButton, *gtk.ComboBoxText, func() config.ViewMode) {
+func buildAppearanceTab(m *manager) (*gtk.Box, *gtk.Scale, *gtk.CheckButton, *gtk.ComboBoxText, func() config.ViewMode, func() fontSizes) {
 	vbox, _ := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 8)
 	vbox.SetMarginTop(8)
 	vbox.SetMarginStart(4)
 	vbox.SetMarginEnd(4)
 
 	// ── View Mode ─────────────────────────────────────────────────────────
-	viewModeTitle, _ := gtk.LabelNew("")
-	viewModeTitle.SetMarkup("<b>" + glib.MarkupEscapeText(m.t("settings.viewMode.title")) + "</b>")
-	viewModeTitle.SetHAlign(gtk.ALIGN_START)
-	vbox.PackStart(viewModeTitle, false, false, 0)
-
 	viewModeSub, _ := gtk.LabelNew(m.t("settings.viewMode.subtitle"))
 	viewModeSub.SetHAlign(gtk.ALIGN_START)
 	viewModeSub.SetLineWrap(true)
@@ -460,27 +600,9 @@ func buildAppearanceTab(m *manager) (*gtk.Box, *gtk.Scale, *gtk.CheckButton, *gt
 	bgNote.SetLineWrap(true)
 	vbox.PackStart(bgNote, false, false, 0)
 
-	// Autostart toggle.
-	sep, _ := gtk.SeparatorNew(gtk.ORIENTATION_HORIZONTAL)
-	vbox.PackStart(sep, false, false, 4)
-
-	autostartCheck, _ := gtk.CheckButtonNewWithLabel(m.t("settings.startup.autostart"))
-	autostartCheck.SetActive(isAutoStartEnabled())
-	autostartCheck.Connect("toggled", func() {
-		if err := setAutoStartEnabled(autostartCheck.GetActive()); err != nil {
-			autostartCheck.SetActive(isAutoStartEnabled())
-		}
-	})
-	vbox.PackStart(autostartCheck, false, false, 0)
-
 	// ── Weather Icons ────────────────────────────────────────────────────────
 	iconSep, _ := gtk.SeparatorNew(gtk.ORIENTATION_HORIZONTAL)
 	vbox.PackStart(iconSep, false, false, 4)
-
-	iconTitle, _ := gtk.LabelNew("")
-	iconTitle.SetMarkup("<b>" + glib.MarkupEscapeText(m.t("settings.icons.title")) + "</b>")
-	iconTitle.SetHAlign(gtk.ALIGN_START)
-	vbox.PackStart(iconTitle, false, false, 0)
 
 	iconSubtitle, _ := gtk.LabelNew(m.t("settings.icons.subtitle"))
 	iconSubtitle.SetHAlign(gtk.ALIGN_START)
@@ -502,11 +624,6 @@ func buildAppearanceTab(m *manager) (*gtk.Box, *gtk.Scale, *gtk.CheckButton, *gt
 	// ── Widget Position ─────────────────────────────────────────────────────
 	posSep, _ := gtk.SeparatorNew(gtk.ORIENTATION_HORIZONTAL)
 	vbox.PackStart(posSep, false, false, 4)
-
-	posTitle, _ := gtk.LabelNew("")
-	posTitle.SetMarkup("<b>Widget Position</b>")
-	posTitle.SetHAlign(gtk.ALIGN_START)
-	vbox.PackStart(posTitle, false, false, 0)
 
 	posSubtitle, _ := gtk.LabelNew("Move the widget on screen. Changes apply immediately.")
 	posSubtitle.SetHAlign(gtk.ALIGN_START)
@@ -620,7 +737,111 @@ func buildAppearanceTab(m *manager) (*gtk.Box, *gtk.Scale, *gtk.CheckButton, *gt
 		return config.ViewModeEnhanced
 	}
 
-	return vbox, opacityScale, noBgCheck, iconCombo, getViewMode
+	// ── Font Size ─────────────────────────────────────────────────────────
+	// Moved here from the About tab so it sits with the other appearance
+	// controls, directly below the Widget Position section.
+	fontSep, _ := gtk.SeparatorNew(gtk.ORIENTATION_HORIZONTAL)
+	vbox.PackStart(fontSep, false, false, 4)
+
+	fontSubtitle, _ := gtk.LabelNew(m.t("settings.fontSize.subtitle"))
+	fontSubtitle.SetHAlign(gtk.ALIGN_START)
+	fontSubtitle.SetLineWrap(true)
+	vbox.PackStart(fontSubtitle, false, false, 0)
+
+	// Live values — kept in sync as the user clicks ▲ / ▼.
+	curCityTime := m.fontSizeCityTime
+	curTempIcon := m.fontSizeTempIcon
+	curConditions := m.fontSizeConditions
+
+	// applyLive fires SetFontSizes so the widget updates immediately.
+	applyLive := func() {
+		m.SetFontSizes(curCityTime, curTempIcon, curConditions)
+	}
+
+	// buildFontRow creates one labelled row: label — ▼ — Npx — ▲
+	buildFontRow := func(labelKey string, initial, minVal, maxVal int, onChange func(int)) (*gtk.Box, func() int) {
+		row, _ := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 8)
+
+		lbl, _ := gtk.LabelNew(m.t(labelKey))
+		lbl.SetHAlign(gtk.ALIGN_START)
+		lbl.SetHExpand(true)
+		row.PackStart(lbl, true, true, 0)
+
+		val := initial
+		sizeLbl, _ := gtk.LabelNew(strconv.Itoa(val) + "px")
+		sizeLbl.SetWidthChars(5)
+
+		decBtn, _ := gtk.ButtonNewWithLabel("▼")
+		incBtn, _ := gtk.ButtonNewWithLabel("▲")
+
+		refresh := func() {
+			sizeLbl.SetText(strconv.Itoa(val) + "px")
+			onChange(val)
+		}
+
+		decBtn.Connect("clicked", func() {
+			if val > minVal {
+				val--
+				refresh()
+			}
+		})
+		incBtn.Connect("clicked", func() {
+			if val < maxVal {
+				val++
+				refresh()
+			}
+		})
+
+		row.PackStart(decBtn, false, false, 0)
+		row.PackStart(sizeLbl, false, false, 0)
+		row.PackStart(incBtn, false, false, 0)
+
+		return row, func() int { return val }
+	}
+
+	// Font size controls in a styled frame.
+	fontFrame, _ := gtk.FrameNew("")
+	fontFrame.SetShadowType(gtk.SHADOW_ETCHED_IN)
+
+	fontBox, _ := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 6)
+	fontBox.SetMarginTop(12)
+	fontBox.SetMarginBottom(12)
+	fontBox.SetMarginStart(16)
+	fontBox.SetMarginEnd(16)
+
+	rowCT, getCityTime := buildFontRow(
+		"settings.fontSize.cityTime",
+		curCityTime, 8, 48,
+		func(v int) { curCityTime = v; applyLive() },
+	)
+	fontBox.PackStart(rowCT, false, false, 0)
+
+	rowTI, getTempIconSize := buildFontRow(
+		"settings.fontSize.tempIcon",
+		curTempIcon, 10, 72,
+		func(v int) { curTempIcon = v; applyLive() },
+	)
+	fontBox.PackStart(rowTI, false, false, 0)
+
+	rowCond, getConditionsSize := buildFontRow(
+		"settings.fontSize.conditions",
+		curConditions, 6, 36,
+		func(v int) { curConditions = v; applyLive() },
+	)
+	fontBox.PackStart(rowCond, false, false, 0)
+
+	fontFrame.Add(fontBox)
+	vbox.PackStart(fontFrame, false, false, 0)
+
+	getFontSizes := func() fontSizes {
+		return fontSizes{
+			cityTime:   getCityTime(),
+			tempIcon:   getTempIconSize(),
+			conditions: getConditionsSize(),
+		}
+	}
+
+	return vbox, opacityScale, noBgCheck, iconCombo, getViewMode, getFontSizes
 }
 
 // showErrorDialog shows a simple error message dialog.
@@ -628,6 +849,13 @@ func showErrorDialog(parent *gtk.Dialog, msg string) {
 	ed := gtk.MessageDialogNew(parent, gtk.DIALOG_MODAL, gtk.MESSAGE_ERROR, gtk.BUTTONS_OK, "%s", msg)
 	ed.Run()
 	ed.Destroy()
+}
+
+// showInfoDialog shows a simple info message dialog.
+func showInfoDialog(parent *gtk.Dialog, msg string) {
+	id := gtk.MessageDialogNew(parent, gtk.DIALOG_MODAL, gtk.MESSAGE_INFO, gtk.BUTTONS_OK, "%s", msg)
+	id.Run()
+	id.Destroy()
 }
 
 // showProUpgradeDialog displays an eye-candy modal dialog highlighting the benefits of Pro tier.
@@ -808,8 +1036,11 @@ type fontSizes struct {
 // buildWidgetTab creates the Widget tab for controlling panel element visibility,
 // pollution metrics, temperature unit, and wind speed unit.
 // Returns the tab box, a getDisplayFields() func, a getPollutionFields() func,
-// a getTempUnit() func, and a getWindUnit() func.
-func buildWidgetTab(m *manager) (*gtk.Box, func() *config.DisplayFields, func() *config.PollutionFields, func() config.TemperatureUnit, func() config.WindSpeedUnit) {
+// a getTempUnit() func, a getWindUnit() func, and an unlockPollution() func that
+// re-enables the Pro-only Air Quality & Pollution controls once the config
+// becomes Pro (so the user doesn't have to reopen Settings after activating a
+// Pro key).
+func buildWidgetTab(m *manager) (*gtk.Box, func() *config.DisplayFields, func() *config.PollutionFields, func() config.TemperatureUnit, func() config.WindSpeedUnit, func()) {
 	vbox, _ := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 12)
 	vbox.SetMarginTop(12)
 	vbox.SetMarginStart(8)
@@ -952,7 +1183,69 @@ func buildWidgetTab(m *manager) (*gtk.Box, func() *config.DisplayFields, func() 
 	chkPM10.SetSensitive(isPro)
 	gridPollution.Attach(chkPM10, 0, 2, 1, 1)
 
+	chkTicker, _ := gtk.CheckButtonNewWithLabel(m.t("settings.pollution.ticker"))
+	chkTicker.SetActive(pf.ShowTicker)
+	chkTicker.SetSensitive(isPro)
+	gridPollution.Attach(chkTicker, 1, 2, 3, 1)
+
+	profileLabel, _ := gtk.LabelNew(m.t("settings.pollution.profile.title"))
+	profileLabel.SetHAlign(gtk.ALIGN_START)
+	profileLabel.SetSensitive(isPro)
+	gridPollution.Attach(profileLabel, 0, 3, 1, 1)
+	profileChoices := []config.TickerProfile{
+		config.TickerProfileEveryday,
+		config.TickerProfileActive,
+		config.TickerProfileFamily,
+		config.TickerProfileSensitive,
+		config.TickerProfileVentilation,
+	}
+	profileLabels := map[config.TickerProfile]string{
+		config.TickerProfileEveryday:    m.t("settings.pollution.profile.everyday"),
+		config.TickerProfileActive:      m.t("settings.pollution.profile.active"),
+		config.TickerProfileFamily:      m.t("settings.pollution.profile.family"),
+		config.TickerProfileSensitive:   m.t("settings.pollution.profile.sensitive"),
+		config.TickerProfileVentilation: m.t("settings.pollution.profile.ventilation"),
+	}
+	profileCombo, _ := gtk.ComboBoxTextNew()
+	activeProfile := config.NormalizeTickerProfile(pf.TickerProfile)
+	activeProfileIdx := 0
+	for i, profile := range profileChoices {
+		profileCombo.AppendText(profileLabels[profile])
+		if profile == activeProfile {
+			activeProfileIdx = i
+		}
+	}
+	profileCombo.SetActive(activeProfileIdx)
+	profileCombo.SetSensitive(isPro)
+	gridPollution.Attach(profileCombo, 1, 3, 3, 1)
+
 	vbox.PackStart(gridPollution, false, false, 0)
+	profileHint, _ := gtk.LabelNew(m.t("settings.pollution.profile.subtitle"))
+	profileHint.SetHAlign(gtk.ALIGN_START)
+	profileHint.SetLineWrap(true)
+	profileHint.SetSensitive(isPro)
+	vbox.PackStart(profileHint, false, false, 0)
+
+	pollutionProBox, _ := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 4)
+	pollutionProBoxSc, _ := pollutionProBox.GetStyleContext()
+	pollutionProNoteCSS, _ := gtk.CssProviderNew()
+	_ = pollutionProNoteCSS.LoadFromData(`
+.pro-note-box {
+    border-radius: 8px;
+    padding: 8px 12px;
+    background: rgba(14, 165, 233, 0.1);
+    border: 1px solid rgba(56, 189, 248, 0.35);
+}
+`)
+	pollutionProBoxSc.AddProvider(pollutionProNoteCSS, gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
+	pollutionProBoxSc.AddClass("pro-note-box")
+
+	pollutionProNote, _ := gtk.LabelNew("")
+	pollutionProNote.SetMarkup(fmt.Sprintf("<span foreground='#38bdf8' font_size='9500'>%s</span>", glib.MarkupEscapeText(m.t("settings.pollution.proNote"))))
+	pollutionProNote.SetHAlign(gtk.ALIGN_START)
+	pollutionProNote.SetLineWrap(true)
+	pollutionProBox.PackStart(pollutionProNote, true, true, 0)
+	vbox.PackStart(pollutionProBox, false, false, 0)
 
 	getDisplayFields := func() *config.DisplayFields {
 		return &config.DisplayFields{
@@ -971,17 +1264,49 @@ func buildWidgetTab(m *manager) (*gtk.Box, func() *config.DisplayFields, func() 
 		}
 	}
 
+	// unlockPollution re-enables every Pro-only Air Quality & Pollution control.
+	// It mirrors unlockLocations in the Locations tab: when the user activates a
+	// Pro key (e.g. after Check Connection + Save on the Data Provider tab) the
+	// section is switched out of its read-only state live, without needing to
+	// close and reopen the Settings dialog. It is a no-op when the config is not
+	// Pro, since Air Quality & Pollution is a Pro-only feature.
+	unlockPollution := func() {
+		if !m.cfg.IsPro() {
+			return
+		}
+		chkAQI.SetSensitive(true)
+		chkCO.SetSensitive(true)
+		chkNO.SetSensitive(true)
+		chkNO2.SetSensitive(true)
+		chkO3.SetSensitive(true)
+		chkSO2.SetSensitive(true)
+		chkNH3.SetSensitive(true)
+		chkPM25.SetSensitive(true)
+		chkPM10.SetSensitive(true)
+		chkTicker.SetSensitive(true)
+		profileLabel.SetSensitive(true)
+		profileCombo.SetSensitive(true)
+		profileHint.SetSensitive(true)
+	}
+
 	getPollutionFields := func() *config.PollutionFields {
+		profileIdx := profileCombo.GetActive()
+		profile := config.TickerProfileEveryday
+		if profileIdx >= 0 && profileIdx < len(profileChoices) {
+			profile = profileChoices[profileIdx]
+		}
 		return &config.PollutionFields{
-			ShowAQI:  chkAQI.GetActive(),
-			ShowCO:   chkCO.GetActive(),
-			ShowNO:   chkNO.GetActive(),
-			ShowNO2:  chkNO2.GetActive(),
-			ShowO3:   chkO3.GetActive(),
-			ShowSO2:  chkSO2.GetActive(),
-			ShowNH3:  chkNH3.GetActive(),
-			ShowPM25: chkPM25.GetActive(),
-			ShowPM10: chkPM10.GetActive(),
+			ShowAQI:       chkAQI.GetActive(),
+			ShowCO:        chkCO.GetActive(),
+			ShowNO:        chkNO.GetActive(),
+			ShowNO2:       chkNO2.GetActive(),
+			ShowO3:        chkO3.GetActive(),
+			ShowSO2:       chkSO2.GetActive(),
+			ShowNH3:       chkNH3.GetActive(),
+			ShowPM25:      chkPM25.GetActive(),
+			ShowPM10:      chkPM10.GetActive(),
+			ShowTicker:    chkTicker.GetActive(),
+			TickerProfile: profile,
 		}
 	}
 
@@ -1065,15 +1390,18 @@ func buildWidgetTab(m *manager) (*gtk.Box, func() *config.DisplayFields, func() 
 		return config.WindSpeedUnitKmh
 	}
 
-	return vbox, getDisplayFields, getPollutionFields, getTempUnit, getWindUnit
+	return vbox, getDisplayFields, getPollutionFields, getTempUnit, getWindUnit, unlockPollution
 }
 
 // buildLocationsTab builds the city management tab.
 // Returns the tab widget and a getCities() func that returns the current list
 // at the time of calling (used by the Save button in showSettingsDialog).
-func buildLocationsTab(m *manager, dlg *gtk.Dialog, initialCities []config.CityConfig, onGoToProvider func()) (*gtk.Box, func() []config.CityConfig) {
+func buildLocationsTab(m *manager, dlg *gtk.Dialog, initialCities []config.CityConfig, onGoToProvider func(), onGetPro func(), onSelectFree func()) (*gtk.Box, func() []config.CityConfig, func()) {
 	cities := make([]config.CityConfig, len(initialCities))
 	copy(cities, initialCities)
+	if len(cities) == 0 {
+		cities = config.DefaultCities()
+	}
 
 	hasLicense := m.cfg.HasLicense()
 
@@ -1081,6 +1409,75 @@ func buildLocationsTab(m *manager, dlg *gtk.Dialog, initialCities []config.CityC
 	outer.SetMarginTop(8)
 	outer.SetMarginStart(4)
 	outer.SetMarginEnd(4)
+
+	var bannerBox *gtk.Box
+	// ── Demo Mode Banner (when no API key is configured) ─────────────────
+	if !hasLicense {
+		bannerCSS := `
+.demo-banner-box {
+    border-radius: 10px;
+    padding: 10px 14px;
+    background: rgba(245, 158, 11, 0.14);
+    border: 1.5px solid rgba(245, 158, 11, 0.55);
+}
+.demo-pro-btn {
+    background: linear-gradient(135deg, #0284c7, #0369a1);
+    color: #ffffff;
+    font-weight: bold;
+    border-radius: 6px;
+    padding: 6px 10px;
+}
+.demo-free-btn {
+    border-radius: 6px;
+    padding: 6px 10px;
+}
+`
+		bannerProvider, _ := gtk.CssProviderNew()
+		bannerProvider.LoadFromData(bannerCSS)
+
+		bannerBox, _ = gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 6)
+		bannerSc, _ := bannerBox.GetStyleContext()
+		bannerSc.AddProvider(bannerProvider, gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
+		bannerSc.AddClass("demo-banner-box")
+
+		bannerTitle, _ := gtk.LabelNew("")
+		bannerTitle.SetMarkup(fmt.Sprintf("<span font_weight='bold' foreground='#fbbf24'>%s</span>", glib.MarkupEscapeText(m.t("settings.locations.demoBanner.title"))))
+		bannerTitle.SetHAlign(gtk.ALIGN_START)
+		bannerTitle.SetLineWrap(true)
+		bannerBox.PackStart(bannerTitle, false, false, 0)
+
+		bannerSub, _ := gtk.LabelNew(m.t("settings.locations.demoBanner.subtitle"))
+		bannerSub.SetHAlign(gtk.ALIGN_START)
+		bannerSub.SetLineWrap(true)
+		bannerBox.PackStart(bannerSub, false, false, 0)
+
+		btnRow, _ := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 6)
+		proBtn, _ := gtk.ButtonNewWithLabel(m.t("settings.locations.demoBanner.proBtn"))
+		proBtnSc, _ := proBtn.GetStyleContext()
+		proBtnSc.AddProvider(bannerProvider, gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
+		proBtnSc.AddClass("demo-pro-btn")
+		proBtn.Connect("clicked", func() {
+			if onGetPro != nil {
+				onGetPro()
+			}
+		})
+
+		freeBtn, _ := gtk.ButtonNewWithLabel(m.t("settings.locations.demoBanner.freeBtn"))
+		freeBtnSc, _ := freeBtn.GetStyleContext()
+		freeBtnSc.AddProvider(bannerProvider, gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
+		freeBtnSc.AddClass("demo-free-btn")
+		freeBtn.Connect("clicked", func() {
+			if onSelectFree != nil {
+				onSelectFree()
+			}
+		})
+
+		btnRow.PackStart(proBtn, true, true, 0)
+		btnRow.PackStart(freeBtn, true, true, 0)
+		bannerBox.PackStart(btnRow, false, false, 0)
+
+		outer.PackStart(bannerBox, false, false, 0)
+	}
 
 	// ── Saved Cities section ──────────────────────────────────────────────
 	savedTitle, _ := gtk.LabelNew("")
@@ -1092,14 +1489,13 @@ func buildLocationsTab(m *manager, dlg *gtk.Dialog, initialCities []config.CityC
 	subTitle.SetHAlign(gtk.ALIGN_START)
 	outer.PackStart(subTitle, false, false, 0)
 
-	// Scrollable city list. Height is fixed at 290px so all 5 cities (each row
-	// is ~56px tall including its separator) are visible at once without the
-	// last one being clipped, while keeping the overall dialog compact enough
-	// to fit on screen. The scrollbar appears automatically if the list ever
-	// exceeds this height.
+	// Scrollable city list. A modest 180px minimum keeps the Locations tab (and
+	// therefore the whole dialog) short enough for small screens; the outer
+	// per-tab scroller added in showSettingsDialog handles any remaining
+	// overflow, and this inner list scrolls on its own once it exceeds 180px.
 	scroll, _ := gtk.ScrolledWindowNew(nil, nil)
 	scroll.SetPolicy(gtk.POLICY_NEVER, gtk.POLICY_AUTOMATIC)
-	scroll.SetSizeRequest(-1, 290)
+	scroll.SetSizeRequest(-1, 180)
 
 	listBox, _ := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 4)
 	scroll.Add(listBox)
@@ -1258,6 +1654,11 @@ func buildLocationsTab(m *manager, dlg *gtk.Dialog, initialCities []config.CityC
 
 	addBox.PackStart(grid, false, false, 0)
 
+	// Coordinates and timezone are populated by Auto-Fill; keep them read-only.
+	latEntry.SetEditable(false)
+	lonEntry.SetEditable(false)
+	tzEntry.SetEditable(false)
+
 	if !hasLicense {
 		nameEntry.SetSensitive(false)
 		regionEntry.SetSensitive(false)
@@ -1272,7 +1673,70 @@ func buildLocationsTab(m *manager, dlg *gtk.Dialog, initialCities []config.CityC
 	statusLbl.SetHAlign(gtk.ALIGN_START)
 	addBox.PackStart(statusLbl, false, false, 0)
 
-	// Search API button handler.
+	// Add City button (disabled until Auto-Fill completes all fields).
+	btnBox, _ := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 0)
+	addBtn, _ := gtk.ButtonNewWithLabel(m.t("settings.locations.addBtn"))
+	addBtn.SetHAlign(gtk.ALIGN_END)
+	addBtn.SetSensitive(false)
+	btnBox.PackEnd(addBtn, false, false, 0)
+	addBox.PackStart(btnBox, false, false, 0)
+
+	cityAutoFilled := false
+	suppressEntryChange := false
+
+	updateAddBtnState := func() {
+		n, _ := nameEntry.GetText()
+		r, _ := regionEntry.GetText()
+		la, _ := latEntry.GetText()
+		lo, _ := lonEntry.GetText()
+		tz, _ := tzEntry.GetText()
+		ready := hasLicense && cityAutoFilled &&
+			strings.TrimSpace(n) != "" &&
+			strings.TrimSpace(r) != "" &&
+			strings.TrimSpace(la) != "" &&
+			strings.TrimSpace(lo) != "" &&
+			strings.TrimSpace(tz) != ""
+		addBtn.SetSensitive(ready)
+	}
+
+	unlockLocations := func() {
+		hasLicense = true
+		if bannerBox != nil {
+			bannerBox.Hide()
+		}
+		nameEntry.SetSensitive(true)
+		regionEntry.SetSensitive(true)
+		searchBtn.SetSensitive(true)
+		refreshList()
+		updateAddBtnState()
+	}
+
+	onManualFieldEdit := func() {
+		if suppressEntryChange {
+			return
+		}
+		if cityAutoFilled {
+			cityAutoFilled = false
+			suppressEntryChange = true
+			latEntry.SetText("")
+			lonEntry.SetText("")
+			tzEntry.SetText("")
+			statusLbl.SetText("")
+			suppressEntryChange = false
+		}
+		updateAddBtnState()
+	}
+	nameEntry.Connect("changed", onManualFieldEdit)
+	regionEntry.Connect("changed", onManualFieldEdit)
+
+	// Pressing Enter in the city name field triggers Auto-Fill.
+	nameEntry.Connect("activate", func() {
+		if hasLicense {
+			searchBtn.Clicked()
+		}
+	})
+
+	// Auto-Fill button handler.
 	searchBtn.Connect("clicked", func() {
 		if !hasLicense {
 			showErrorDialog(dlg, m.t("error.settings.licenseRequired"))
@@ -1350,7 +1814,7 @@ func buildLocationsTab(m *manager, dlg *gtk.Dialog, initialCities []config.CityC
 				foundTZ = lookupTimezone(foundLat, foundLon)
 
 			default: // openweathermap
-				uStr := fmt.Sprintf("http://api.openweathermap.org/geo/1.0/direct?q=%s&limit=1&appid=%s",
+				uStr := fmt.Sprintf("https://api.openweathermap.org/geo/1.0/direct?q=%s&limit=1&appid=%s",
 					url.QueryEscape(name), url.QueryEscape(apiKey))
 				ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 				defer cancel()
@@ -1391,28 +1855,26 @@ func buildLocationsTab(m *manager, dlg *gtk.Dialog, initialCities []config.CityC
 				return
 			}
 
+			if foundTZ == "" {
+				foundTZ = "UTC"
+			}
+
 			fName, fRegion, fTZ := foundName, foundRegion, foundTZ
 			fLat, fLon := foundLat, foundLon
 			runOnUI(func() {
+				suppressEntryChange = true
 				nameEntry.SetText(fName)
 				regionEntry.SetText(fRegion)
 				latEntry.SetText(fmt.Sprintf("%f", fLat))
 				lonEntry.SetText(fmt.Sprintf("%f", fLon))
 				tzEntry.SetText(fTZ)
+				suppressEntryChange = false
+				cityAutoFilled = true
+				updateAddBtnState()
 				statusLbl.SetText("✓ " + fName + ", " + fRegion)
 			})
 		}()
 	})
-
-	// Add City button.
-	btnBox, _ := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 0)
-	addBtn, _ := gtk.ButtonNewWithLabel(m.t("settings.locations.addBtn"))
-	addBtn.SetHAlign(gtk.ALIGN_END)
-	if !hasLicense {
-		addBtn.SetSensitive(false)
-	}
-	btnBox.PackEnd(addBtn, false, false, 0)
-	addBox.PackStart(btnBox, false, false, 0)
 
 	addBtn.Connect("clicked", func() {
 		if !hasLicense {
@@ -1465,12 +1927,16 @@ func buildLocationsTab(m *manager, dlg *gtk.Dialog, initialCities []config.CityC
 		}
 		cities = result
 
-		// Clear the form.
+		// Clear the form and disable Add City until next Auto-Fill.
+		suppressEntryChange = true
 		nameEntry.SetText("")
 		regionEntry.SetText("")
 		latEntry.SetText("")
 		lonEntry.SetText("")
 		tzEntry.SetText("")
+		suppressEntryChange = false
+		cityAutoFilled = false
+		updateAddBtnState()
 		statusLbl.SetText("")
 
 		refreshList()
@@ -1478,7 +1944,7 @@ func buildLocationsTab(m *manager, dlg *gtk.Dialog, initialCities []config.CityC
 
 	return outer, func() []config.CityConfig {
 		return cities
-	}
+	}, unlockLocations
 }
 
 // lookupTimezone attempts to find the IANA timezone for the given coordinates
@@ -1718,8 +2184,8 @@ func buildLanguageTab(m *manager, initialLocale string) (*gtk.Box, func() string
 	return outer, func() string { return selected }
 }
 
-// buildAboutTab creates the About tab showing app info, links, and font size configuration.
-func buildAboutTab(m *manager) (*gtk.Box, func() fontSizes) {
+// buildAboutTab creates the About tab showing app info and links.
+func buildAboutTab(m *manager) *gtk.Box {
 	vbox, _ := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 12)
 	vbox.SetMarginTop(20)
 	vbox.SetMarginStart(20)
@@ -1803,112 +2269,5 @@ func buildAboutTab(m *manager) (*gtk.Box, func() fontSizes) {
 	linksFrame.Add(linksGrid)
 	vbox.PackStart(linksFrame, false, false, 0)
 
-	// Font Size section
-	sep3, _ := gtk.SeparatorNew(gtk.ORIENTATION_HORIZONTAL)
-	vbox.PackStart(sep3, false, false, 4)
-
-	fontTitle, _ := gtk.LabelNew("")
-	fontTitle.SetMarkup("<b>" + glib.MarkupEscapeText(m.t("settings.fontSize.title")) + "</b>")
-	fontTitle.SetHAlign(gtk.ALIGN_START)
-	vbox.PackStart(fontTitle, false, false, 0)
-
-	fontSubtitle, _ := gtk.LabelNew(m.t("settings.fontSize.subtitle"))
-	fontSubtitle.SetHAlign(gtk.ALIGN_START)
-	fontSubtitle.SetLineWrap(true)
-	vbox.PackStart(fontSubtitle, false, false, 0)
-
-	// Live values — kept in sync as the user clicks ▲ / ▼.
-	curCityTime := m.fontSizeCityTime
-	curTempIcon := m.fontSizeTempIcon
-	curConditions := m.fontSizeConditions
-
-	// applyLive fires SetFontSizes so the widget updates immediately.
-	applyLive := func() {
-		m.SetFontSizes(curCityTime, curTempIcon, curConditions)
-	}
-
-	// buildFontRow creates one labelled row: label — ▼ — Npx — ▲
-	buildFontRow := func(labelKey string, initial, minVal, maxVal int, onChange func(int)) (*gtk.Box, func() int) {
-		row, _ := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 8)
-
-		lbl, _ := gtk.LabelNew(m.t(labelKey))
-		lbl.SetHAlign(gtk.ALIGN_START)
-		lbl.SetHExpand(true)
-		row.PackStart(lbl, true, true, 0)
-
-		val := initial
-		sizeLbl, _ := gtk.LabelNew(strconv.Itoa(val) + "px")
-		sizeLbl.SetWidthChars(5)
-
-		decBtn, _ := gtk.ButtonNewWithLabel("▼")
-		incBtn, _ := gtk.ButtonNewWithLabel("▲")
-
-		refresh := func() {
-			sizeLbl.SetText(strconv.Itoa(val) + "px")
-			onChange(val)
-		}
-
-		decBtn.Connect("clicked", func() {
-			if val > minVal {
-				val--
-				refresh()
-			}
-		})
-		incBtn.Connect("clicked", func() {
-			if val < maxVal {
-				val++
-				refresh()
-			}
-		})
-
-		row.PackStart(decBtn, false, false, 0)
-		row.PackStart(sizeLbl, false, false, 0)
-		row.PackStart(incBtn, false, false, 0)
-
-		return row, func() int { return val }
-	}
-
-	// Font size controls in a styled frame.
-	fontFrame, _ := gtk.FrameNew("")
-	fontFrame.SetShadowType(gtk.SHADOW_ETCHED_IN)
-
-	fontBox, _ := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 6)
-	fontBox.SetMarginTop(12)
-	fontBox.SetMarginBottom(12)
-	fontBox.SetMarginStart(16)
-	fontBox.SetMarginEnd(16)
-
-	rowCT, getCityTime := buildFontRow(
-		"settings.fontSize.cityTime",
-		curCityTime, 8, 48,
-		func(v int) { curCityTime = v; applyLive() },
-	)
-	fontBox.PackStart(rowCT, false, false, 0)
-
-	rowTI, getTempIconSize := buildFontRow(
-		"settings.fontSize.tempIcon",
-		curTempIcon, 10, 72,
-		func(v int) { curTempIcon = v; applyLive() },
-	)
-	fontBox.PackStart(rowTI, false, false, 0)
-
-	rowCond, getConditionsSize := buildFontRow(
-		"settings.fontSize.conditions",
-		curConditions, 6, 36,
-		func(v int) { curConditions = v; applyLive() },
-	)
-	fontBox.PackStart(rowCond, false, false, 0)
-
-	fontFrame.Add(fontBox)
-	vbox.PackStart(fontFrame, false, false, 0)
-
-	getFontSizes := func() fontSizes {
-		return fontSizes{
-			cityTime:   getCityTime(),
-			tempIcon:   getTempIconSize(),
-			conditions: getConditionsSize(),
-		}
-	}
-
-	return vbox, getFontSizes
+	return vbox
 }

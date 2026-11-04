@@ -348,7 +348,7 @@ func (a *AppManager) createProvider(cfg *config.Config) weather.WeatherProvider 
 		// If no API key is configured, use easyweatherwidget in free mode
 		// (only default cities will work).
 		if apiKey == "" {
-			provider = "easyweatherwidget"
+			provider = "openmeteo"
 		}
 		return remoteapi.NewRemoteAPIAdapter(provider, apiKey)
 	}

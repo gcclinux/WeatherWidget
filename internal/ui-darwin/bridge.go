@@ -125,6 +125,10 @@ extern void setCardMetricNames(uintptr_t card,
 // slot: 0=CO 1=NO 2=NO2 3=O3 4=SO2 5=NH3 6=PM2.5 7=PM10.  "" to hide.
 extern void updateCardPollutant(uintptr_t card, int slot, const char *iconPath, const char *value);
 
+// updateCardTicker updates the scrolling pollution ticker items in Enhanced mode.
+// Pass "" or "[]" to hide the ticker.
+extern void updateCardTicker(uintptr_t card, const char *itemsJSON);
+
 // setCardFieldVisibility shows/hides individual card sub-elements.
 // Field bits — use the DisplayField* constants below.
 extern void setCardFieldVisibility(uintptr_t card, unsigned int fieldMask);
@@ -347,6 +351,12 @@ func nativeUpdateCardPollutant(card uintptr, slot int, iconPath, value string) {
 	defer C.free(unsafe.Pointer(ci))
 	defer C.free(unsafe.Pointer(cv))
 	C.updateCardPollutant(C.uintptr_t(card), C.int(slot), ci, cv)
+}
+
+func nativeUpdateCardTicker(card uintptr, itemsJSON string) {
+	cj := C.CString(itemsJSON)
+	defer C.free(unsafe.Pointer(cj))
+	C.updateCardTicker(C.uintptr_t(card), cj)
 }
 
 func nativeSetCardPollutantName(card uintptr, slot int, name string) {

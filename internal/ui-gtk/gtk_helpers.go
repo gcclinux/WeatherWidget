@@ -193,6 +193,11 @@ window {
     background-color: transparent;
     border-radius: 12px;
 }
+/* Pollution ticker is a windowless DrawingArea rendered with Cairo/Pango
+   directly over the card background. */
+.pollution-ticker {
+    background-color: transparent;
+}
 .city-label {
     font-size: %dpx;
     font-weight: bold;
@@ -328,7 +333,8 @@ window {
     font-weight: bold;
     color: #00bfff;
 }
-`, fsCityTime, fsTempIcon, fsConditions, fsTime, fsConditions, fsConditions,
+`,
+		fsCityTime, fsTempIcon, fsConditions, fsTime, fsConditions, fsConditions,
 		lineCSS, tileFillCSS, lineCSS,
 		fsConditions+2, fsConditions, fsConditions+2,
 		sepCSS,

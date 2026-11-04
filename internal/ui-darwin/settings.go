@@ -48,6 +48,10 @@ func openSettingsWindow(m *manager) {
 		return
 	}
 
+	if len(m.cfg.Cities) == 0 {
+		m.cfg.Cities = config.DefaultCities()
+	}
+
 	// Serialize current config to JSON for the ObjC layer.
 	cfgBytes, err := json.Marshal(m.cfg)
 	if err != nil {
@@ -158,6 +162,11 @@ func (m *manager) settingsStrings() map[string]string {
 		// Provider tab
 		"settings.provider.label", "settings.provider.apiKeyLabel",
 		"settings.provider.apiKeyPlaceholder", "settings.interval.title",
+		"settings.provider.getFreeApi", "settings.provider.getProApi",
+		"settings.provider.checkConnection", "settings.provider.checkingConnection",
+		"settings.provider.connectionSuccessTitle", "settings.provider.connectionSuccessMsg",
+		"settings.provider.connectionFailedTitle", "settings.provider.connectionFailedMsg",
+		"settings.provider.apiKeyEmpty",
 		"settings.provider.note",
 		"settings.provider.apiKeyActivation.title",
 		"settings.provider.apiKeyActivation.message",
@@ -172,6 +181,10 @@ func (m *manager) settingsStrings() map[string]string {
 		"settings.locations.tzPlaceholder", "settings.locations.addBtn",
 		"settings.locations.searchBtn", "settings.locations.searching",
 		"settings.locations.removeBtn",
+		"settings.locations.demoBanner.title",
+		"settings.locations.demoBanner.subtitle",
+		"settings.locations.demoBanner.proBtn",
+		"settings.locations.demoBanner.freeBtn",
 		// Widget tab: panel display
 		"settings.display.title", "settings.display.subtitle",
 		"settings.display.city", "settings.display.icon", "settings.display.temp",
@@ -180,9 +193,14 @@ func (m *manager) settingsStrings() map[string]string {
 		"settings.display.dewPoint", "settings.display.pressure", "settings.display.uvIndex",
 		// Widget tab: pollution
 		"settings.pollution.title", "settings.pollution.subtitle",
+		"settings.pollution.proNote",
 		"settings.pollution.aqi", "settings.pollution.co", "settings.pollution.no",
 		"settings.pollution.no2", "settings.pollution.o3", "settings.pollution.so2",
 		"settings.pollution.nh3", "settings.pollution.pm2_5", "settings.pollution.pm10",
+		"settings.pollution.ticker", "settings.pollution.profile.title", "settings.pollution.profile.subtitle",
+		"settings.pollution.profile.everyday", "settings.pollution.profile.active",
+		"settings.pollution.profile.family", "settings.pollution.profile.sensitive",
+		"settings.pollution.profile.ventilation",
 		// Widget tab: units
 		"settings.temperature.title", "settings.windspeed.title",
 		"settings.temperature.celsius", "settings.temperature.fahrenheit",
@@ -318,6 +336,10 @@ func mergeSettingsJSON(base *config.Config, data []byte) (*config.Config, error)
 			jsonSetBool(pf, "showNH3", &p.ShowNH3)
 			jsonSetBool(pf, "showPM25", &p.ShowPM25)
 			jsonSetBool(pf, "showPM10", &p.ShowPM10)
+			jsonSetBool(pf, "showTicker", &p.ShowTicker)
+			if s, ok := jsonString(pf["tickerProfile"]); ok {
+				p.TickerProfile = config.NormalizeTickerProfile(config.TickerProfile(s))
+			}
 			out.PollutionFields = p
 		}
 	}
@@ -349,6 +371,9 @@ func mergeSettingsJSON(base *config.Config, data []byte) (*config.Config, error)
 		} else if err != nil {
 			log.Printf("uidarwin: settings save: ignoring malformed cities payload: %v; raw cities = %s", err, string(raw))
 		}
+	}
+	if len(out.Cities) == 0 {
+		out.Cities = config.DefaultCities()
 	}
 
 	return &out, nil

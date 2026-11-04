@@ -550,6 +550,9 @@ func (m *manager) paintCards(cr *cairoContext) {
 		}
 		if alpha > 0 {
 			paintRoundedRect(cr, x, y, wd, ht, radius, r, g, b, alpha)
+			// The card background covers the entire panel. The pollution ticker
+			// widget has a transparent background, so the card tint shows through
+			// uniformly behind the scrolling text without double-tinting or black bars.
 			continue
 		}
 		// No-background mode: inset by half the line width so the 1px stroke
@@ -796,7 +799,7 @@ func (m *manager) buildProvider(cfg *config.Config) weather.WeatherProvider {
 		apiKey = cfg.APIConfig.APIKey
 	}
 	if apiKey == "" {
-		provider = "easyweatherwidget"
+		provider = "openmeteo"
 	}
 	return remoteapi.NewRemoteAPIAdapter(provider, apiKey)
 }

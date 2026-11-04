@@ -3,11 +3,14 @@
 package uitk
 
 import (
+	"fmt"
 	"strings"
 	"time"
 
 	"github.com/gotk3/gotk3/gdk"
+	"github.com/gotk3/gotk3/glib"
 	"github.com/gotk3/gotk3/gtk"
+	"github.com/gotk3/gotk3/pango"
 
 	"weatherwidget/assets"
 	"weatherwidget/internal/config"
@@ -35,10 +38,24 @@ type panelView interface {
 	// wall-clock time, correcting a stale display (e.g. after wake-from-sleep)
 	// without waiting for the next per-second tick.
 	refreshClock()
+	// tickerAllocation returns the screen allocation of the pollution ticker
+	// widget, or nil if the ticker is not visible or does not exist (simple view).
+	// Used by paintCards to paint a tinted background behind the ticker text.
+	tickerAllocation() *gtk.Allocation
 }
 
 // rootBox returns the enhanced panel's top-level card box.
 func (p *cityPanel) rootBox() *gtk.Box { return p.root }
+
+// tickerAllocation returns the pollution ticker's screen allocation, or nil if
+// the ticker is hidden or unavailable.
+func (p *cityPanel) tickerAllocation() *gtk.Allocation {
+	if p.tickerArea == nil || !p.tickerArea.GetVisible() {
+		return nil
+	}
+	alloc := p.tickerArea.GetAllocation()
+	return alloc
+}
 
 // setIconSize sets the weather icon pixel size for the enhanced panel.
 func (p *cityPanel) setIconSize(size int) { p.iconSize = size }
@@ -84,6 +101,16 @@ type cityPanel struct {
 	tempLbl *gtk.Label
 	descLbl *gtk.Label
 
+	// Pollution info ticker (Enhanced mode top header row, to the right of cityLbl)
+	headerBox     *gtk.Box
+	tickerArea    *gtk.DrawingArea
+	tickerItems   []weather.PollutionTickerItem
+	tickerIdx     int
+	tickerStagger int
+	tickerPos     float64
+	tickerTextW   float64
+	tickerStop    chan struct{}
+
 	feelsPill *gtk.Box
 	feelsIcon *gtk.Image
 	feelsLbl  *gtk.Label
@@ -127,9 +154,18 @@ type cityPanel struct {
 	clockStop   chan struct{}
 }
 
+var gtkTickerStaggerCounter int
+
 // newCityPanel creates a new panel for the given city.
 func newCityPanel(city, region, timezone string, lm *i18n.LocaleManager) (*cityPanel, error) {
-	p := &cityPanel{city: city, region: region, timezone: timezone, lm: lm}
+	p := &cityPanel{
+		city:          city,
+		region:        region,
+		timezone:      timezone,
+		lm:            lm,
+		tickerStagger: gtkTickerStaggerCounter,
+	}
+	gtkTickerStaggerCounter++
 
 	// Root box — the card. Vertical: top info region, separator, air row.
 	root, err := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 2)
@@ -142,7 +178,15 @@ func newCityPanel(city, region, timezone string, lm *i18n.LocaleManager) (*cityP
 	root.SetSizeRequest(cardWidth, -1)
 	p.root = root
 
-	// ── Location (top of the card) ───────────────────────────────────────────
+	// ── Location + Pollution Ticker header (top of the card) ─────────────────
+	// ── Location + Pollution Ticker header (top of the card) ─────────────────
+	headerBox, err := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 16)
+	if err != nil {
+		return nil, err
+	}
+	headerBox.SetHExpand(true)
+	p.headerBox = headerBox
+
 	cityLbl, err := gtk.LabelNew("📍 " + city + ", " + region)
 	if err != nil {
 		return nil, err
@@ -152,7 +196,29 @@ func newCityPanel(city, region, timezone string, lm *i18n.LocaleManager) (*cityP
 	sc, _ = cityLbl.GetStyleContext()
 	sc.AddClass("city-label")
 	p.cityLbl = cityLbl
-	root.PackStart(cityLbl, false, false, 0)
+	headerBox.PackStart(cityLbl, false, false, 0)
+
+	tickerArea, err := gtk.DrawingAreaNew()
+	if err != nil {
+		return nil, err
+	}
+	tickerArea.SetHasWindow(false)
+	tickerArea.SetHExpand(true)
+	tickerArea.SetHAlign(gtk.ALIGN_FILL)
+	tickerArea.SetVAlign(gtk.ALIGN_CENTER)
+	tickerArea.SetSizeRequest(80, 20)
+	tickerArea.SetNoShowAll(true)
+	if sc, err := tickerArea.GetStyleContext(); err == nil {
+		sc.AddClass("pollution-ticker")
+	}
+	tickerArea.Connect("draw", func(da *gtk.DrawingArea, cr *cairoContext) {
+		p.drawTicker(cr)
+	})
+	tickerArea.Hide()
+	p.tickerArea = tickerArea
+	headerBox.PackStart(tickerArea, true, true, 0)
+
+	root.PackStart(headerBox, false, false, 0)
 
 	// ── Top region: [ left info block ] [ metrics grid ] ─────────────────────
 	topRegion, err := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 12)
@@ -378,7 +444,7 @@ func newCityPanel(city, region, timezone string, lm *i18n.LocaleManager) (*cityP
 		tileValue.SetJustify(gtk.JUSTIFY_CENTER)
 		sc, _ = tileValue.GetStyleContext()
 		sc.AddClass("air-label")
-		tile.PackStart(tileValue, false, false, 0)
+		tile.PackEnd(tileValue, false, false, 0)
 
 		// AQI goes directly in the main pollution box (left-aligned)
 		// All other metrics go in the right-aligned box
@@ -615,6 +681,170 @@ func (p *cityPanel) applyPollutionRows(pf *config.PollutionFields) {
 			w.row.Hide()
 		}
 	}
+
+	if p.pollutionBox != nil {
+		if len(rows) == 0 {
+			p.pollutionBox.Hide()
+		} else {
+			p.pollutionBox.Show()
+		}
+	}
+
+	p.applyTicker(pf)
+}
+
+func gtkStatusColorHex(level int) string {
+	switch level {
+	case 1:
+		return "#34D399" // Good
+	case 2:
+		return "#FBBF24" // Fair
+	case 3:
+		return "#FB923C" // Moderate
+	case 4:
+		return "#F87171" // Poor
+	default:
+		return "#C084FC" // Very Poor
+	}
+}
+
+func formatTickerItemMarkup(it weather.PollutionTickerItem) string {
+	header := it.Symbol
+	if it.FullName != "" && it.FullName != it.Symbol {
+		header = fmt.Sprintf("%s (%s)", it.Symbol, it.FullName)
+	}
+	return fmt.Sprintf(
+		"<span foreground='#FFFFFF' weight='bold'>%s: </span>"+
+			"<span foreground='%s' weight='bold'>%s</span>"+
+			"<span foreground='#00BFFF'> • %s</span>",
+		glib.MarkupEscapeText(header),
+		gtkStatusColorHex(it.StatusLevel),
+		glib.MarkupEscapeText(it.StatusText),
+		glib.MarkupEscapeText(it.SourcesText),
+	)
+}
+
+func (p *cityPanel) applyTicker(pf *config.PollutionFields) {
+	items := weather.PlanPollutionTickerWithWeather(pf, p.lastData, p.lastUnit, p.lm)
+	if len(items) == 0 {
+		p.stopTicker()
+		p.tickerItems = nil
+		if p.tickerArea != nil {
+			p.tickerArea.Hide()
+		}
+		return
+	}
+
+	same := len(items) == len(p.tickerItems)
+	if same {
+		for i := range items {
+			if items[i] != p.tickerItems[i] {
+				same = false
+				break
+			}
+		}
+	}
+	p.tickerItems = items
+	if p.tickerArea != nil {
+		p.tickerArea.Show()
+		p.tickerArea.QueueDraw()
+	}
+	if same && p.tickerStop != nil {
+		return
+	}
+
+	p.stopTicker()
+	p.tickerIdx = p.tickerStagger % len(p.tickerItems)
+	p.tickerPos = 0
+
+	stopCh := make(chan struct{})
+	p.tickerStop = stopCh
+	go func(stop <-chan struct{}) {
+		ticker := time.NewTicker(33 * time.Millisecond)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-stop:
+				return
+			case <-ticker.C:
+				runOnUI(func() {
+					if len(p.tickerItems) == 0 || p.tickerArea == nil || !p.tickerArea.GetVisible() {
+						return
+					}
+					alloc := p.tickerArea.GetAllocation()
+					w := float64(alloc.GetWidth())
+					if w <= 0 {
+						return
+					}
+					p.tickerPos += 1.6
+					textW := p.tickerTextW
+					if textW <= 0 {
+						textW = 200
+					}
+					maxScroll := w + textW + float64(tickerTrailingGap)
+					if p.tickerPos >= maxScroll {
+						p.tickerIdx = (p.tickerIdx + 1) % len(p.tickerItems)
+						p.tickerPos = 0
+					}
+					p.tickerArea.QueueDraw()
+				})
+			}
+		}
+	}(stopCh)
+}
+
+// drawTicker renders the current ticker item using Pango directly onto the card's
+// Cairo context. Because tickerArea is windowless (SetHasWindow(false)), the card
+// background sits directly behind the text, eliminating punch-through and seams.
+func (p *cityPanel) drawTicker(cr *cairoContext) {
+	if len(p.tickerItems) == 0 || p.tickerArea == nil {
+		return
+	}
+	alloc := p.tickerArea.GetAllocation()
+	w := float64(alloc.GetWidth())
+	h := float64(alloc.GetHeight())
+	if w <= 0 || h <= 0 {
+		return
+	}
+
+	cr.Save()
+	defer cr.Restore()
+
+	// Clip strictly to the ticker area bounds
+	cr.Rectangle(0, 0, w, h)
+	cr.Clip()
+
+	if p.tickerIdx < 0 || p.tickerIdx >= len(p.tickerItems) {
+		p.tickerIdx = 0
+	}
+	markup := formatTickerItemMarkup(p.tickerItems[p.tickerIdx])
+
+	layout := pango.CairoCreateLayout(cr)
+	desc := pango.FontDescriptionFromString("Sans 11")
+	layout.SetFontDescription(desc)
+	layout.SetMarkup(markup, -1)
+
+	pw, ph := layout.GetSize()
+	textW := float64(pw) / float64(pango.SCALE)
+	textH := float64(ph) / float64(pango.SCALE)
+	p.tickerTextW = textW
+
+	y := (h - textH) / 2
+	if y < 0 {
+		y = 0
+	}
+
+	// Starts at the far right edge of the ticker area and scrolls to the left
+	x := w - p.tickerPos
+	cr.MoveTo(x, y)
+	pango.CairoShowLayout(cr, layout)
+}
+
+func (p *cityPanel) stopTicker() {
+	if p.tickerStop != nil {
+		close(p.tickerStop)
+		p.tickerStop = nil
+	}
 }
 
 // showError displays an error state on the panel.
@@ -644,6 +874,9 @@ func (p *cityPanel) setTintAlpha(alpha float64) {
 	if p.lastData != nil {
 		p.applyPollutionRows(p.pollutionFields)
 	}
+	// The ticker background tracks opacity via CSS (applyCSS is called by the
+	// manager on every SetOpacity / SetNoBackground change), so no extra
+	// QueueDraw is needed here.
 }
 
 // applyDisplayFields shows or hides individual elements based on the config.
@@ -798,6 +1031,11 @@ func (p *cityPanel) loadIcon(iconCode string, size int) {
 
 // pollutionIconSize is the pixel size for pollution metric icons rendered next to text.
 const pollutionIconSize = 48
+
+// tickerTrailingGap is the pixel width of the transparent spacer placed after
+// the ticker label in the scrollable track, providing a clean pause before the
+// next item begins scrolling in from the right edge.
+const tickerTrailingGap = 60
 
 // tintPadding is the extra pixels added around the icon when compositing over
 // the card tint. This eliminates thin gaps between the icon background and the
@@ -976,6 +1214,7 @@ func (p *cityPanel) startClock() {
 
 // stopClock stops the clock goroutine.
 func (p *cityPanel) stopClock() {
+	p.stopTicker()
 	if p.clockStop != nil {
 		close(p.clockStop)
 		p.clockStop = nil

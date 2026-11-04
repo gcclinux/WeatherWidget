@@ -300,3 +300,76 @@ func TestProperty6_IconMappingResolvesInEmbed(t *testing.T) {
 		t.Fatalf("AirIconFile(MetricNH3) = %q, want %q", got, "nh2.png")
 	}
 }
+
+func TestPlanPollutionTicker(t *testing.T) {
+	pm25 := 8.5
+	no2 := 120.0
+	o3 := 80.0
+	data := PollutionData{
+		PM25: &pm25,
+		NO2:  &no2,
+		O3:   &o3,
+	}
+
+	// When ShowTicker is false, returns nil.
+	fieldsOff := &config.PollutionFields{
+		ShowPM25:   true,
+		ShowNO2:    true,
+		ShowTicker: false,
+	}
+	if got := PlanPollutionTicker(fieldsOff, data); got != nil {
+		t.Fatalf("PlanPollutionTicker with ShowTicker=false returned %v, want nil", got)
+	}
+
+	// When ShowTicker is true, a favourable condition emits an opportunity
+	// followed by context for the dominant selected pollutant.
+	fieldsOn := &config.PollutionFields{
+		ShowPM25:   true,
+		ShowNO2:    true,
+		ShowO3:     true,
+		ShowCO:     true, // absent in data
+		ShowTicker: true,
+	}
+	items := PlanPollutionTicker(fieldsOn, data)
+	// Expect Opportunity, dominant Context, plus 3 individual pollutant description items (PM25, NO2, O3)
+	if len(items) != 5 {
+		t.Fatalf("len(items) = %d, want 5", len(items))
+	}
+	if items[0].Kind != TickerItemOpportunity || items[0].StatusLevel != 1 {
+		t.Fatalf("items[0] = %+v, want opportunity with Good status", items[0])
+	}
+	if items[1].Kind != TickerItemContext || items[1].Metric != MetricNO2 || items[1].StatusLevel != 2 {
+		t.Fatalf("items[1] = %+v, want NO2 Fair context (level 2)", items[1])
+	}
+}
+
+func TestPlanPollutionTicker_ProfileAlertSensitivity(t *testing.T) {
+	pm25 := 30.0 // Fair according to the existing PM2.5 thresholds.
+	data := PollutionData{PM25: &pm25}
+
+	everyday := PlanPollutionTicker(&config.PollutionFields{
+		ShowPM25: true, ShowTicker: true, TickerProfile: config.TickerProfileEveryday,
+	}, data)
+	if len(everyday) == 0 || everyday[0].Kind != TickerItemOpportunity {
+		t.Fatalf("everyday profile first item = %+v, want opportunity", everyday)
+	}
+
+	sensitive := PlanPollutionTicker(&config.PollutionFields{
+		ShowPM25: true, ShowTicker: true, TickerProfile: config.TickerProfileSensitive,
+	}, data)
+	if len(sensitive) == 0 || sensitive[0].Kind != TickerItemAlert || sensitive[0].Metric != MetricPM25 {
+		t.Fatalf("sensitive profile first item = %+v, want PM2.5 alert", sensitive)
+	}
+}
+
+func TestPlanPollutionTicker_ModerateIsContextNotOpportunity(t *testing.T) {
+	pm25 := 50.0 // Moderate according to the existing PM2.5 thresholds.
+	items := PlanPollutionTicker(&config.PollutionFields{
+		ShowPM25: true, ShowTicker: true, TickerProfile: config.TickerProfileEveryday,
+	}, PollutionData{PM25: &pm25})
+	// When conditions are moderate, no opportunity is emitted; we expect
+	// dominant context with advice followed by individual pollutant descriptions.
+	if len(items) < 1 || items[0].Kind != TickerItemContext {
+		t.Fatalf("moderate everyday items = %+v, want first item to be context", items)
+	}
+}

@@ -84,7 +84,7 @@ You can download the latest pre-compiled binaries for Windows and Linux from the
 
 ### Windows MSI Package
 ```powershell
- .\installer\build-msi.ps1 -Version "2.1.0" -SkipSign
+ .\installer\build-msi.ps1 -Version "2.2.0" -SkipSign
  ```
 
 ### Linux
@@ -166,6 +166,22 @@ There are two ways to fix this:
 *Note: A `-software` flag is also available (`.\weatherwidget.exe -software`) which instructs the Fyne framework to prefer software rendering, but this still requires basic OpenGL driver availability at the OS level.*
 
 ## Changelog
+### v2.2.0 — 2026-11-04
+- **BUG - Fix** 
+  - Linux Snap package autostart permanant fix
+  - Windows Software rendering running without GPU (AMD64 & AMR64)
+
+- **5 Multi-Ticker Profiles**
+  - Everyday Outdoors: General atmospheric context for daily commutes and stepping out.
+  - Runner & Cyclist: Real-time feedback on whether conditions and air quality are optimal for outdoor cardio.
+  - Family & School Run: Practical checks when heading out with children and family.
+  - Sensitive Airways: Targeted alerts for asthma, allergy, and pollutant sensitivity.
+  - Open Windows: Quick guidance on whether bringing fresh outdoor air inside is a good idea.
+
+- **Simplified Pollution Definitions & Grading**
+  - Replaces raw microgram density confusion with clear, graded context: Good, Fair, Moderate, and beyond.
+  - Includes human-readable descriptions alongside the standard composite AQI scale.
+  - Granular toggles remain available if you prefer tracking individual components directly (PM2.5, PM10, NO₂, Ozone, CO).
 
 ### v2.1.0 — 2026-10-14
 - **WeatherWidget** 
