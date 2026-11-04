@@ -93,12 +93,44 @@ if (-not $SkipSign) {
     }
 }
 
+# Helper function to find signtool.exe from PATH, user SDK, or Windows Kits
+function Get-SignTool {
+    # Check PATH first
+    $cmd = Get-Command "signtool.exe" -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Source
+    if ($cmd) { return $cmd }
+
+    # Candidate roots: user-local installation or standard Program Files
+    $roots = @(
+        "$env:LocalAppData\Microsoft\WindowsSDK\bin\Windows Kits\10\bin",
+        "${env:ProgramFiles(x86)}\Windows Kits\10\bin",
+        "${env:ProgramFiles}\Windows Kits\10\bin"
+    )
+
+    $archOrder = if ($HostArch -eq "arm64") { @("arm64", "x64") } else { @("x64", "x86") }
+
+    foreach ($kitsRoot in $roots) {
+        if (Test-Path $kitsRoot) {
+            $versions = Get-ChildItem -Path $kitsRoot -Directory -ErrorAction SilentlyContinue |
+                Where-Object { $_.Name -match '^\d+\.\d+\.\d+\.\d+$' } |
+                Sort-Object { [version]$_.Name } -Descending
+            foreach ($ver in $versions) {
+                foreach ($arch in $archOrder) {
+                    $candidate = Join-Path $ver.FullName "$arch\signtool.exe"
+                    if (Test-Path $candidate) { return $candidate }
+                }
+            }
+        }
+    }
+    throw "signtool.exe not found on PATH or in Windows Kits. Install the Windows SDK Signing Tools."
+}
+
 # Helper function to sign a file
 function Sign-File {
     param([string]$FilePath, [string]$Description)
 
     if ($SignMode -eq "none") { return }
 
+    $signTool = Get-SignTool
     $signArgs = @("sign", "/fd", "SHA256", "/tr", "http://timestamp.digicert.com", "/td", "SHA256")
 
     if ($SignMode -eq "thumbprint") {
@@ -114,7 +146,7 @@ function Sign-File {
 
     $signArgs += $FilePath
 
-    & signtool @signArgs
+    & $signTool @signArgs
     if ($LASTEXITCODE -ne 0) { throw "Signing failed for $FilePath" }
 }
 
@@ -201,10 +233,29 @@ try {
     # -------------------------------------------------------------------------
     Write-Host "[5/6] Building MSI with WiX ($WixArch)..." -ForegroundColor Yellow
 
+    # Ensure dotnet and dotnet global tools are configured for the current session
+    $dotnetDir = if (Test-Path "$env:LocalAppData\Microsoft\dotnet") {
+        "$env:LocalAppData\Microsoft\dotnet"
+    } elseif (Test-Path "${env:ProgramFiles}\dotnet") {
+        "${env:ProgramFiles}\dotnet"
+    } else {
+        $null
+    }
+    if ($dotnetDir) {
+        $env:DOTNET_ROOT = $dotnetDir
+        if ($env:PATH -notlike "*$dotnetDir*") {
+            $env:PATH = "$dotnetDir;$env:PATH"
+        }
+    }
+    if ((Test-Path "$env:USERPROFILE\.dotnet\tools") -and ($env:PATH -notlike "*$env:USERPROFILE\.dotnet\tools*")) {
+        $env:PATH = "$env:USERPROFILE\.dotnet\tools;$env:PATH"
+    }
+
     # Resolve wix.exe — check PATH first, then known install locations
     $wixExe = (Get-Command "wix" -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Source)
     if (-not $wixExe) {
         $wixPaths = @(
+            "$env:USERPROFILE\.dotnet\tools\wix.exe",
             "${env:ProgramFiles}\WiX Toolset v7.0\bin\wix.exe",
             "${env:ProgramFiles}\WiX Toolset v4.0\bin\wix.exe"
         )

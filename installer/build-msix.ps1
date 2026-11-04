@@ -26,7 +26,7 @@
 # ============================================================================
 
 param(
-    [Parameter(Mandatory=$true)]
+    [Parameter(Mandatory = $true)]
     [string]$Version,
 
     [string]$CertPath = "",
@@ -43,7 +43,8 @@ if (-not $ProjectRoot) { $ProjectRoot = (Get-Location).Path }
 # Detect current host architecture
 $HostArch = if ($env:PROCESSOR_ARCHITECTURE -match "ARM64|AARCH64" -or $env:PROCESSOR_ARCHITEW6432 -match "ARM64|AARCH64") {
     "arm64"
-} else {
+}
+else {
     "amd64"
 }
 $AppxArch = if ($HostArch -eq "arm64") { "arm64" } else { "x64" }
@@ -59,22 +60,56 @@ function Set-CompilerForHost {
             $env:PATH = "C:\msys64\clangarm64\bin;$env:PATH"
             $env:CC = "clang"
             $env:CXX = "clang++"
-        } elseif (Test-Path "C:\msys64\clangarm64\bin\gcc.exe") {
+        }
+        elseif (Test-Path "C:\msys64\clangarm64\bin\gcc.exe") {
             $env:PATH = "C:\msys64\clangarm64\bin;$env:PATH"
             $env:CC = "gcc"
             $env:CXX = "g++"
         }
-    } elseif ($HostArch -eq "amd64") {
+    }
+    elseif ($HostArch -eq "amd64") {
         if (Test-Path "C:\msys64\ucrt64\bin\gcc.exe") {
             $env:PATH = "C:\msys64\ucrt64\bin;$env:PATH"
             $env:CC = "gcc"
             $env:CXX = "g++"
-        } elseif (Test-Path "C:\msys64\mingw64\bin\gcc.exe") {
+        }
+        elseif (Test-Path "C:\msys64\mingw64\bin\gcc.exe") {
             $env:PATH = "C:\msys64\mingw64\bin;$env:PATH"
             $env:CC = "gcc"
             $env:CXX = "g++"
         }
     }
+}
+
+# Helper function to find signtool.exe from PATH, user SDK, or Windows Kits
+function Get-SignTool {
+    # Check PATH first
+    $cmd = Get-Command "signtool.exe" -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Source
+    if ($cmd) { return $cmd }
+
+    # Candidate roots: user-local installation or standard Program Files
+    $roots = @(
+        "$env:LocalAppData\Microsoft\WindowsSDK\bin\Windows Kits\10\bin",
+        "${env:ProgramFiles(x86)}\Windows Kits\10\bin",
+        "${env:ProgramFiles}\Windows Kits\10\bin"
+    )
+
+    $archOrder = if ($HostArch -eq "arm64") { @("arm64", "x64") } else { @("x64", "x86") }
+
+    foreach ($kitsRoot in $roots) {
+        if (Test-Path $kitsRoot) {
+            $versions = Get-ChildItem -Path $kitsRoot -Directory -ErrorAction SilentlyContinue |
+            Where-Object { $_.Name -match '^\d+\.\d+\.\d+\.\d+$' } |
+            Sort-Object { [version]$_.Name } -Descending
+            foreach ($ver in $versions) {
+                foreach ($arch in $archOrder) {
+                    $candidate = Join-Path $ver.FullName "$arch\signtool.exe"
+                    if (Test-Path $candidate) { return $candidate }
+                }
+            }
+        }
+    }
+    throw "signtool.exe not found on PATH or in Windows Kits. Install the Windows SDK Signing Tools."
 }
 
 # Resolve go-winres from GOPATH/bin or PATH (only required when not skipping build)
@@ -100,7 +135,8 @@ try {
     # Determine total steps based on mode
     if ($StoreUpload) {
         $totalSteps = 7
-    } else {
+    }
+    else {
         $totalSteps = 6
     }
 
@@ -119,7 +155,8 @@ try {
     Write-Host "[1/$totalSteps] Cleaning previous build..." -ForegroundColor Yellow
     if (-not $SkipBuild) {
         if (Test-Path $BuildDir) { Remove-Item -Recurse -Force $BuildDir }
-    } elseif (Test-Path $PackageDir) {
+    }
+    elseif (Test-Path $PackageDir) {
         Remove-Item -Recurse -Force $PackageDir
     }
     New-Item -ItemType Directory -Path $PackageDir -Force | Out-Null
@@ -158,7 +195,8 @@ try {
         go build -ldflags="$ldflags" -o "$BuildDir\weatherwidget.exe" .\cmd\weatherwidget\
         if ($LASTEXITCODE -ne 0) { throw "Go build failed" }
         Write-Host "       Done. Output: $BuildDir\weatherwidget.exe ($HostArch)" -ForegroundColor Green
-    } else {
+    }
+    else {
         Write-Host "[2/$totalSteps] Skipping resource generation (SkipBuild)." -ForegroundColor DarkGray
         Write-Host "[3/$totalSteps] Skipping build (SkipBuild)." -ForegroundColor DarkGray
         if (-not (Test-Path "$BuildDir\weatherwidget.exe") -and (Test-Path ".\scripts\build\weatherwidget.exe")) {
@@ -174,7 +212,8 @@ try {
     # -------------------------------------------------------------------------
     if ($StoreUpload) {
         Write-Host "[4/$totalSteps] Skipping exe signing (Store signs the package)." -ForegroundColor DarkGray
-    } elseif (-not $SkipSign -and $CertPath) {
+    }
+    elseif (-not $SkipSign -and $CertPath) {
         Write-Host "[4/$totalSteps] Signing executable..." -ForegroundColor Yellow
         $signArgs = @(
             "sign", "/fd", "SHA256",
@@ -185,10 +224,12 @@ try {
         if ($CertPassword) { $signArgs += @("/p", $CertPassword) }
         $signArgs += "$BuildDir\weatherwidget.exe"
 
-        & signtool @signArgs
+        $signTool = Get-SignTool
+        & $signTool @signArgs
         if ($LASTEXITCODE -ne 0) { throw "Executable signing failed" }
         Write-Host "       Done." -ForegroundColor Green
-    } else {
+    }
+    else {
         Write-Host "[4/$totalSteps] Skipping exe signing." -ForegroundColor DarkGray
     }
 
@@ -214,14 +255,15 @@ try {
     if (Test-Path $storeAssetsDir) {
         Copy-Item "$storeAssetsDir\*" "$PackageDir\assets\" -Force
         Write-Host "       Store assets copied." -ForegroundColor Green
-    } else {
+    }
+    else {
         Write-Host "       WARNING: No store-assets found at $storeAssetsDir" -ForegroundColor Red
         Write-Host "       Creating placeholder assets. Replace with real ones before submission!" -ForegroundColor Red
         # Create minimal placeholder PNGs (1x1 transparent) - replace these!
         $placeholders = @("StoreLogo.png", "Square44x44Logo.png", "Square150x150Logo.png", "Wide310x150Logo.png", "Square310x310Logo.png")
         foreach ($p in $placeholders) {
             # Create a minimal valid PNG (1x1 pixel, transparent)
-            [byte[]]$png = @(137,80,78,71,13,10,26,10,0,0,0,13,73,72,68,82,0,0,0,1,0,0,0,1,8,6,0,0,0,31,21,196,137,0,0,0,13,73,68,65,84,120,156,98,0,0,0,2,0,1,226,33,188,51,0,0,0,0,73,69,78,68,174,66,96,130)
+            [byte[]]$png = @(137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 68, 82, 0, 0, 0, 1, 0, 0, 0, 1, 8, 6, 0, 0, 0, 31, 21, 196, 137, 0, 0, 0, 13, 73, 68, 65, 84, 120, 156, 98, 0, 0, 0, 2, 0, 1, 226, 33, 188, 51, 0, 0, 0, 0, 73, 69, 78, 68, 174, 66, 96, 130)
             [System.IO.File]::WriteAllBytes("$PackageDir\assets\$p", $png)
         }
     }
@@ -270,7 +312,8 @@ try {
     # -------------------------------------------------------------------------
     if ($StoreUpload) {
         # No signing needed — Partner Center signs Store packages
-    } elseif (-not $SkipSign -and $CertPath) {
+    }
+    elseif (-not $SkipSign -and $CertPath) {
         Write-Host "       Signing MSIX..." -ForegroundColor Yellow
         $signArgs = @(
             "sign", "/fd", "SHA256",
@@ -281,7 +324,8 @@ try {
         if ($CertPassword) { $signArgs += @("/p", $CertPassword) }
         $signArgs += $OutputMsix
 
-        & signtool @signArgs
+        $signTool = Get-SignTool
+        & $signTool @signArgs
         if ($LASTEXITCODE -ne 0) { throw "MSIX signing failed" }
         Write-Host "       Signed." -ForegroundColor Green
     }
@@ -330,12 +374,14 @@ try {
         Write-Host ""
         Write-Host "  Partner Center App ID: 47955afa-afc7-46ee-abc1-02ab2632b4ad" -ForegroundColor DarkGray
         Write-Host ""
-    } elseif ($SkipSign -or -not $CertPath) {
+    }
+    elseif ($SkipSign -or -not $CertPath) {
         Write-Host "  NOTE: Package is unsigned. For sideloading," -ForegroundColor Yellow
         Write-Host "  provide -CertPath and -CertPassword parameters." -ForegroundColor Yellow
         Write-Host ""
     }
 
-} finally {
+}
+finally {
     Pop-Location
 }
