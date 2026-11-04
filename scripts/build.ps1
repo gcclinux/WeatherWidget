@@ -3,9 +3,9 @@
 # Without -Arch, builds for the current host architecture (amd64 or arm64)
 # and produces weatherwidget.exe.
 #
-# -Arch amd64  -> weatherwidget.exe + weatherwidget-amd64.exe (both amd64)
-# -Arch arm64  -> weatherwidget.exe + weatherwidget-arm64.exe (both arm64)
-# -Arch both   -> weatherwidget-amd64.exe + weatherwidget-arm64.exe
+# -Arch amd64  -> weatherwidget.exe + weatherwidget_<version>_portable-amd64.exe
+# -Arch arm64  -> weatherwidget.exe + weatherwidget_<version>_portable-arm64.exe
+# -Arch both   -> weatherwidget_<version>_portable-amd64.exe + weatherwidget_<version>_portable-arm64.exe
 #
 # -Arch only affects the "build" target; test/vet always use the host architecture.
 
@@ -169,16 +169,16 @@ switch ($Target) {
 
         switch ($Arch) {
             "amd64" {
-                $built = Invoke-ArchBuild -TargetArch "amd64" -OutputName "weatherwidget-amd64.exe"
+                $built = Invoke-ArchBuild -TargetArch "amd64" -OutputName "weatherwidget_${Version}_portable-amd64.exe"
                 Copy-ArchBuild -SourcePath $built -OutputName "weatherwidget.exe" -TargetArch "amd64"
             }
             "arm64" {
-                $built = Invoke-ArchBuild -TargetArch "arm64" -OutputName "weatherwidget-arm64.exe"
+                $built = Invoke-ArchBuild -TargetArch "arm64" -OutputName "weatherwidget_${Version}_portable-arm64.exe"
                 Copy-ArchBuild -SourcePath $built -OutputName "weatherwidget.exe" -TargetArch "arm64"
             }
             "both" {
-                Invoke-ArchBuild -TargetArch "arm64" -OutputName "weatherwidget-arm64.exe" | Out-Null
-                Invoke-ArchBuild -TargetArch "amd64" -OutputName "weatherwidget-amd64.exe" | Out-Null
+                Invoke-ArchBuild -TargetArch "arm64" -OutputName "weatherwidget_${Version}_portable-arm64.exe" | Out-Null
+                Invoke-ArchBuild -TargetArch "amd64" -OutputName "weatherwidget_${Version}_portable-amd64.exe" | Out-Null
             }
             default {
                 # No -Arch flag: build for host architecture as weatherwidget.exe

@@ -3,7 +3,7 @@
 # ============================================================================
 # Usage:
 #   # Sign with certificate from Windows certificate store (by thumbprint):
-#   .\installer\build-msi.ps1 -Version "0.0.6.1" -CertThumbprint "A9D97675327F7BF344BA308A357E91141A1DDE50"
+#   .\installer\build-msi.ps1 -Version "0.0.6.1" -CertThumbprint "017C71948F14B125A4D23550D361C73E1F732A85"
 #
 #   # Sign with a .pfx file:
 #   .\installer\build-msi.ps1 -Version "0.0.6.1" -CertPath "cert.pfx" -CertPassword "pass"
@@ -24,7 +24,7 @@ param(
     [Parameter(Mandatory=$true)]
     [string]$Version,
 
-    [string]$CertThumbprint = "A9D97675327F7BF344BA308A357E91141A1DDE50",
+    [string]$CertThumbprint = "017C71948F14B125A4D23550D361C73E1F732A85",
     [string]$CertPath = "",
     [string]$CertPassword = "",
     [switch]$SkipSign,
@@ -122,8 +122,8 @@ Push-Location $ProjectRoot
 
 try {
     $BuildDir = ".\build"
-    $OutputMsi = ".\build\WeatherWidget-$Version.msi"
-    $OutputSetupExe = ".\build\WeatherWidget-$Version-Setup.exe"
+    $OutputMsi = ".\build\WeatherWidget-$Version-install-$HostArch.msi"
+    $OutputSetupExe = ".\build\WeatherWidget-$Version-setup-$HostArch.exe"
 
     Write-Host ""
     Write-Host "============================================" -ForegroundColor Cyan
