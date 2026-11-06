@@ -34,6 +34,10 @@
           <span class="nav-icon">🔑</span>
           <span class="nav-label">Data & Provider</span>
         </li>
+        <li class="nav-item" data-tab="tab-language">
+          <span class="nav-icon">🌐</span>
+          <span class="nav-label">Language</span>
+        </li>
         <li class="nav-item" data-tab="tab-about">
           <span class="nav-icon">ℹ️</span>
           <span class="nav-label">About</span>
@@ -57,9 +61,12 @@
 
         <div class="card">
           <div class="city-add-bar">
-            <input type="text" id="new-city-name" placeholder="City name (e.g. London)" class="input-text">
-            <input type="text" id="new-city-region" placeholder="Region / Country (e.g. UK)" class="input-text">
-            <input type="text" id="new-city-tz" placeholder="Timezone (e.g. Europe/London)" class="input-text">
+            <label for="new-city-name"><span></span><input type="text" id="new-city-name" class="input-text"></label>
+            <label for="new-city-region"><span></span><input type="text" id="new-city-region" class="input-text"></label>
+            <label for="new-city-tz"><span></span><input type="text" id="new-city-tz" class="input-text" readonly></label>
+            <label for="new-city-lat"><span></span><input type="number" id="new-city-lat" step="any" class="input-text" readonly></label>
+            <label for="new-city-lon"><span></span><input type="number" id="new-city-lon" step="any" class="input-text" readonly></label>
+            <button id="btn-search-city" class="btn btn-secondary">Search</button>
             <button id="btn-add-city" class="btn btn-accent">+ Add City</button>
           </div>
           <ul id="city-list" class="city-list"></ul>
@@ -93,14 +100,20 @@
 
           <div class="setting-row">
             <div class="setting-info">
-              <label class="setting-label">Borderless Mode</label>
-              <span class="setting-hint">Hide card background panel completely</span>
+              <label class="setting-label">Transparent background</label>
+              <span class="setting-hint">Hide the enhanced card background image</span>
             </div>
             <label class="switch">
               <input type="checkbox" id="chk-no-bg">
               <span class="slider"></span>
             </label>
           </div>
+
+          <div class="setting-row"><label for="sel-icon-theme">Weather icons</label><select id="sel-icon-theme" class="input-select"><option value="new">New</option><option value="original">Original animated</option></select></div>
+          <div class="setting-row"><label for="sel-monitor">Monitor</label><select id="sel-monitor" class="input-select"></select></div>
+          <div class="setting-row"><label for="font-city">City and time font size</label><input id="font-city" type="number" min="8" max="48" class="input-text"></div>
+          <div class="setting-row"><label for="font-temp">Temperature font size</label><input id="font-temp" type="number" min="10" max="80" class="input-text"></div>
+          <div class="setting-row"><label for="font-conditions">Conditions font size</label><input id="font-conditions" type="number" min="6" max="40" class="input-text"></div>
 
           <div class="setting-row">
             <div class="setting-info">
@@ -120,9 +133,9 @@
               <span class="setting-hint">Display wind speeds in km/h, mph, or knots</span>
             </div>
             <select id="sel-wind-unit" class="input-select">
-              <option value="kmh">Kilometres per hour (km/h)</option>
-              <option value="mph">Miles per hour (mph)</option>
-              <option value="knots">Knots (kn)</option>
+              <option value="kmh">km/h</option>
+              <option value="mph">mph</option>
+              <option value="knots">kn</option>
             </select>
           </div>
 
@@ -141,6 +154,12 @@
         </div>
       </section>
 
+      <section id="tab-language" class="tab-pane">
+        <h2 class="pane-title"></h2>
+        <p class="pane-desc"></p>
+        <div class="card"><div id="language-list" class="language-grid" role="radiogroup"></div></div>
+      </section>
+
       <!-- Tab 3: Display & Metrics -->
       <section id="tab-display" class="tab-pane">
         <h2 class="pane-title">Metrics & Fields</h2>
@@ -149,7 +168,12 @@
         <div class="card">
           <h3 class="card-subtitle">Weather Metrics</h3>
           <div class="toggle-grid">
-            <label class="checkbox-pill"><input type="checkbox" id="df-feels-like"> Feels Like</label>
+            <label class="checkbox-pill"><input type="checkbox" id="df-city"> City</label>
+            <label class="checkbox-pill"><input type="checkbox" id="df-icon"> Weather icon</label>
+            <label class="checkbox-pill"><input type="checkbox" id="df-temp"> Temperature and feels like</label>
+            <label class="checkbox-pill"><input type="checkbox" id="df-desc"> Conditions</label>
+            <label class="checkbox-pill"><input type="checkbox" id="df-time"> Time</label>
+            <label class="checkbox-pill"><input type="checkbox" id="df-date"> Date</label>
             <label class="checkbox-pill"><input type="checkbox" id="df-humidity"> Humidity</label>
             <label class="checkbox-pill"><input type="checkbox" id="df-wind"> Wind Speed</label>
             <label class="checkbox-pill"><input type="checkbox" id="df-gust"> Wind Gust</label>
@@ -167,7 +191,18 @@
             <label class="checkbox-pill"><input type="checkbox" id="pf-no2"> Nitrogen Dioxide (NO2)</label>
             <label class="checkbox-pill"><input type="checkbox" id="pf-so2"> Sulphur Dioxide (SO2)</label>
             <label class="checkbox-pill"><input type="checkbox" id="pf-co"> Carbon Monoxide (CO)</label>
+            <label class="checkbox-pill"><input type="checkbox" id="pf-no"> Nitric Oxide (NO)</label>
+            <label class="checkbox-pill"><input type="checkbox" id="pf-nh3"> Ammonia (NH3)</label>
+            <label class="checkbox-pill"><input type="checkbox" id="pf-ticker"> Pollution ticker</label>
           </div>
+          <div class="setting-row"><label for="sel-ticker-profile">Ticker profile</label>
+            <select id="sel-ticker-profile" class="input-select">
+              <option value="everyday">Everyday Outdoors</option><option value="active">Active Outdoors</option>
+              <option value="family">Family</option><option value="sensitive">Sensitive</option>
+              <option value="ventilation">Ventilation</option>
+            </select>
+          </div>
+          <p class="setting-hint">Pollution data is available with EasyWeatherWidget Pro.</p>
         </div>
       </section>
 
@@ -177,25 +212,38 @@
         <p class="pane-desc">Configure where WeatherWidget retrieves weather data.</p>
 
         <div class="card">
+          <div class="setting-row"><label for="sel-data-source">Data source</label><select id="sel-data-source" class="input-select"><option value="remote_api">Remote API</option><option value="local_database">PostgreSQL database</option></select></div>
+          <div id="remote-settings">
           <div class="setting-row">
             <div class="setting-info">
               <label class="setting-label">Weather Provider</label>
               <span class="setting-hint">Choose your preferred weather data provider</span>
             </div>
             <select id="sel-provider" class="input-select">
-              <option value="openmeteo">Open-Meteo (Free, No Key Required)</option>
               <option value="easyweatherwidget">EasyWeatherWidget Gateway</option>
               <option value="openweathermap">OpenWeatherMap</option>
-              <option value="weatherunderground">Weather Underground</option>
             </select>
           </div>
 
           <div class="setting-row" id="row-api-key">
             <div class="setting-info">
               <label class="setting-label">API Key</label>
-              <span class="setting-hint">Required for OpenWeatherMap / Weather Underground</span>
+              <span class="setting-hint">Required for OpenWeatherMap and EasyWeatherWidget Pro</span>
             </div>
             <input type="password" id="input-api-key" placeholder="Enter API Key" class="input-text" style="width: 260px;">
+          </div>
+          <div class="setting-row">
+              <a href="https://openweathermap.org/" target="_blank" rel="noopener" class="about-link">Get an OpenWeatherMap API key</a>
+              <a href="https://easysmartapps.co.uk/" target="_blank" rel="noopener" class="about-link">EasyWeatherWidget Pro</a>
+          </div>
+          </div>
+          <div id="database-settings">
+              <div class="setting-row"><label for="db-host">Host</label><input id="db-host" class="input-text"></div>
+              <div class="setting-row"><label for="db-port">Port</label><input id="db-port" class="input-text" type="number" min="1" max="65535"></div>
+              <div class="setting-row"><label for="db-name">Database</label><input id="db-name" class="input-text"></div>
+              <div class="setting-row"><label for="db-user">Username</label><input id="db-user" class="input-text"></div>
+              <div class="setting-row"><label for="db-password">Password</label><input id="db-password" class="input-text" type="password"></div>
+              <div class="setting-row"><label for="db-query">Weather query</label><textarea id="db-query" class="input-text" rows="3"></textarea></div>
           </div>
 
           <div class="setting-row">
@@ -203,12 +251,7 @@
               <label class="setting-label">Refresh Interval</label>
               <span class="setting-hint">Minutes between automatic weather updates</span>
             </div>
-            <select id="sel-refresh-interval" class="input-select">
-              <option value="5">5 Minutes</option>
-              <option value="15">15 Minutes</option>
-              <option value="30">30 Minutes</option>
-              <option value="60">60 Minutes</option>
-            </select>
+            <input type="number" id="sel-refresh-interval" min="1" max="120" class="input-text">
           </div>
 
           <div style="margin-top: 16px;">
@@ -227,8 +270,8 @@
           <div class="about-hero">
             <div class="about-icon">⛅</div>
             <div>
-              <div class="about-name">Weather Widget for Windows</div>
-              <div class="about-version" id="about-version">Version 2.1.0 (Native Win32 & WebView2)</div>
+              <div class="about-name">WeatherWidget</div>
+              <div class="about-version" id="about-version">Win32 &amp; WebView2</div>
               <div class="about-copyright">© 2026 Ricardo Wagemaker. All rights reserved.</div>
             </div>
           </div>

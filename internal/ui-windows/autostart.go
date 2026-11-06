@@ -3,6 +3,7 @@
 package uiwindows
 
 import (
+	"errors"
 	"log"
 	"os"
 	"path/filepath"
@@ -55,15 +56,18 @@ func setAutoStartEnabled(enabled bool) error {
 	// Remove the entry.
 	key, err := registry.OpenKey(registry.CURRENT_USER, autoStartRegistryKey, registry.SET_VALUE)
 	if err != nil {
-		// Key doesn't exist — nothing to remove.
-		return nil
+		if errors.Is(err, registry.ErrNotExist) {
+			return nil
+		}
+		return err
 	}
 	defer key.Close()
 
 	if err := key.DeleteValue(autoStartValueName); err != nil {
-		// Value doesn't exist — already disabled.
-		log.Printf("uiwindows: auto-start entry not found, already disabled")
-		return nil
+		if errors.Is(err, registry.ErrNotExist) {
+			return nil
+		}
+		return err
 	}
 	log.Printf("uiwindows: auto-start disabled")
 	return nil

@@ -34,6 +34,14 @@ Features:
 - 12 languages supported
 - Launches at start-up and stays out of your way
 
+The native Windows enhanced view uses day/night image backgrounds or a
+transparent background, with selected weather metrics and air-quality fields
+shown on each city card. The Windows settings panel exposes the background,
+icon theme, pollution ticker and profile, units, and field visibility options.
+Locations require a city and country for Auto-Fill; the resulting timezone and
+coordinates are read-only. The Language tab lists the available translations
+with their flags and native names.
+
 ## Screenshots
 
 **Linux Fog background**  
@@ -84,7 +92,7 @@ You can download the latest pre-compiled binaries for Windows and Linux from the
 
 ### Windows MSI Package
 ```powershell
- .\installer\build-msi.ps1 -Version "2.2.0" -SkipSign
+ .\installer\build-msi.ps1 -Version "2.3.0" -SkipSign
  ```
 
 ### Linux

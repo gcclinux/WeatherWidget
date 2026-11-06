@@ -343,7 +343,8 @@ input:checked + .slider:before {
 
 /* City Management List */
 .city-add-bar {
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
   margin-bottom: 16px;
 }
@@ -455,3 +456,19 @@ input:checked + .slider:before {
   opacity: 0;
   pointer-events: none;
 }
+
+.input-select option { background: #202020; color: #f3f3f3; }
+.setting-row { gap: 16px; }
+.input-text, .input-select { min-width: 0; }
+.checkbox-pill input { width: 16px; height: 16px; flex: none; }
+input, textarea { user-select: text; }
+
+.language-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+.language-choice { display: flex; align-items: center; gap: 10px; text-align: left; color: var(--text-main); background: var(--bg-card); border: 1px solid var(--border-card); border-radius: var(--radius-md); padding: 9px; cursor: pointer; }
+.language-choice[aria-checked="true"] { border-color: var(--accent); background: rgba(96, 205, 255, 0.12); }
+.language-choice img { width: 36px; height: 24px; object-fit: contain; }
+.language-choice span { display: flex; flex-direction: column; }
+.language-choice small { color: var(--text-muted); }
+.language-choice[aria-checked="true"]::after { content: '✓'; margin-left: auto; color: var(--accent); }
+.city-add-bar label { display: flex; flex-direction: column; gap: 4px; min-width: 0; color: var(--text-muted); }
+.city-add-bar input[readonly] { opacity: 0.75; }

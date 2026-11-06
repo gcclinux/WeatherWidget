@@ -1,320 +1,457 @@
-// Settings Web Frontend Controller
-let currentConfig = null;
+'use strict';
 
-// Tab Switching
+let currentConfig = null;
+let selectedLocale = 'en-GB';
+let translations = {};
+let autoFilled = false;
+let citySearchGeneration = 0;
+const t = key => translations[key] || key;
+const format = (key, ...args) => t(key).replace(/%[dsv]/g, () => String(args.shift()));
+const el = id => document.getElementById(id);
+const displayFields = {
+  'df-city': 'showCity', 'df-icon': 'showIcon', 'df-temp': 'showTemp',
+  'df-desc': 'showDesc', 'df-humidity': 'showHumidity', 'df-wind': 'showWind',
+  'df-time': 'showTime', 'df-date': 'showDate', 'df-gust': 'showWindGust',
+  'df-dew': 'showDewPoint', 'df-pressure': 'showPressure', 'df-uv': 'showUVIndex'
+};
+const pollutionFields = {
+  'pf-aqi': 'showAQI', 'pf-co': 'showCO', 'pf-no': 'showNO', 'pf-no2': 'showNO2',
+  'pf-o3': 'showO3', 'pf-so2': 'showSO2', 'pf-nh3': 'showNH3',
+  'pf-pm25': 'showPM25', 'pf-pm10': 'showPM10', 'pf-ticker': 'showTicker'
+};
+const translationTargets = {
+  '[data-tab="tab-cities"] .nav-label': 'settings.tab.locations',
+  '[data-tab="tab-appearance"] .nav-label': 'settings.tab.appearance',
+  '[data-tab="tab-display"] .nav-label': 'settings.tab.widget',
+  '[data-tab="tab-api"] .nav-label': 'settings.tab.provider',
+  '[data-tab="tab-language"] .nav-label': 'settings.tab.language',
+  '[data-tab="tab-about"] .nav-label': 'settings.tab.about',
+  '.app-subtitle': 'settings.title',
+  '#tab-cities .pane-desc': 'settings.locations.savedSubtitle',
+  '#btn-save': 'settings.save', '#btn-cancel': 'settings.cancel',
+  '#tab-cities .pane-title': 'settings.locations.savedTitle',
+  '#btn-add-city': 'settings.locations.addBtn', '#btn-search-city': 'settings.locations.searchBtn',
+  'label[for="new-city-name"] span': 'settings.locations.nameLabel',
+  'label[for="new-city-region"] span': 'settings.locations.regionLabel',
+  'label[for="new-city-tz"] span': 'settings.locations.tzLabel',
+  'label[for="new-city-lat"] span': 'settings.locations.latLabel',
+  'label[for="new-city-lon"] span': 'settings.locations.lonLabel',
+  '#tab-display .pane-title': 'settings.display.title',
+  '#tab-display .pane-desc': 'settings.display.subtitle',
+  '#tab-display .card-subtitle:first-child': 'settings.display.title',
+  '#df-city': 'settings.display.city', '#df-icon': 'settings.display.icon',
+  '#df-temp': 'settings.display.temp', '#df-desc': 'settings.display.desc',
+  '#df-time': 'settings.display.time', '#df-date': 'settings.display.date',
+  '#df-humidity': 'settings.display.humidity', '#df-wind': 'settings.display.wind',
+  '#df-gust': 'settings.display.windGust', '#df-dew': 'settings.display.dewPoint',
+  '#df-pressure': 'settings.display.pressure', '#df-uv': 'settings.display.uvIndex',
+  '#pf-aqi': 'settings.pollution.aqi', '#pf-co': 'settings.pollution.co',
+  '#pf-no': 'settings.pollution.no', '#pf-no2': 'settings.pollution.no2',
+  '#pf-o3': 'settings.pollution.o3', '#pf-so2': 'settings.pollution.so2',
+  '#pf-nh3': 'settings.pollution.nh3', '#pf-pm25': 'settings.pollution.pm2_5',
+  '#pf-pm10': 'settings.pollution.pm10', '#pf-ticker': 'settings.pollution.ticker',
+  'label[for="sel-ticker-profile"]': 'settings.pollution.profile.title',
+  '#sel-ticker-profile option[value="everyday"]': 'settings.pollution.profile.everyday',
+  '#sel-ticker-profile option[value="active"]': 'settings.pollution.profile.active',
+  '#sel-ticker-profile option[value="family"]': 'settings.pollution.profile.family',
+  '#sel-ticker-profile option[value="sensitive"]': 'settings.pollution.profile.sensitive',
+  '#sel-ticker-profile option[value="ventilation"]': 'settings.pollution.profile.ventilation',
+  'label[for="sel-icon-theme"]': 'settings.icons.title',
+  '#tab-language .pane-title': 'settings.language.title',
+  '#tab-language .pane-desc': 'settings.language.subtitle',
+  'label[for="sel-monitor"]': 'settings.monitor.label',
+  'label[for="font-city"]': 'settings.fontSize.cityTime',
+  'label[for="font-temp"]': 'settings.fontSize.tempIcon',
+  'label[for="font-conditions"]': 'settings.fontSize.conditions',
+  '#sel-view-mode option[value="enhanced"]': 'settings.viewMode.enhanced',
+  '#sel-view-mode option[value="simple"]': 'settings.viewMode.simple',
+  '#btn-test-connection': 'settings.provider.checkConnection',
+  '#tab-appearance .pane-title': 'settings.tab.appearance',
+  '#tab-appearance .pane-desc': 'settings.fontSize.subtitle',
+  '#tab-appearance .setting-row:nth-child(1) .setting-label': 'settings.viewMode.title',
+  '#tab-appearance .setting-row:nth-child(1) .setting-hint': 'settings.viewMode.subtitle',
+  '#tab-appearance .setting-row:nth-child(2) .setting-label': 'settings.transparency.title',
+  '#tab-appearance .setting-row:nth-child(3) .setting-label': 'settings.noBackground.checkbox',
+  '#tab-appearance .setting-row:nth-child(3) .setting-hint': 'settings.transparency.subtitle',
+  '#sel-icon-theme option[value="new"]': 'settings.icons.new',
+  '#sel-icon-theme option[value="original"]': 'settings.icons.original',
+  '#tab-appearance .setting-row:nth-last-child(3) .setting-label': 'settings.temperature.title',
+  '#tab-appearance .setting-row:nth-last-child(3) .setting-hint': 'settings.temperature.subtitle',
+  '#sel-temp-unit option[value="celsius"]': 'settings.temperature.celsius',
+  '#sel-temp-unit option[value="fahrenheit"]': 'settings.temperature.fahrenheit',
+  '#sel-temp-unit option[value="kelvin"]': 'settings.temperature.kelvin',
+  '#tab-appearance .setting-row:nth-last-child(2) .setting-label': 'settings.windspeed.title',
+  '#tab-appearance .setting-row:nth-last-child(2) .setting-hint': 'settings.windspeed.subtitle',
+  '#tab-appearance .setting-row:last-child .setting-label': 'settings.position.title',
+  '#tab-appearance .setting-row:last-child .setting-hint': 'settings.position.subtitle',
+  '#sel-corner option[value="top-left"]': 'settings.position.topLeft',
+  '#sel-corner option[value="top-right"]': 'settings.position.topRight',
+  '#sel-corner option[value="bottom-left"]': 'settings.position.bottomLeft',
+  '#sel-corner option[value="bottom-right"]': 'settings.position.bottomRight',
+  '#tab-display .card-subtitle:nth-of-type(2)': 'settings.pollution.title',
+  '#tab-display .card > .setting-hint': 'settings.pollution.proNote',
+  '#tab-api .pane-title': 'settings.provider.title',
+  '#tab-api .pane-desc': 'settings.provider.subtitle',
+  'label[for="sel-data-source"]': 'settings.windows.dataSource',
+  '#sel-data-source option[value="remote_api"]': 'settings.windows.remote',
+  '#sel-data-source option[value="local_database"]': 'settings.windows.database',
+  '#remote-settings .setting-row:first-child .setting-label': 'settings.provider.label',
+  '#remote-settings .setting-row:first-child .setting-hint': 'settings.provider.subtitle',
+  '#row-api-key .setting-label': 'settings.provider.apiKeyLabel',
+  '#row-api-key .setting-hint': 'settings.provider.note',
+  '#remote-settings a:first-child': 'settings.provider.getFreeApi',
+  '#remote-settings a:last-child': 'settings.provider.getProApi',
+  'label[for="db-host"]': 'settings.windows.host',
+  'label[for="db-port"]': 'settings.windows.port',
+  'label[for="db-name"]': 'settings.windows.database',
+  'label[for="db-user"]': 'settings.windows.username',
+  'label[for="db-password"]': 'settings.windows.password',
+  'label[for="db-query"]': 'settings.windows.query',
+  '#tab-api .card > .setting-row:nth-last-of-type(2) .setting-label': 'settings.interval.title',
+  '#tab-api .card > .setting-row:nth-last-of-type(2) .setting-hint': 'settings.interval.subtitle',
+  '#tab-about .pane-title': 'settings.tab.about',
+  '#tab-about .pane-desc': 'settings.about.description',
+  '#tab-about .setting-label': 'settings.startup.autostart',
+  '#tab-about .setting-hint': 'settings.startup.subtitle',
+  '#tab-about .about-links a:first-child': 'settings.about.websiteLabel',
+  '#tab-about .about-links a:nth-of-type(2)': 'settings.windows.support'
+};
+
+async function applyLanguage(locale) {
+  const keys = [...Object.values(translationTargets), ...Object.values(placeholderTargets),
+    'settings.locations.latLabel', 'settings.locations.lonLabel', 'settings.locations.tzLabel',
+    'settings.locations.removeBtn', 'settings.monitor.format', 'settings.transparency.title',
+    'settings.dialog.savedMsg', 'settings.provider.checkingConnection', 'settings.provider.connectionSuccessTitle',
+    'error.settings.cityNameRequiredSearch', 'error.settings.regionRequiredEww', 'error.settings.apiKeyRequired',
+    'error.settings.searchFailed', 'error.settings.saveFailed', 'error.settings.connectionFailed',
+    'error.settings.autoStartFailed', 'settings.windows.autofillRequired', 'settings.windows.error'];
+  const values = await window.goGetTranslations(locale, keys);
+  translations = values;
+  document.documentElement.lang = locale;
+  document.title = t('settings.title');
+  Object.entries(translationTargets).forEach(([selector, key]) => {
+    const target = document.querySelector(selector);
+    if (!target || !values[key] || values[key] === key) return;
+    if (target.type === 'checkbox') {
+      target.parentElement.lastChild.textContent = ' ' + values[key];
+    } else {
+      target.textContent = values[key];
+    }
+  });
+  Object.entries(placeholderTargets).forEach(([selector, key]) => {
+    document.querySelector(selector).placeholder = t(key);
+  });
+  updateOpacityHint();
+  renderCityList();
+  updateLanguageSelection();
+  Array.from(el('sel-monitor').options).forEach((option, i) => { option.textContent = format('settings.monitor.format', i + 1); });
+}
+
+const placeholderTargets = {
+  '#new-city-name': 'settings.locations.namePlaceholder',
+  '#new-city-region': 'settings.locations.regionPlaceholder',
+  '#new-city-tz': 'settings.locations.tzLabel',
+  '#new-city-lat': 'settings.locations.latLabel',
+  '#new-city-lon': 'settings.locations.lonLabel',
+  '#input-api-key': 'settings.provider.apiKeyPlaceholder'
+};
 document.querySelectorAll('.nav-item').forEach(item => {
   item.addEventListener('click', () => {
     document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active'));
     document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
-
     item.classList.add('active');
-    const tabId = item.getAttribute('data-tab');
-    document.getElementById(tabId).classList.add('active');
+    el(item.dataset.tab).classList.add('active');
   });
 });
 
-// Toast notification
 function showToast(message, isError = false) {
-  const toast = document.getElementById('toast');
+  const toast = el('toast');
   toast.textContent = message;
   toast.style.borderColor = isError ? '#ff6b6b' : 'var(--accent)';
   toast.classList.remove('hidden');
-  setTimeout(() => toast.classList.add('hidden'), 3000);
+  if (!isError) setTimeout(() => toast.classList.add('hidden'), 3000);
 }
 
-// Populate UI from Config object
 function populateUI(cfg) {
   currentConfig = cfg;
-
-  // Tab 1: Cities
-  renderCityList(cfg.cities || []);
-
-  // Tab 2: Appearance
-  document.getElementById('sel-view-mode').value = cfg.viewMode || 'enhanced';
-  document.getElementById('slider-opacity').value = cfg.opacity || 100;
-  document.getElementById('opacity-hint').textContent = `Background opacity (${cfg.opacity || 100}%)`;
-  document.getElementById('chk-no-bg').checked = !!cfg.noBackground;
-  document.getElementById('sel-temp-unit').value = cfg.temperatureUnit || 'celsius';
-  document.getElementById('sel-wind-unit').value = cfg.windSpeedUnit || 'kmh';
-  document.getElementById('sel-corner').value = cfg.cornerPosition || 'top-left';
-
-  // Tab 3: Display & Metrics
-  const df = cfg.displayFields || {};
-  document.getElementById('df-feels-like').checked = !!df.showFeelsLike;
-  document.getElementById('df-humidity').checked = !!df.showHumidity;
-  document.getElementById('df-wind').checked = !!df.showWindSpeed;
-  document.getElementById('df-gust').checked = !!df.showWindGust;
-  document.getElementById('df-dew').checked = !!df.showDewPoint;
-  document.getElementById('df-pressure').checked = !!df.showPressure;
-  document.getElementById('df-uv').checked = !!df.showUVIndex;
-
-  const pf = cfg.pollutionFields || {};
-  document.getElementById('pf-aqi').checked = !!pf.showAQI;
-  document.getElementById('pf-pm25').checked = !!pf.showPM25;
-  document.getElementById('pf-pm10').checked = !!pf.showPM10;
-  document.getElementById('pf-o3').checked = !!pf.showO3;
-  document.getElementById('pf-no2').checked = !!pf.showNO2;
-  document.getElementById('pf-so2').checked = !!pf.showSO2;
-  document.getElementById('pf-co').checked = !!pf.showCO;
-
-  // Tab 4: API & Provider
-  const api = cfg.apiConfig || {};
-  document.getElementById('sel-provider').value = api.provider || 'openmeteo';
-  document.getElementById('input-api-key').value = api.apiKey || '';
-  document.getElementById('sel-refresh-interval').value = String(cfg.refreshInterval || 15);
-
-  updateAPIKeyVisibility();
+  currentConfig.cities ||= [];
+  renderCityList();
+  el('sel-view-mode').value = cfg.viewMode || 'enhanced';
+  el('slider-opacity').value = cfg.opacity || 100;
+  updateOpacityHint();
+  el('chk-no-bg').checked = !!cfg.noBackground;
+  el('sel-temp-unit').value = cfg.temperatureUnit || 'celsius';
+  el('sel-wind-unit').value = cfg.windSpeedUnit || 'kmh';
+  el('sel-corner').value = cfg.cornerPosition || 'top-right';
+  el('sel-icon-theme').value = cfg.iconTheme || 'new';
+  selectedLocale = cfg.locale || 'en-GB';
+  el('sel-monitor').value = String(cfg.monitorIndex || 0);
+  el('font-city').value = cfg.fontSizeCityTime || 14;
+  el('font-temp').value = cfg.fontSizeTempIcon || 32;
+  el('font-conditions').value = cfg.fontSizeConditions || 10;
+  Object.entries(displayFields).forEach(([id, key]) => {
+    el(id).checked = cfg.displayFields ? !!cfg.displayFields[key] : true;
+  });
+  Object.entries(pollutionFields).forEach(([id, key]) => {
+    el(id).checked = !!cfg.pollutionFields?.[key];
+  });
+  el('sel-ticker-profile').value = cfg.pollutionFields?.tickerProfile || 'everyday';
+  el('sel-provider').value = cfg.apiConfig?.provider || 'easyweatherwidget';
+  el('input-api-key').value = cfg.apiConfig?.apiKey || '';
+  el('sel-data-source').value = cfg.dataSource || 'remote_api';
+  el('db-host').value = cfg.databaseConfig?.host || '';
+  el('db-port').value = cfg.databaseConfig?.port || 5432;
+  el('db-name').value = cfg.databaseConfig?.dbName || '';
+  el('db-user').value = cfg.databaseConfig?.username || '';
+  el('db-password').value = cfg.databaseConfig?.password || '';
+  el('db-query').value = cfg.databaseConfig?.query || '';
+  updateDataSource();
+  el('sel-refresh-interval').value = cfg.refreshInterval;
 }
 
-// Render City list items
-function renderCityList(cities) {
-  const list = document.getElementById('city-list');
-  list.innerHTML = '';
-
-  cities.forEach((c, index) => {
-    const li = document.createElement('li');
-    li.className = 'city-item';
-    li.innerHTML = `
-      <div>
-        <div class="city-item-name">${escapeHtml(c.name || '')}</div>
-        <div class="city-item-sub">${escapeHtml(c.region || '')} ${c.timezone ? '• ' + escapeHtml(c.timezone) : ''}</div>
-      </div>
-      <button class="btn-remove-city" data-index="${index}">Remove</button>
-    `;
-    list.appendChild(li);
-  });
-
-  list.querySelectorAll('.btn-remove-city').forEach(btn => {
-    btn.addEventListener('click', (e) => {
-      const idx = parseInt(e.target.getAttribute('data-index'), 10);
-      currentConfig.cities.splice(idx, 1);
-      renderCityList(currentConfig.cities);
-      dispatchPreview();
+function renderCityList() {
+  const list = el('city-list');
+  list.replaceChildren();
+  currentConfig.cities.forEach((city, index) => {
+    const item = document.createElement('li');
+    item.className = 'city-item';
+    const text = document.createElement('div');
+    const name = document.createElement('div');
+    name.className = 'city-item-name';
+    name.textContent = [city.name, city.region].filter(Boolean).join(', ');
+    const subtitle = document.createElement('div');
+    subtitle.className = 'city-item-sub';
+    subtitle.textContent = `${city.timezone || 'UTC'} • ${city.latitude || 0}, ${city.longitude || 0}`;
+    text.append(name, subtitle);
+    const button = document.createElement('button');
+    button.className = 'btn-remove-city';
+    button.textContent = t('settings.locations.removeBtn');
+    button.addEventListener('click', () => {
+      currentConfig.cities.splice(index, 1);
+      renderCityList();
     });
+    item.append(text, button);
+    list.appendChild(item);
   });
 }
 
-// Add City Button
-document.getElementById('btn-add-city').addEventListener('click', () => {
-  const nameInput = document.getElementById('new-city-name');
-  const regionInput = document.getElementById('new-city-region');
-  const tzInput = document.getElementById('new-city-tz');
-
-  const name = nameInput.value.trim();
-  const region = regionInput.value.trim();
-  const tz = tzInput.value.trim();
-
-  if (!name) {
-    showToast('Please enter a city name', true);
+el('btn-add-city').addEventListener('click', () => {
+  const name = el('new-city-name').value.trim();
+  const region = el('new-city-region').value.trim();
+  const timezone = el('new-city-tz').value.trim();
+  const lat = el('new-city-lat').value;
+  const lon = el('new-city-lon').value;
+  if (!autoFilled || !name || !region || !timezone || lat === '' || lon === '') {
+    showToast(t('settings.windows.autofillRequired'), true);
     return;
   }
-
-  if (!currentConfig.cities) {
-    currentConfig.cities = [];
+  const latitude = Number(lat), longitude = Number(lon);
+  if (!Number.isFinite(latitude) || !Number.isFinite(longitude) || Math.abs(latitude) > 90 || Math.abs(longitude) > 180) {
+    showToast(format('error.settings.invalidLat', lat) + ' / ' + format('error.settings.invalidLon', lon), true);
+    return;
   }
-
-  currentConfig.cities.push({
-    name: name,
-    region: region,
-    timezone: tz || 'UTC',
-    lat: 0,
-    lon: 0
-  });
-
-  nameInput.value = '';
-  regionInput.value = '';
-  tzInput.value = '';
-
-  renderCityList(currentConfig.cities);
-  dispatchPreview();
+  currentConfig.cities.push({name, region, timezone, latitude, longitude});
+  ['new-city-name', 'new-city-region', 'new-city-tz', 'new-city-lat', 'new-city-lon'].forEach(id => { el(id).value = ''; });
+  autoFilled = false;
+  renderCityList();
 });
 
-// Provider switch adjusts API key visibility
-document.getElementById('sel-provider').addEventListener('change', updateAPIKeyVisibility);
+function clearCityAutofill() {
+  citySearchGeneration++;
+  autoFilled = false;
+  ['new-city-tz', 'new-city-lat', 'new-city-lon'].forEach(id => { el(id).value = ''; });
+}
+['new-city-name', 'new-city-region'].forEach(id => el(id).addEventListener('input', clearCityAutofill));
+['sel-provider', 'input-api-key'].forEach(id => el(id).addEventListener('change', clearCityAutofill));
 
-function updateAPIKeyVisibility() {
-  const provider = document.getElementById('sel-provider').value;
-  const row = document.getElementById('row-api-key');
-  if (provider === 'openmeteo') {
-    row.style.opacity = '0.5';
-  } else {
-    row.style.opacity = '1.0';
+el('btn-search-city').addEventListener('click', async () => {
+  clearCityAutofill();
+  const name = el('new-city-name').value.trim(), region = el('new-city-region').value.trim();
+  if (!name) { showToast(t('error.settings.cityNameRequiredSearch'), true); return; }
+  if (!region) { showToast(t('settings.windows.autofillRequired'), true); return; }
+  if (!el('input-api-key').value.trim()) { showToast(t('error.settings.apiKeyRequired'), true); return; }
+  const generation = citySearchGeneration;
+  const button = el('btn-search-city');
+  button.disabled = true;
+  try {
+    const city = await window.goSearchCity(name, region,
+      el('sel-provider').value, el('input-api-key').value.trim(), selectedLocale);
+    if (generation !== citySearchGeneration) return;
+    el('new-city-name').value = city.name;
+    el('new-city-region').value = city.region;
+    el('new-city-tz').value = city.timezone;
+    el('new-city-lat').value = city.latitude;
+    el('new-city-lon').value = city.longitude;
+    autoFilled = true;
+  } catch (err) {
+    if (generation === citySearchGeneration) showToast(format('error.settings.searchFailed', err), true);
+  } finally {
+    button.disabled = false;
   }
+});
+
+function updateOpacityHint() { el('opacity-hint').textContent = `${t('settings.transparency.title')} (${el('slider-opacity').value}%)`; }
+el('slider-opacity').addEventListener('input', updateOpacityHint);
+function updateDataSource() {
+  const remote = el('sel-data-source').value === 'remote_api';
+  el('remote-settings').hidden = !remote;
+  el('database-settings').hidden = remote;
+}
+el('sel-data-source').addEventListener('change', updateDataSource);
+function updateLanguageSelection() {
+  el('language-list').querySelectorAll('button').forEach(button => button.setAttribute('aria-checked', String(button.dataset.locale === selectedLocale)));
+}
+function renderLanguages(locales) {
+  const list = el('language-list');
+  const order = ['en-GB', 'es-ES', 'fr-FR', 'de-DE', 'it-IT', 'pt-BR', 'nl-NL', 'pl-PL', 'tr-TR', 'ta-IN', 'ja-JP', 'zh-CN'];
+  locales.sort((a, b) => {
+    const ai = order.indexOf(a.Code), bi = order.indexOf(b.Code);
+    return (ai < 0 ? order.length : ai) - (bi < 0 ? order.length : bi);
+  }).forEach(locale => {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'language-choice';
+    button.dataset.locale = locale.Code;
+    button.setAttribute('role', 'radio');
+    const flag = document.createElement('img');
+    flag.src = locale.Flag;
+    flag.alt = '';
+    const text = document.createElement('span');
+    const nativeName = document.createElement('strong');
+    const englishName = document.createElement('small');
+    nativeName.textContent = locale.DisplayName;
+    englishName.textContent = new Intl.DisplayNames(['en'], {type: 'language'}).of(locale.Code.split('-')[0]);
+    text.append(nativeName, englishName);
+    button.append(flag, text);
+    button.addEventListener('click', async () => {
+      list.inert = true;
+      el('btn-save').disabled = true;
+      el('btn-cancel').disabled = true;
+      try {
+        await applyLanguage(locale.Code);
+        selectedLocale = locale.Code;
+        updateLanguageSelection();
+        el('toast').classList.add('hidden');
+      } catch (err) { showToast(format('settings.windows.error', err), true); }
+      finally {
+        list.inert = false;
+        el('btn-save').disabled = false;
+        el('btn-cancel').disabled = false;
+      }
+    });
+    list.append(button);
+  });
+  updateLanguageSelection();
 }
 
-// Live Preview Handlers
-document.getElementById('slider-opacity').addEventListener('input', (e) => {
-  const val = parseInt(e.target.value, 10);
-  document.getElementById('opacity-hint').textContent = `Background opacity (${val}%)`;
-  if (currentConfig) {
-    currentConfig.opacity = val;
-    dispatchPreview();
-  }
-});
-
-document.getElementById('chk-no-bg').addEventListener('change', (e) => {
-  if (currentConfig) {
-    currentConfig.noBackground = e.target.checked;
-    dispatchPreview();
-  }
-});
-
-document.getElementById('sel-view-mode').addEventListener('change', (e) => {
-  if (currentConfig) {
-    currentConfig.viewMode = e.target.value;
-    dispatchPreview();
-  }
-});
-
-document.getElementById('sel-temp-unit').addEventListener('change', (e) => {
-  if (currentConfig) {
-    currentConfig.temperatureUnit = e.target.value;
-    dispatchPreview();
-  }
-});
-
-document.getElementById('sel-wind-unit').addEventListener('change', (e) => {
-  if (currentConfig) {
-    currentConfig.windSpeedUnit = e.target.value;
-    dispatchPreview();
-  }
-});
-
 function collectConfigFromUI() {
-  if (!currentConfig) return null;
+  const cfg = structuredClone(currentConfig);
+  cfg.viewMode = el('sel-view-mode').value;
+  cfg.opacity = Number(el('slider-opacity').value);
+  cfg.noBackground = el('chk-no-bg').checked;
+  cfg.temperatureUnit = el('sel-temp-unit').value;
+  cfg.windSpeedUnit = el('sel-wind-unit').value;
+  cfg.cornerPosition = el('sel-corner').value;
+  cfg.monitorIndex = Number(el('sel-monitor').value);
+  if (cfg.cornerPosition !== currentConfig.cornerPosition || cfg.monitorIndex !== currentConfig.monitorIndex) {
+    delete cfg.customX;
+    delete cfg.customY;
+  }
 
-  const cfg = JSON.parse(JSON.stringify(currentConfig));
-
-  cfg.viewMode = document.getElementById('sel-view-mode').value;
-  cfg.opacity = parseInt(document.getElementById('slider-opacity').value, 10);
-  cfg.noBackground = document.getElementById('chk-no-bg').checked;
-  cfg.temperatureUnit = document.getElementById('sel-temp-unit').value;
-  cfg.windSpeedUnit = document.getElementById('sel-wind-unit').value;
-  cfg.cornerPosition = document.getElementById('sel-corner').value;
-  cfg.refreshInterval = parseInt(document.getElementById('sel-refresh-interval').value, 10);
-
-  if (!cfg.apiConfig) cfg.apiConfig = {};
-  cfg.apiConfig.provider = document.getElementById('sel-provider').value;
-  cfg.apiConfig.apiKey = document.getElementById('input-api-key').value.trim();
-
-  cfg.displayFields = {
-    showFeelsLike: document.getElementById('df-feels-like').checked,
-    showHumidity: document.getElementById('df-humidity').checked,
-    showWindSpeed: document.getElementById('df-wind').checked,
-    showWindGust: document.getElementById('df-gust').checked,
-    showDewPoint: document.getElementById('df-dew').checked,
-    showPressure: document.getElementById('df-pressure').checked,
-    showUVIndex: document.getElementById('df-uv').checked,
-  };
-
-  cfg.pollutionFields = {
-    showAQI: document.getElementById('pf-aqi').checked,
-    showPM25: document.getElementById('pf-pm25').checked,
-    showPM10: document.getElementById('pf-pm10').checked,
-    showO3: document.getElementById('pf-o3').checked,
-    showNO2: document.getElementById('pf-no2').checked,
-    showSO2: document.getElementById('pf-so2').checked,
-    showCO: document.getElementById('pf-co').checked,
-  };
-
+  cfg.iconTheme = el('sel-icon-theme').value;
+  cfg.locale = selectedLocale;
+  cfg.fontSizeCityTime = Number(el('font-city').value);
+  cfg.fontSizeTempIcon = Number(el('font-temp').value);
+  cfg.fontSizeConditions = Number(el('font-conditions').value);
+  cfg.refreshInterval = Number(el('sel-refresh-interval').value);
+  cfg.dataSource = el('sel-data-source').value;
+  cfg.apiConfig = {...cfg.apiConfig, provider: el('sel-provider').value, apiKey: el('input-api-key').value.trim()};
+  if (cfg.dataSource === 'local_database') {
+    cfg.databaseConfig = {...cfg.databaseConfig, host: el('db-host').value.trim(), port: Number(el('db-port').value),
+      dbName: el('db-name').value.trim(), username: el('db-user').value.trim(),
+      password: el('db-password').value, query: el('db-query').value};
+  }
+  cfg.displayFields = {...cfg.displayFields};
+  Object.entries(displayFields).forEach(([id, key]) => { cfg.displayFields[key] = el(id).checked; });
+  cfg.pollutionFields = {...cfg.pollutionFields, tickerProfile: el('sel-ticker-profile').value};
+  Object.entries(pollutionFields).forEach(([id, key]) => { cfg.pollutionFields[key] = el(id).checked; });
   return cfg;
 }
 
-function dispatchPreview() {
-  const cfg = collectConfigFromUI();
-  if (cfg && window.goPreviewConfig) {
-    window.goPreviewConfig(JSON.stringify(cfg));
-  }
-}
+let previewTimer;
+let previewInFlight = Promise.resolve();
+document.querySelectorAll('#tab-appearance input, #tab-appearance select, #tab-display input, #tab-display select').forEach(input => {
+  input.addEventListener('change', () => {
+    if (!currentConfig) return;
+    clearTimeout(previewTimer);
+    previewTimer = setTimeout(() => {
+      const config = JSON.stringify(collectConfigFromUI());
+      previewInFlight = previewInFlight.then(() => window.goPreviewConfig(config))
+        .catch(err => showToast(format('settings.windows.error', err), true));
+    }, 150);
+  });
+});
 
-// Save Changes
-document.getElementById('btn-save').addEventListener('click', async () => {
-  const cfg = collectConfigFromUI();
-  if (!cfg) return;
-
+el('btn-save').addEventListener('click', async () => {
+  if (!currentConfig) return;
+  clearTimeout(previewTimer);
+  const button = el('btn-save');
+  button.disabled = true;
+  el('btn-cancel').disabled = true;
+  document.querySelector('.content-area').inert = true;
   try {
-    if (window.goSaveConfig) {
-      const err = await window.goSaveConfig(JSON.stringify(cfg));
-      if (err) {
-        showToast('Error saving: ' + err, true);
-        return;
-      }
-    }
-    showToast('Settings saved successfully!');
+    await previewInFlight;
+    const cfg = collectConfigFromUI();
+    await window.goSaveConfig(JSON.stringify(cfg));
+    currentConfig = cfg;
+    showToast(t('settings.dialog.savedMsg'));
   } catch (err) {
-    showToast('Failed to save settings: ' + err, true);
+    showToast(format('error.settings.saveFailed', err), true);
+  } finally {
+    button.disabled = false;
+    el('btn-cancel').disabled = false;
+    document.querySelector('.content-area').inert = false;
   }
 });
-
-// Close Button
-document.getElementById('btn-cancel').addEventListener('click', () => {
-  if (window.goCloseSettings) {
-    window.goCloseSettings();
+el('btn-cancel').addEventListener('click', async () => {
+  clearTimeout(previewTimer);
+  el('btn-cancel').disabled = true;
+  await previewInFlight;
+  try { await window.goCloseSettings(); }
+  catch (err) {
+    el('btn-cancel').disabled = false;
+    showToast(format('settings.windows.error', err), true);
   }
 });
-
-// Test Connection Button
-document.getElementById('btn-test-connection').addEventListener('click', async () => {
-  const provider = document.getElementById('sel-provider').value;
-  const apiKey = document.getElementById('input-api-key').value.trim();
-  const resSpan = document.getElementById('test-result');
-
-  resSpan.textContent = 'Testing connection...';
-  resSpan.style.color = 'var(--text-muted)';
-
-  if (window.goTestConnection) {
-    try {
-      const res = await window.goTestConnection(provider, apiKey);
-      if (res === 'ok' || !res) {
-        resSpan.textContent = '✓ Connection successful!';
-        resSpan.style.color = '#2ecc71';
-      } else {
-        resSpan.textContent = '✗ ' + res;
-        resSpan.style.color = '#ff6b6b';
-      }
-    } catch (e) {
-      resSpan.textContent = '✗ Error: ' + e;
-      resSpan.style.color = '#ff6b6b';
-    }
-  } else {
-    setTimeout(() => {
-      resSpan.textContent = '✓ Connection verified';
-      resSpan.style.color = '#2ecc71';
-    }, 500);
+el('btn-test-connection').addEventListener('click', async () => {
+  const result = el('test-result');
+  result.textContent = t('settings.provider.checkingConnection');
+  try {
+    await window.goTestConnection(JSON.stringify(collectConfigFromUI()));
+    result.textContent = t('settings.provider.connectionSuccessTitle');
+  } catch (err) {
+    result.textContent = format('error.settings.connectionFailed', err);
   }
 });
-
-// Autostart toggle
-document.getElementById('chk-autostart').addEventListener('change', async (e) => {
-  if (window.goSetAutoStart) {
+el('chk-autostart').addEventListener('change', async e => {
+  try {
     await window.goSetAutoStart(e.target.checked);
+  } catch (err) {
+    e.target.checked = !e.target.checked;
+    showToast(format('error.settings.autoStartFailed', err), true);
   }
 });
-
-// Escape HTML helper
-function escapeHtml(str) {
-  return str.replace(/[&<>'"]/g, 
-    tag => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[tag] || tag)
-  );
-}
-
-// Initialize on window load
 window.addEventListener('DOMContentLoaded', async () => {
-  if (window.goGetConfig) {
-    try {
-      const json = await window.goGetConfig();
-      const cfg = JSON.parse(json);
-      populateUI(cfg);
-    } catch (e) {
-      console.error('Failed to load initial config', e);
-    }
-  }
-  if (window.goGetAutoStart) {
-    try {
-      const enabled = await window.goGetAutoStart();
-      document.getElementById('chk-autostart').checked = !!enabled;
-    } catch (e) {
-      console.error(e);
-    }
+  try {
+    const [json, locales, monitors, autostart] = await Promise.all([
+      window.goGetConfig(), window.goGetLocales(), window.goGetMonitors(), window.goGetAutoStart()
+    ]);
+    renderLanguages(locales);
+    for (let i = 0; i < monitors; i++) el('sel-monitor').add(new Option(String(i + 1), String(i)));
+    populateUI(JSON.parse(json));
+    el('chk-autostart').checked = autostart;
+    await applyLanguage(selectedLocale);
+  } catch (err) {
+    showToast(format('settings.windows.error', err), true);
   }
 });
