@@ -14,6 +14,7 @@
   "settings.windows.query": "Requête météo",
   "settings.windows.support": "Assistance",
   "settings.windows.autofillRequired": "Saisissez la ville et le pays, puis utilisez le remplissage automatique.",
+  "settings.windows.apply": "Appliquer",
   "settings.windows.error": "Erreur : %v",
   "_locale.code": "fr-FR",
   "_locale.displayName": "Français (FR)",

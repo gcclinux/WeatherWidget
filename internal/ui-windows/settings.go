@@ -34,6 +34,14 @@ var (
 	openingWV  bool
 )
 
+// nativeLocaleNames supplies native-script names for locales whose embedded
+// display name is not in that language.
+var nativeLocaleNames = map[string]string{
+	"ta-IN": "தமிழ் (IN)",
+	"ja-JP": "日本語 (JP)",
+	"zh-CN": "中文 (CN)",
+}
+
 type settingsLocale struct {
 	Code        string
 	DisplayName string
@@ -60,8 +68,8 @@ func (m *Manager) OpenSettings() {
 			AutoFocus: true,
 			WindowOptions: webview2.WindowOptions{
 				Title:  "WeatherWidget Settings",
-				Width:  860,
-				Height: 640,
+				Width:  1150,
+				Height: 724,
 			},
 		})
 		if wv == nil {
@@ -77,7 +85,15 @@ func (m *Manager) OpenSettings() {
 		openingWV = false
 		settingsMu.Unlock()
 
+		origX, origY := 0, 0
+		if m.widget != nil {
+			origX, origY = m.widget.GetPosition()
+		}
+		saved := false
 		defer func() {
+			if !saved && m.widget != nil {
+				m.widget.SetPosition(origX, origY)
+			}
 			m.clearSettingsPreview()
 			settingsMu.Lock()
 			activeWV = nil
@@ -106,7 +122,24 @@ func (m *Manager) OpenSettings() {
 			if err := json.Unmarshal([]byte(jsonStr), &newCfg); err != nil {
 				return fmt.Errorf("invalid config: %w", err)
 			}
-			return m.saveSettings(&newCfg)
+			if err := m.saveSettings(&newCfg); err != nil {
+				return err
+			}
+			saved = true
+			return nil
+		})
+
+		bind("goGetPosition", func() []int {
+			if m.widget == nil {
+				return []int{0, 0}
+			}
+			x, y := m.widget.GetPosition()
+			return []int{x, y}
+		})
+		bind("goMoveWidget", func(x, y int) {
+			if m.widget != nil {
+				m.widget.SetPosition(x, y)
+			}
 		})
 
 		bind("goGetLocales", func() ([]settingsLocale, error) {
@@ -122,7 +155,11 @@ func (m *Manager) OpenSettings() {
 				if err != nil {
 					return nil, fmt.Errorf("load flag for %s: %w", locale.Code, err)
 				}
-				result = append(result, settingsLocale{locale.Code, locale.DisplayName, "data:image/png;base64," + base64.StdEncoding.EncodeToString(flag)})
+				name := locale.DisplayName
+				if native, ok := nativeLocaleNames[locale.Code]; ok {
+					name = native
+				}
+				result = append(result, settingsLocale{locale.Code, name, "data:image/png;base64," + base64.StdEncoding.EncodeToString(flag)})
 			}
 			return result, nil
 		})

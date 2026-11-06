@@ -14,6 +14,7 @@
   "settings.windows.query": "天气查询",
   "settings.windows.support": "支持",
   "settings.windows.autofillRequired": "输入城市和国家，然后使用自动填充。",
+  "settings.windows.apply": "应用",
   "settings.windows.error": "错误：%v",
   "_locale.code": "zh-CN",
   "_locale.displayName": "Chinese",

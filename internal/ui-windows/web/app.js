@@ -84,6 +84,7 @@ const translationTargets = {
   '#tab-appearance .setting-row:nth-last-child(2) .setting-hint': 'settings.windspeed.subtitle',
   '#tab-appearance .setting-row:last-child .setting-label': 'settings.position.title',
   '#tab-appearance .setting-row:last-child .setting-hint': 'settings.position.subtitle',
+  '#btn-pos-apply': 'settings.windows.apply',
   '#sel-corner option[value="top-left"]': 'settings.position.topLeft',
   '#sel-corner option[value="top-right"]': 'settings.position.topRight',
   '#sel-corner option[value="bottom-left"]': 'settings.position.bottomLeft',
@@ -124,7 +125,7 @@ async function applyLanguage(locale) {
     'settings.dialog.savedMsg', 'settings.provider.checkingConnection', 'settings.provider.connectionSuccessTitle',
     'error.settings.cityNameRequiredSearch', 'error.settings.regionRequiredEww', 'error.settings.apiKeyRequired',
     'error.settings.searchFailed', 'error.settings.saveFailed', 'error.settings.connectionFailed',
-    'error.settings.autoStartFailed', 'settings.windows.autofillRequired', 'settings.windows.error'];
+    'error.settings.autoStartFailed', 'settings.windows.autofillRequired', 'settings.windows.error', 'settings.windows.apply'];
   const values = await window.goGetTranslations(locale, keys);
   translations = values;
   document.documentElement.lang = locale;
@@ -344,6 +345,32 @@ function renderLanguages(locales) {
   updateLanguageSelection();
 }
 
+let customPos = null;
+
+async function moveWidgetTo(x, y) {
+  if (!Number.isFinite(x) || !Number.isFinite(y)) return;
+  x = Math.round(x); y = Math.round(y);
+  try {
+    await window.goMoveWidget(x, y);
+    customPos = {x, y};
+    el('pos-x').value = x;
+    el('pos-y').value = y;
+  } catch (err) { showToast(format('settings.windows.error', err), true); }
+}
+
+function currentPos() {
+  return [parseInt(el('pos-x').value, 10), parseInt(el('pos-y').value, 10)];
+}
+el('btn-pos-apply').addEventListener('click', () => moveWidgetTo(...currentPos()));
+['pos-x', 'pos-y'].forEach(id => el(id).addEventListener('keydown', e => {
+  if (e.key === 'Enter') moveWidgetTo(...currentPos());
+}));
+document.querySelectorAll('.btn-nudge').forEach(button => button.addEventListener('click', () => {
+  const [x, y] = currentPos();
+  moveWidgetTo(x + Number(button.dataset.dx), y + Number(button.dataset.dy));
+}));
+['sel-corner', 'sel-monitor'].forEach(id => el(id).addEventListener('change', () => { customPos = null; }));
+
 function collectConfigFromUI() {
   const cfg = structuredClone(currentConfig);
   cfg.viewMode = el('sel-view-mode').value;
@@ -356,6 +383,10 @@ function collectConfigFromUI() {
   if (cfg.cornerPosition !== currentConfig.cornerPosition || cfg.monitorIndex !== currentConfig.monitorIndex) {
     delete cfg.customX;
     delete cfg.customY;
+  }
+  if (customPos) {
+    cfg.customX = customPos.x;
+    cfg.customY = customPos.y;
   }
 
   cfg.iconTheme = el('sel-icon-theme').value;
@@ -450,6 +481,9 @@ window.addEventListener('DOMContentLoaded', async () => {
     for (let i = 0; i < monitors; i++) el('sel-monitor').add(new Option(String(i + 1), String(i)));
     populateUI(JSON.parse(json));
     el('chk-autostart').checked = autostart;
+    const [px, py] = await window.goGetPosition();
+    el('pos-x').value = px;
+    el('pos-y').value = py;
     await applyLanguage(selectedLocale);
   } catch (err) {
     showToast(format('settings.windows.error', err), true);

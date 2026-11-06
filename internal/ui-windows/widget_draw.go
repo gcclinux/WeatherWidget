@@ -11,6 +11,8 @@ import (
 	"image/png"
 	"log"
 	"math"
+	"os"
+	"path/filepath"
 	"sync"
 	"time"
 
@@ -78,6 +80,14 @@ func NewWidgetDrawer() *WidgetDrawer {
 		}
 		if err != nil {
 			log.Printf("uiwindows: failed to load font %s: %v", path, err)
+		}
+	}
+	// Segoe UI Symbol supplies glyphs such as ✓ and ⚠ used by ticker messages.
+	if dir := os.Getenv("WINDIR"); dir != "" {
+		if data, err := os.ReadFile(filepath.Join(dir, "Fonts", "seguisym.ttf")); err == nil {
+			if f, err := opentype.Parse(data); err == nil {
+				wd.fallbackFonts = append(wd.fallbackFonts, f)
+			}
 		}
 	}
 

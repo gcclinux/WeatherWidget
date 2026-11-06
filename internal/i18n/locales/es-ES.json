@@ -14,6 +14,7 @@
   "settings.windows.query": "Consulta meteorológica",
   "settings.windows.support": "Ayuda",
   "settings.windows.autofillRequired": "Introduce ciudad y país y usa Autocompletar.",
+  "settings.windows.apply": "Aplicar",
   "settings.windows.error": "Error: %v",
   "_locale.code": "es-ES",
   "_locale.displayName": "Español (ES)",

@@ -152,6 +152,19 @@
             </select>
           </div>
         </div>
+        <div class="card position-card">
+          <div class="position-row">
+            <label for="pos-x">X:</label><input id="pos-x" type="number" class="input-text pos-input">
+            <label for="pos-y">Y:</label><input id="pos-y" type="number" class="input-text pos-input">
+            <div class="pos-nudge">
+              <button type="button" class="btn-nudge" data-dx="-10" data-dy="0">◄</button>
+              <button type="button" class="btn-nudge" data-dx="0" data-dy="-10">▲</button>
+              <button type="button" class="btn-nudge" data-dx="0" data-dy="10">▼</button>
+              <button type="button" class="btn-nudge" data-dx="10" data-dy="0">►</button>
+            </div>
+            <button type="button" id="btn-pos-apply" class="btn btn-primary"></button>
+          </div>
+        </div>
       </section>
 
       <section id="tab-language" class="tab-pane">
@@ -272,7 +285,7 @@
             <div>
               <div class="about-name">WeatherWidget</div>
               <div class="about-version" id="about-version">Win32 &amp; WebView2</div>
-              <div class="about-copyright">© 2026 Ricardo Wagemaker. All rights reserved.</div>
+              <div class="about-copyright">© 2026 EasySmartApps Ltd. All rights reserved.</div>
             </div>
           </div>
 

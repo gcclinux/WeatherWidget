@@ -14,6 +14,7 @@
   "settings.windows.query": "Wetterabfrage",
   "settings.windows.support": "Support",
   "settings.windows.autofillRequired": "Stadt und Land eingeben und automatisch ausfüllen.",
+  "settings.windows.apply": "Übernehmen",
   "settings.windows.error": "Fehler: %v",
   "_locale.code": "de-DE",
   "_locale.displayName": "Deutsch (DE)",

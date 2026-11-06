@@ -14,6 +14,7 @@
   "settings.windows.query": "Weather query",
   "settings.windows.support": "Support",
   "settings.windows.autofillRequired": "Enter a city and country, then use Auto-Fill.",
+  "settings.windows.apply": "Apply",
   "settings.windows.error": "Error: %v",
   "_locale.code": "en-GB",
   "_locale.displayName": "English (UK)",

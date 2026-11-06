@@ -14,6 +14,7 @@
   "settings.windows.query": "Weerquery",
   "settings.windows.support": "Ondersteuning",
   "settings.windows.autofillRequired": "Vul stad en land in en gebruik automatisch invullen.",
+  "settings.windows.apply": "Toepassen",
   "settings.windows.error": "Fout: %v",
   "_locale.code": "nl-NL",
   "_locale.displayName": "Nederlands (NL)",

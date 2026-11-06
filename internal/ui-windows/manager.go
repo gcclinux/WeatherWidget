@@ -244,7 +244,7 @@ func (m *Manager) redraw() {
 
 // startClockLoop updates clocks and animates the ticker and original icon set.
 func (m *Manager) startClockLoop() {
-	ticker := time.NewTicker(100 * time.Millisecond)
+	ticker := time.NewTicker(33 * time.Millisecond)
 	defer ticker.Stop()
 
 	var lastSecond int64

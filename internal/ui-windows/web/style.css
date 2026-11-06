@@ -229,6 +229,17 @@ body {
 }
 
 /* Buttons */
+.position-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.pos-input { width: 90px; }
+.pos-nudge { display: flex; gap: 6px; margin-left: 6px; }
+.btn-nudge {
+  width: 34px; height: 32px; border-radius: var(--radius-sm); cursor: pointer;
+  background-color: rgba(255, 255, 255, 0.08); color: var(--text-main);
+  border: 1px solid var(--border-card);
+}
+.btn-nudge:hover { background-color: rgba(255, 255, 255, 0.16); }
+.position-row .btn-primary { margin-left: 6px; }
+
 .btn {
   padding: 8px 16px;
   border-radius: var(--radius-sm);

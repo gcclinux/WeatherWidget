@@ -14,6 +14,7 @@
   "settings.windows.query": "Hava durumu sorgusu",
   "settings.windows.support": "Destek",
   "settings.windows.autofillRequired": "Şehir ve ülke girip otomatik doldurmayı kullanın.",
+  "settings.windows.apply": "Uygula",
   "settings.windows.error": "Hata: %v",
   "_locale.code": "tr-TR",
   "_locale.displayName": "Türkçe (TR)",

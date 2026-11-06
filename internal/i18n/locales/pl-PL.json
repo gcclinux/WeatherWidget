@@ -14,6 +14,7 @@
   "settings.windows.query": "Zapytanie pogodowe",
   "settings.windows.support": "Pomoc",
   "settings.windows.autofillRequired": "Wpisz miasto i kraj, a następnie użyj autouzupełniania.",
+  "settings.windows.apply": "Zastosuj",
   "settings.windows.error": "Błąd: %v",
   "_locale.code": "pl-PL",
   "_locale.displayName": "Polski (PL)",

@@ -14,6 +14,7 @@
   "settings.windows.query": "天気クエリ",
   "settings.windows.support": "サポート",
   "settings.windows.autofillRequired": "都市と国を入力し、自動入力を使用してください。",
+  "settings.windows.apply": "適用",
   "settings.windows.error": "エラー: %v",
   "_locale.code": "ja-JP",
   "_locale.displayName": "Japanese",
