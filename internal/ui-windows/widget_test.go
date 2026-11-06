@@ -155,3 +155,61 @@ func TestWidgetDrawerRender(t *testing.T) {
 		t.Errorf("simple layout did not expand for larger fonts: default %v, larger %v", imgSimple.Bounds(), larger.Bounds())
 	}
 }
+
+func TestWidgetUpdateSurfaceScaled(t *testing.T) {
+	w, err := NewWidget(nil, nil)
+	if err != nil {
+		t.Fatalf("NewWidget failed: %v", err)
+	}
+	defer w.Destroy()
+
+	testImg := image.NewRGBA(image.Rect(0, 0, 100, 100))
+	for y := 0; y < 100; y++ {
+		for x := 0; x < 100; x++ {
+			testImg.SetRGBA(x, y, color.RGBA{R: 50, G: 100, B: 150, A: 255})
+		}
+	}
+
+	// 1:1 scale
+	w.UpdateSurfaceScaled(testImg, 1.0)
+	if w.width != 100 || w.height != 100 {
+		t.Errorf("expected 100x100 at 1.0 scale, got %dx%d", w.width, w.height)
+	}
+
+	// 2.0x scale (DPI = 192 / 200%)
+	w.UpdateSurfaceScaled(testImg, 2.0)
+	if w.width != 200 || w.height != 200 {
+		t.Errorf("expected 200x200 at 2.0 scale, got %dx%d", w.width, w.height)
+	}
+
+	// 1.5x scale (DPI = 144 / 150%)
+	w.UpdateSurfaceScaled(testImg, 1.5)
+	if w.width != 150 || w.height != 150 {
+		t.Errorf("expected 150x150 at 1.5 scale, got %dx%d", w.width, w.height)
+	}
+}
+
+func TestManagerGetEffectiveScale(t *testing.T) {
+	m := &Manager{
+		cfg: config.DefaultConfig(),
+	}
+
+	// Default: widgetScale is 0 (auto), falls back to DPI scaling (>= 1.0)
+	scale := m.getEffectiveScale()
+	if scale < 1.0 {
+		t.Errorf("expected auto scale >= 1.0, got %f", scale)
+	}
+
+	// Explicit override in config: 150%
+	m.cfg.WidgetScale = 150
+	if s := m.getEffectiveScale(); s != 1.5 {
+		t.Errorf("expected 1.5 for 150%%, got %f", s)
+	}
+
+	// Explicit override in preview: 200%
+	m.preview = config.DefaultConfig()
+	m.preview.WidgetScale = 200
+	if s := m.getEffectiveScale(); s != 2.0 {
+		t.Errorf("expected 2.0 for preview 200%%, got %f", s)
+	}
+}

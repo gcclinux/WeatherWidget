@@ -4,11 +4,13 @@ package uiwindows
 
 import (
 	"context"
+	"crypto/rand"
 	"embed"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"log"
+	"os/exec"
 	"reflect"
 	"runtime"
 	"strings"
@@ -20,8 +22,69 @@ import (
 	"weatherwidget/internal/config"
 	"weatherwidget/internal/i18n"
 	"weatherwidget/internal/weather"
-	"weatherwidget/internal/weather/database"
 )
+
+// ewwAPIKeyLen is the expected length of an EasyWeatherWidget API key (UUID v4).
+const ewwAPIKeyLen = 36
+
+const stripeProPaymentURL = "https://buy.stripe.com/bJe3cvaJOa650fQ8cPdZ603?client_reference_id="
+
+// generateClientReferenceID creates a random UUID v4 string (e.g. "f169fecc-de0c-4de1-b8c8-4ec3701b671c")
+// to be used as a unique client_reference_id for Stripe payment links.
+func generateClientReferenceID() string {
+	var uuid [16]byte
+	_, _ = rand.Read(uuid[:])
+	uuid[6] = (uuid[6] & 0x0f) | 0x40
+	uuid[8] = (uuid[8] & 0x3f) | 0x80
+	return fmt.Sprintf("%08x-%04x-%04x-%04x-%012x",
+		uuid[0:4], uuid[4:6], uuid[6:8], uuid[8:10], uuid[10:16])
+}
+
+func openBrowserURL(urlStr string) error {
+	if !strings.HasPrefix(urlStr, "https://") && !strings.HasPrefix(urlStr, "http://") {
+		return fmt.Errorf("unsupported URL scheme")
+	}
+	return exec.Command("rundll32", "url.dll,FileProtocolHandler", urlStr).Start()
+}
+
+// activateProKey ensures a 36-character UUID v4 Pro API key is set on the
+// configuration for EasyWeatherWidget, immediately persists it to config.json,
+// and switches the active weather provider.
+func (m *Manager) activateProKey(currentKey string) (string, error) {
+	m.saveMu.Lock()
+	defer m.saveMu.Unlock()
+
+	clientRef := strings.TrimSpace(currentKey)
+	if len(clientRef) != ewwAPIKeyLen {
+		clientRef = generateClientReferenceID()
+	}
+
+	m.mu.Lock()
+	if m.cfg == nil {
+		m.cfg = config.DefaultConfig()
+	}
+	cfgCopy := *m.cfg
+	cfgCopy.DataSource = config.DataSourceRemoteAPI
+	cfgCopy.DatabaseConfig = nil
+	cfgCopy.APIConfig = &config.APIConfig{
+		Provider: "easyweatherwidget",
+		APIKey:   clientRef,
+	}
+	m.cfg = &cfgCopy
+	m.mu.Unlock()
+
+	if m.cfgSvc != nil {
+		if err := m.cfgSvc.Save(&cfgCopy); err != nil {
+			return "", err
+		}
+	}
+	if m.weatherSvc != nil {
+		if provider, err := m.buildProvider(&cfgCopy); err == nil {
+			m.weatherSvc.SwitchProvider(provider)
+		}
+	}
+	return clientRef, nil
+}
 
 // webFS embeds the HTML, CSS, and JS files for the Settings window.
 //
@@ -48,6 +111,68 @@ type settingsLocale struct {
 	Flag        string
 }
 
+// computeSettingsWindowBounds calculates the initial Settings window size and
+// placement. On standard 96-DPI displays (scale <= 1.0), it preserves the exact
+// 1150x724 size and default OS placement so normal 100%-scale physical systems
+// are completely unaffected. On high-DPI displays (scale > 1.0, such as Retina
+// VMs at 192 DPI / 200%), it scales the window proportionally to the monitor
+// DPI and centers it within the monitor's work area (above the taskbar).
+func computeSettingsWindowBounds(dpi, monLeft, monTop, monWidth, monHeight int) (width, height uint, center bool, posX, posY int) {
+	const (
+		defaultWidth  = 1150
+		defaultHeight = 724
+	)
+
+	if dpi <= 96 {
+		return defaultWidth, defaultHeight, false, 0, 0
+	}
+
+	scale := float64(dpi) / 96.0
+	w := int(float64(1080)*scale + 0.5)
+	h := int(float64(790)*scale + 0.5)
+
+	if monWidth > 160 && w > monWidth-120 {
+		w = monWidth - 120
+	}
+	if monHeight > 120 && h > monHeight-80 {
+		h = monHeight - 80
+	}
+	if w < defaultWidth {
+		w = defaultWidth
+	}
+	if h < defaultHeight {
+		h = defaultHeight
+	}
+
+	x := monLeft + (monWidth-w)/2
+	y := monTop + (monHeight-h)/2
+	if x < monLeft {
+		x = monLeft
+	}
+	if y < monTop {
+		y = monTop
+	}
+
+	return uint(w), uint(h), true, x, y
+}
+
+func (m *Manager) settingsWindowBounds() (width, height uint, center bool, posX, posY int) {
+	var hwnd uintptr
+	monIdx := 0
+	m.mu.Lock()
+	if m.widget != nil {
+		hwnd = m.widget.hwnd
+	}
+	if m.cfg != nil {
+		monIdx = m.cfg.MonitorIndex
+	}
+	m.mu.Unlock()
+
+	dpi := GetWindowDPI(hwnd)
+	monLeft, monTop, monWidth, monHeight := getMonitorBounds(monIdx)
+	return computeSettingsWindowBounds(dpi, monLeft, monTop, monWidth, monHeight)
+}
+
 // OpenSettings opens the Edge WebView2 settings dialog.
 func (m *Manager) OpenSettings() {
 	settingsMu.Lock()
@@ -62,14 +187,17 @@ func (m *Manager) OpenSettings() {
 		runtime.LockOSThread()
 		defer runtime.UnlockOSThread()
 
+		winW, winH, centerWin, winX, winY := m.settingsWindowBounds()
+
 		wv := webview2.NewWithOptions(webview2.WebViewOptions{
 			Debug:     false,
 			DataPath:  m.appDataDir,
 			AutoFocus: true,
 			WindowOptions: webview2.WindowOptions{
 				Title:  "WeatherWidget Settings",
-				Width:  1150,
-				Height: 724,
+				Width:  winW,
+				Height: winH,
+				Center: centerWin,
 			},
 		})
 		if wv == nil {
@@ -78,6 +206,20 @@ func (m *Manager) OpenSettings() {
 			settingsMu.Unlock()
 			log.Println("uiwindows: failed to initialize WebView2 settings window")
 			return
+		}
+
+		if centerWin {
+			if wvHwnd := uintptr(wv.Window()); wvHwnd != 0 {
+				procSetWindowPos.Call(
+					wvHwnd,
+					0,
+					uintptr(winX),
+					uintptr(winY),
+					0,
+					0,
+					swpNoSize|swpNoZOrder|swpNoActivate,
+				)
+			}
 		}
 
 		settingsMu.Lock()
@@ -210,16 +352,27 @@ func (m *Manager) OpenSettings() {
 			if err := json.Unmarshal([]byte(jsonStr), &cfg); err != nil {
 				return fmt.Errorf("invalid configuration: %w", err)
 			}
-			adapter, db, err := m.buildProvider(&cfg)
+			adapter, err := m.buildProvider(&cfg)
 			if err != nil {
 				return err
-			}
-			if db != nil {
-				defer db.Close()
 			}
 			ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
 			defer cancel()
 			return adapter.TestConnection(ctx)
+		})
+
+		bind("goGetProAPI", func(currentKey string) (string, error) {
+			clientRef, err := m.activateProKey(currentKey)
+			if err != nil {
+				return "", err
+			}
+			saved = true
+			_ = openBrowserURL(stripeProPaymentURL + clientRef)
+			return clientRef, nil
+		})
+
+		bind("goOpenURL", func(urlStr string) error {
+			return openBrowserURL(urlStr)
 		})
 
 		bind("goGetAutoStart", func() bool {
@@ -258,9 +411,13 @@ func (m *Manager) saveSettings(cfg *config.Config) error {
 	if cfg.RefreshInterval <= 0 {
 		return invalid("settings.interval.title")
 	}
-	if cfg.DataSource != config.DataSourceRemoteAPI && cfg.DataSource != config.DataSourceLocalDatabase {
+	if cfg.DataSource == "" {
+		cfg.DataSource = config.DataSourceRemoteAPI
+	}
+	if cfg.DataSource != config.DataSourceRemoteAPI {
 		return invalid("settings.windows.dataSource")
 	}
+	cfg.DatabaseConfig = nil
 	if cfg.Opacity < 25 || cfg.Opacity > 100 {
 		return invalid("settings.transparency.title")
 	}
@@ -269,9 +426,6 @@ func (m *Manager) saveSettings(cfg *config.Config) error {
 	}
 	if errs := config.Validate(cfg, lm.T); len(errs) != 0 {
 		return errs[0]
-	}
-	if cfg.DataSource == config.DataSourceLocalDatabase && strings.TrimSpace(cfg.DatabaseConfig.Query) == "" {
-		return fmt.Errorf("%s: %s", lm.T("settings.windows.query"), lm.T("settings.windows.required"))
 	}
 	if !cfg.HasLicense() && !reflect.DeepEqual(cfg.Cities, config.DefaultCities()) {
 		return fmt.Errorf("%s", lm.T("error.settings.licenseRequired"))
@@ -287,27 +441,19 @@ func (m *Manager) saveSettings(cfg *config.Config) error {
 	m.mu.Lock()
 	old := m.cfg
 	m.mu.Unlock()
-	providerChanged := old.DataSource != cfg.DataSource || !reflect.DeepEqual(old.APIConfig, cfg.APIConfig) || !reflect.DeepEqual(old.DatabaseConfig, cfg.DatabaseConfig)
+	providerChanged := old.DataSource != cfg.DataSource || !reflect.DeepEqual(old.APIConfig, cfg.APIConfig)
 	var newProvider weather.WeatherProvider
-	var newDB *database.DatabaseAdapter
 	if providerChanged {
-		newProvider, newDB, err = m.buildProvider(cfg)
+		newProvider, err = m.buildProvider(cfg)
 		if err != nil {
 			return fmt.Errorf("%s: %w", lm.T("settings.provider.title"), err)
 		}
 	}
 	if err := m.cfgSvc.Save(cfg); err != nil {
-		if newDB != nil {
-			newDB.Close()
-		}
 		return fmt.Errorf(lm.T("error.settings.saveFailed"), err)
 	}
 	if providerChanged && m.weatherSvc != nil {
 		m.weatherSvc.SwitchProvider(newProvider)
-		if m.dbAdapter != nil {
-			m.dbAdapter.Close()
-		}
-		m.dbAdapter = newDB
 	}
 	m.redrawMu.Lock()
 	m.mu.Lock()

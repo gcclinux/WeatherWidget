@@ -5,10 +5,7 @@ package uiwindows
 import (
 	"fmt"
 	"log"
-	"net"
-	"net/url"
 	"runtime"
-	"strconv"
 	"sync"
 	"time"
 	"unsafe"
@@ -19,7 +16,6 @@ import (
 	"weatherwidget/internal/power"
 	"weatherwidget/internal/scheduler"
 	"weatherwidget/internal/weather"
-	"weatherwidget/internal/weather/database"
 	"weatherwidget/internal/weather/remoteapi"
 )
 
@@ -27,7 +23,28 @@ var (
 	procGetMessageW      = user32.NewProc("GetMessageW")
 	procTranslateMessage = user32.NewProc("TranslateMessage")
 	procDispatchMessageW = user32.NewProc("DispatchMessageW")
+
+	procSetProcessDpiAwarenessContext = user32.NewProc("SetProcessDpiAwarenessContext")
+	procSetProcessDPIAware            = user32.NewProc("SetProcessDPIAware")
 )
+
+func initDPIAwareness() {
+	if procSetProcessDpiAwarenessContext.Find() == nil {
+		const dpiAwarenessContextPerMonitorAwareV2 = ^uintptr(3) // -4
+		ret, _, _ := procSetProcessDpiAwarenessContext.Call(dpiAwarenessContextPerMonitorAwareV2)
+		if ret != 0 {
+			return
+		}
+		const dpiAwarenessContextPerMonitorAware = ^uintptr(2) // -3
+		ret, _, _ = procSetProcessDpiAwarenessContext.Call(dpiAwarenessContextPerMonitorAware)
+		if ret != 0 {
+			return
+		}
+	}
+	if procSetProcessDPIAware.Find() == nil {
+		procSetProcessDPIAware.Call()
+	}
+}
 
 // msg mirrors the Win32 MSG structure.
 type msg struct {
@@ -47,7 +64,6 @@ type Manager struct {
 	preview    *config.Config
 	lm         *i18n.LocaleManager
 	weatherSvc *weather.WeatherService
-	dbAdapter  *database.DatabaseAdapter
 	sched      *scheduler.RefreshScheduler
 	guard      *guard.SingleInstanceGuard
 
@@ -72,6 +88,7 @@ type Manager struct {
 func init() {
 	// Lock the main goroutine to the main OS thread for Win32 GUI message pump.
 	runtime.LockOSThread()
+	initDPIAwareness()
 }
 
 // Run is the public entry point for the native Windows UI layer.
@@ -118,6 +135,9 @@ func Run(appDataDir string, openSettings bool) error {
 		log.Printf("uiwindows: failed to create desktop widget window: %v", err)
 	} else {
 		m.widget = widget
+		m.widget.SetOnDPIChanged(func() {
+			m.redraw()
+		})
 		defer m.widget.Destroy()
 
 		// Rendering establishes the dimensions before placement.
@@ -132,11 +152,10 @@ func Run(appDataDir string, openSettings bool) error {
 	go m.startClockLoop()
 
 	// 6. Initialize weather service and scheduler.
-	provider, dbAdapter, err := m.buildProvider(cfg)
+	provider, err := m.buildProvider(cfg)
 	if err != nil {
 		return fmt.Errorf("create weather provider: %w", err)
 	}
-	m.dbAdapter = dbAdapter
 	m.weatherSvc = weather.NewWeatherService(provider)
 
 	interval := time.Duration(cfg.RefreshInterval) * time.Minute
@@ -202,6 +221,34 @@ func Run(appDataDir string, openSettings bool) error {
 	return nil
 }
 
+// getEffectiveScale calculates the scaling multiplier for the widget window.
+// If WidgetScale is configured (> 0), it uses that explicit percentage.
+// Otherwise (Auto/0), it returns the monitor's DPI scale factor (dpi / 96.0).
+func (m *Manager) getEffectiveScale() float64 {
+	m.mu.Lock()
+	cfgScale := 0
+	if m.preview != nil {
+		cfgScale = m.preview.GetWidgetScale()
+	} else if m.cfg != nil {
+		cfgScale = m.cfg.GetWidgetScale()
+	}
+	var hwnd uintptr
+	if m.widget != nil {
+		hwnd = m.widget.hwnd
+	}
+	m.mu.Unlock()
+
+	if cfgScale > 0 {
+		return float64(cfgScale) / 100.0
+	}
+
+	dpi := GetWindowDPI(hwnd)
+	if dpi <= 0 {
+		dpi = 96
+	}
+	return float64(dpi) / 96.0
+}
+
 // redraw renders all cards and updates the layered window surface.
 func (m *Manager) redraw() {
 	m.redrawMu.Lock()
@@ -233,10 +280,18 @@ func (m *Manager) redraw() {
 	m.resultsMu.Unlock()
 
 	img := m.drawer.Render(cities, res, &cfgCopy, m.lm, time.Now())
+	scale := m.getEffectiveScale()
+	if scale <= 0 {
+		scale = 1.0
+	}
+	targetW := int(float64(img.Bounds().Dx())*scale + 0.5)
+	targetH := int(float64(img.Bounds().Dy())*scale + 0.5)
+
 	m.widget.mu.Lock()
-	resized := m.widget.width != img.Bounds().Dx() || m.widget.height != img.Bounds().Dy()
+	resized := m.widget.width != targetW || m.widget.height != targetH
 	m.widget.mu.Unlock()
-	m.widget.UpdateSurface(img)
+
+	m.widget.UpdateSurfaceScaled(img, scale)
 	if resized {
 		m.widget.ApplyPlacement(cfgCopy.CustomX, cfgCopy.CustomY, cfgCopy.CornerPosition, cfgCopy.MonitorIndex)
 	}
@@ -308,20 +363,7 @@ func (m *Manager) onWidgetContextMenu() {
 }
 
 // buildProvider creates a WeatherProvider based on the config.
-func (m *Manager) buildProvider(cfg *config.Config) (weather.WeatherProvider, *database.DatabaseAdapter, error) {
-	if cfg.DataSource == config.DataSourceLocalDatabase {
-		if cfg.DatabaseConfig == nil {
-			return nil, nil, fmt.Errorf("database configuration is required")
-		}
-		db := cfg.DatabaseConfig
-		conn := url.URL{Scheme: "postgres", User: url.UserPassword(db.Username, db.Password),
-			Host: net.JoinHostPort(db.Host, strconv.Itoa(db.Port)), Path: "/" + db.DBName}
-		adapter, err := database.NewDatabaseAdapter(conn.String(), db.Query)
-		if err != nil {
-			return nil, nil, err
-		}
-		return adapter, adapter, nil
-	}
+func (m *Manager) buildProvider(cfg *config.Config) (weather.WeatherProvider, error) {
 	provider := "easyweatherwidget"
 	apiKey := ""
 	if cfg.APIConfig != nil {
@@ -333,7 +375,7 @@ func (m *Manager) buildProvider(cfg *config.Config) (weather.WeatherProvider, *d
 	if apiKey == "" {
 		provider = "openmeteo"
 	}
-	return remoteapi.NewRemoteAPIAdapter(provider, apiKey), nil, nil
+	return remoteapi.NewRemoteAPIAdapter(provider, apiKey), nil
 }
 
 // t translates a localization key.

@@ -128,45 +128,82 @@ func TestSettingsPreviewRollback(t *testing.T) {
 	}
 }
 
-func TestSettingsSwitchDatabaseProvider(t *testing.T) {
+func TestSettingsSwitchRemoteProviderAndRejectDatabase(t *testing.T) {
 	cfg := config.DefaultConfig()
 	service := config.NewConfigService(t.TempDir())
 	m := &Manager{cfg: cfg, cfgSvc: service, weatherSvc: weather.NewWeatherService(nil)}
-	next := *cfg
-	next.DataSource = config.DataSourceLocalDatabase
-	next.RefreshInterval = 30
-	next.DatabaseConfig = &config.DatabaseConfig{
-		Host: "127.0.0.1", Port: 5432, DBName: "weather", Username: "user", Password: "p@ss:/word",
-		Query: "SELECT temperature FROM weather WHERE city = $1",
-	}
-	invalid := next
-	invalidDB := *next.DatabaseConfig
-	invalidDB.Query = " "
-	invalid.DatabaseConfig = &invalidDB
+
+	// Reject local_database data source since only Remote API providers are supported.
+	invalid := *cfg
+	invalid.DataSource = config.DataSourceLocalDatabase
 	if err := m.saveSettings(&invalid); err == nil {
-		t.Fatal("expected an empty weather query to be rejected")
+		t.Fatal("expected local_database data source to be rejected")
 	}
-	if m.cfg != cfg || m.dbAdapter != nil {
-		t.Fatal("invalid database settings changed the active configuration")
+
+	// Switch between EasyWeatherGateway (Pro) and OpenWeatherMap (Free).
+	next := *cfg
+	next.DataSource = config.DataSourceRemoteAPI
+	next.RefreshInterval = 120
+	next.APIConfig = &config.APIConfig{
+		Provider: "openweathermap",
+		APIKey:   "0123456789abcdef0123456789abcdef",
 	}
 	if err := m.saveSettings(&next); err != nil {
-		t.Fatalf("switch to database: %v", err)
-	}
-	if m.dbAdapter == nil {
-		t.Fatal("database provider was not installed")
+		t.Fatalf("switch to openweathermap provider: %v", err)
 	}
 	stored, err := service.Load()
-	if err != nil || !reflect.DeepEqual(stored.DatabaseConfig, next.DatabaseConfig) {
-		t.Fatalf("database configuration was not persisted: %v", err)
+	if err != nil || !reflect.DeepEqual(stored.APIConfig, next.APIConfig) {
+		t.Fatalf("remote provider configuration was not persisted: %v", err)
 	}
-	back := next
-	back.DataSource = config.DataSourceRemoteAPI
-	back.RefreshInterval = 120
-	if err := m.saveSettings(&back); err != nil {
-		m.dbAdapter.Close()
-		t.Fatalf("switch to remote provider: %v", err)
+}
+
+func TestComputeSettingsWindowBounds(t *testing.T) {
+	// 1. Standard 96-DPI physical PC: untouched 1150x724 and default OS placement.
+	w, h, center, _, _ := computeSettingsWindowBounds(96, 0, 0, 1920, 1040)
+	if w != 1150 || h != 724 || center {
+		t.Fatalf("expected (1150, 724, false) at 96 DPI, got (%d, %d, %v)", w, h, center)
 	}
-	if m.dbAdapter != nil {
-		t.Fatal("database provider was not released")
+
+	// 2. High-DPI 192-DPI (200%) Retina VM (2880x1704 work area): scaled and work-area centered.
+	w, h, center, x, y := computeSettingsWindowBounds(192, 0, 0, 2880, 1704)
+	if w != 2160 || h != 1580 || !center || x != 360 || y != 62 {
+		t.Fatalf("expected (2160, 1580, true, 360, 62) at 192 DPI, got (%d, %d, %v, %d, %d)", w, h, center, x, y)
+	}
+
+	// 3. High-DPI on smaller screen (144 DPI / 150% on 1920x1032 work area): safely clamped inside work area.
+	w, h, center, x, y = computeSettingsWindowBounds(144, 0, 0, 1920, 1032)
+	if !center || int(w) > 1920-120 || int(h) > 1032-80 || x < 0 || y < 0 || y+int(h) > 1032 {
+		t.Fatalf("expected bounds clamped within 1920x1032 work area, got (%d, %d, %v, %d, %d)", w, h, center, x, y)
+	}
+}
+
+func TestActivateProKeyGeneratesAndPersistsUUID(t *testing.T) {
+	cfg := config.DefaultConfig()
+	service := config.NewConfigService(t.TempDir())
+	m := &Manager{cfg: cfg, cfgSvc: service, weatherSvc: weather.NewWeatherService(nil)}
+
+	// 1. Empty key generates a 36-char UUID v4 and saves it under easyweatherwidget.
+	key1, err := m.activateProKey("")
+	if err != nil {
+		t.Fatalf("activateProKey failed: %v", err)
+	}
+	if len(key1) != ewwAPIKeyLen {
+		t.Fatalf("expected %d-char UUID v4 key, got %q (len=%d)", ewwAPIKeyLen, key1, len(key1))
+	}
+	stored, err := service.Load()
+	if err != nil {
+		t.Fatalf("load config failed: %v", err)
+	}
+	if stored.APIConfig == nil || stored.APIConfig.Provider != "easyweatherwidget" || stored.APIConfig.APIKey != key1 {
+		t.Fatalf("expected persisted easyweatherwidget key %q, got %+v", key1, stored.APIConfig)
+	}
+
+	// 2. Existing 36-char key is preserved instead of overwritten.
+	key2, err := m.activateProKey(key1)
+	if err != nil {
+		t.Fatalf("activateProKey with existing key failed: %v", err)
+	}
+	if key2 != key1 {
+		t.Fatalf("expected existing 36-char key %q to be preserved, got %q", key1, key2)
 	}
 }
