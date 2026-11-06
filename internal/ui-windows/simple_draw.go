@@ -5,28 +5,13 @@ package uiwindows
 import (
 	"image"
 	"image/color"
+	"image/draw"
 	"time"
-
-	"golang.org/x/sys/windows/registry"
 
 	"weatherwidget/internal/config"
 	"weatherwidget/internal/i18n"
 	"weatherwidget/internal/weather"
 )
-
-func windowsLightTheme() bool {
-	key, err := registry.OpenKey(registry.CURRENT_USER, `Software\Microsoft\Windows\CurrentVersion\Themes\Personalize`, registry.QUERY_VALUE)
-	if err != nil {
-		return false
-	}
-	defer key.Close()
-	for _, name := range []string{"SystemUsesLightTheme", "AppsUseLightTheme"} {
-		if value, _, err := key.GetIntegerValue(name); err == nil && value != 0 {
-			return true
-		}
-	}
-	return false
-}
 
 func simpleCardHeight(fields *config.DisplayFields, rows []weather.PollutionRow, cfg *config.Config) int {
 	citySize, tempSize, conditionsSize := cfg.GetFontSizeCityTime()+4, cfg.GetFontSizeTempIcon()+10, cfg.GetFontSizeConditions()+2
@@ -101,29 +86,30 @@ func (wd *WidgetDrawer) renderSimpleView(cities []config.CityConfig, results []w
 		}
 	}
 	dst := image.NewRGBA(image.Rect(0, 0, len(cities)*width+(len(cities)-1)*gap, height))
-	light := windowsLightTheme()
 	for i, city := range cities {
 		var result *weather.WeatherResult
 		if i < len(results) {
 			result = &results[i]
 		}
-		wd.drawSimpleCard(dst, image.Rect(i*(width+gap), 0, i*(width+gap)+width, height), city, result, cfg, lm, now, light)
+		wd.drawSimpleCard(dst, image.Rect(i*(width+gap), 0, i*(width+gap)+width, height), city, result, cfg, lm, now)
 	}
 	return dst
 }
 
-func (wd *WidgetDrawer) drawSimpleCard(dst *image.RGBA, rect image.Rectangle, city config.CityConfig, result *weather.WeatherResult, cfg *config.Config, lm *i18n.LocaleManager, now time.Time, light bool) {
+func (wd *WidgetDrawer) drawSimpleCard(dst *image.RGBA, rect image.Rectangle, city config.CityConfig, result *weather.WeatherResult, cfg *config.Config, lm *i18n.LocaleManager, now time.Time) {
 	text := enhancedWhite
 	if cfg.NoBackground {
 		drawSmoke(dst, rect, cfg.Opacity)
-	}
-	if light {
-		text = color.RGBA{24, 24, 28, 255}
-		if !cfg.NoBackground {
-			fillRoundedRect(dst, rect.Min.X, rect.Min.Y, rect.Dx(), rect.Dy(), 12, color.RGBA{245, 247, 252, 220})
-			strokeRoundedRect(dst, rect.Min.X, rect.Min.Y, rect.Dx(), rect.Dy(), 12, color.RGBA{255, 255, 255, 180}, 1)
+	} else {
+		local := now.UTC()
+		if loc, err := time.LoadLocation(city.Timezone); err == nil {
+			local = now.In(loc)
+		}
+		if bg := wd.cardBackground(rect.Dx(), rect.Dy(), weather.IsNight(local), cfg.Opacity); bg != nil {
+			draw.Draw(dst, rect, bg, image.Point{}, draw.Over)
 		}
 	}
+	strokeRoundedRect(dst, rect.Min.X, rect.Min.Y, rect.Dx(), rect.Dy(), 12, color.RGBA{255, 255, 255, 100}, 1)
 	fields := cfg.GetDisplayFields()
 	var data *weather.WeatherData
 	if result != nil {
