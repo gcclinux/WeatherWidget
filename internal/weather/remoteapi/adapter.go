@@ -200,6 +200,11 @@ func (r *RemoteAPIAdapter) fetchOWM(ctx context.Context, city config.CityConfig)
 }
 
 func (r *RemoteAPIAdapter) testOWM(ctx context.Context) error {
+	key := strings.TrimSpace(r.apiKey)
+	if key == "" {
+		return fmt.Errorf("API key is required")
+	}
+
 	// Use a lightweight call with a known city to verify the API key.
 	u, err := url.Parse(r.BaseURL + "/data/2.5/weather")
 	if err != nil {
@@ -208,7 +213,7 @@ func (r *RemoteAPIAdapter) testOWM(ctx context.Context) error {
 
 	q := u.Query()
 	q.Set("q", "London")
-	q.Set("appid", r.apiKey)
+	q.Set("appid", key)
 	q.Set("units", "metric")
 	u.RawQuery = q.Encode()
 
@@ -642,10 +647,9 @@ func (r *RemoteAPIAdapter) fetchEWWPollution(ctx context.Context, city config.Ci
 }
 
 func (r *RemoteAPIAdapter) testEWW(ctx context.Context) error {
-	key := r.apiKey
+	key := strings.TrimSpace(r.apiKey)
 	if key == "" {
-		// In free mode (no key), use "free" as the key and test with a default city.
-		key = "free"
+		return fmt.Errorf("API key is required")
 	}
 	reqURL := fmt.Sprintf("%s/api/v1/weather/key=%s/London,GB", r.BaseURL, key)
 

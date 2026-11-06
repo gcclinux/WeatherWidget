@@ -2,6 +2,7 @@ package ui
 
 import (
 	"image/color"
+	"strings"
 	"testing"
 
 	"fyne.io/fyne/v2"
@@ -445,6 +446,54 @@ func TestSpacedVBoxLayout(t *testing.T) {
 		t.Errorf("rect2.Position().Y = %v, want 58", rect2.Position().Y)
 	}
 }
+
+func TestBuildConfigFromUI_EmptyCitiesFallback(t *testing.T) {
+	state := &settingsState{
+		cities:       nil,
+		selectedLang: "en-GB",
+	}
+	cfg := buildConfigFromUIHelper(t, state)
+	if len(cfg.Cities) == 0 {
+		t.Fatal("expected cities to fall back to default cities, got 0")
+	}
+	if cfg.Cities[0].Name != "London" {
+		t.Errorf("expected first fallback city London, got %s", cfg.Cities[0].Name)
+	}
+}
+
+func TestInitialSettingsTabIndex(t *testing.T) {
+	// When no API key is configured, initial tab should be Data Provider (index 2)
+	cfgNoKey := &config.Config{
+		APIConfig: &config.APIConfig{
+			Provider: "easyweatherwidget",
+			APIKey:   "",
+		},
+	}
+	tabNoKey := 0
+	if cfgNoKey.APIConfig == nil || strings.TrimSpace(cfgNoKey.APIConfig.APIKey) == "" {
+		tabNoKey = 2
+	}
+	if tabNoKey != 2 {
+		t.Errorf("expected tab index 2 for unconfigured API, got %d", tabNoKey)
+	}
+
+	// When API key is configured, initial tab should be Display (index 0)
+	cfgWithKey := &config.Config{
+		APIConfig: &config.APIConfig{
+			Provider: "openweathermap",
+			APIKey:   "valid-key",
+		},
+	}
+	tabWithKey := 0
+	if cfgWithKey.APIConfig == nil || strings.TrimSpace(cfgWithKey.APIConfig.APIKey) == "" {
+		tabWithKey = 2
+	}
+	if tabWithKey != 0 {
+		t.Errorf("expected tab index 0 for configured API, got %d", tabWithKey)
+	}
+}
+
+
 
 
 

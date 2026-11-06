@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="utf-8">
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #0b0a18;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            color: #f8fafc;
+        }
+
+        .email-container {
+            max-width: 600px;
+            margin: 0 auto;
+            background-color: #131127;
+            border-radius: 12px;
+            border: 1px solid #2a254d;
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #00f2fe 0%, #3b82f6 100%);
+            padding: 32px 24px;
+            text-align: center;
+        }
+
+        .header h1 {
+            margin: 0;
+            color: #05040a;
+            font-size: 24px;
+            font-weight: 800;
+            letter-spacing: -0.5px;
+        }
+
+        .content {
+            padding: 36px 32px;
+        }
+
+        .content h2 {
+            color: #f8fafc;
+            font-size: 20px;
+            margin-top: 0;
+        }
+
+        .content p {
+            color: #94a3b8;
+            font-size: 15px;
+            line-height: 1.6;
+        }
+
+        .highlight-card {
+            background-color: #1a1736;
+            border: 1px solid #2d2854;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 24px 0;
+        }
+
+        .highlight-card h3 {
+            color: #00f2fe;
+            margin-top: 0;
+            font-size: 16px;
+        }
+
+        .btn-cta {
+            display: inline-block;
+            background: linear-gradient(135deg, #00f2fe 0%, #3b82f6 100%);
+            color: #05040a;
+            text-decoration: none;
+            padding: 12px 28px;
+            border-radius: 8px;
+            font-weight: 700;
+            font-size: 15px;
+            margin-top: 10px;
+        }
+
+        .footer {
+            padding: 24px 32px;
+            background-color: #0d0c1d;
+            border-top: 1px solid #2a254d;
+            text-align: center;
+            color: #64748b;
+            font-size: 12px;
+            line-height: 1.6;
+        }
+
+        .footer a {
+            color: #00f2fe;
+            text-decoration: none;
+        }
+    </style>
+</head>
+
+<body>
+    <div style="padding: 24px 12px;">
+        <div class="email-container">
+            <div class="header">
+                <h1>WeatherWidget Update</h1>
+            </div>
+            <div class="content">
+                <h2>WeatherWidget v2.2.0 is here 🌤️</h2>
+                <p>Hello there,</p>
+                <p>WeatherWidget v2.2.0 is out, with smarter tickers, clearer air quality information and wider platform
+                    support.</p>
+
+                <div class="highlight-card" style="margin: 16px 0;">
+                    <h3>🚀 New</h3>
+                    <p style="margin-bottom: 0;">First release for <strong>Windows ARM64</strong>.</p>
+                </div>
+
+                <div class="highlight-card" style="margin: 16px 0;">
+                    <h3>🏃 5 Multi-Ticker Profiles</h3>
+                    <p>Instead of raw atmospheric numbers, the ticker now shows tailored opportunity messages:</p>
+                    <ul style="color: #94a3b8; font-size: 15px; line-height: 1.6; margin: 0; padding-left: 20px;">
+                        <li><strong>Everyday Outdoors:</strong> general context for daily commutes and stepping out.
+                        </li>
+                        <li><strong>Runner &amp; Cyclist:</strong> are conditions and air quality right for outdoor
+                            cardio?</li>
+                        <li><strong>Family &amp; School Run:</strong> practical checks when heading out with children.
+                        </li>
+                        <li><strong>Sensitive Airways:</strong> alerts for asthma, allergy and pollutant sensitivity.
+                        </li>
+                        <li><strong>Open Windows:</strong> is it a good time to let fresh air in?</li>
+                    </ul>
+                </div>
+
+                <div class="highlight-card" style="margin: 16px 0;">
+                    <h3>🌫️ Simplified Pollution Definitions &amp; Grading</h3>
+                    <p style="margin-bottom: 0;">Clear graded context (Good, Fair, Moderate and beyond) replaces raw
+                        microgram
+                        values, with human-readable descriptions alongside the composite AQI scale. Individual toggles
+                        (PM2.5, PM10, NO₂, Ozone, CO) are still available.</p>
+                </div>
+
+                <div class="highlight-card" style="margin: 16px 0;">
+                    <h3>🛠️ Bug Fixes</h3>
+                    <ul style="color: #94a3b8; font-size: 15px; line-height: 1.6; margin: 0; padding-left: 20px;">
+                        <li>Linux Snap autostart fixed (existing installs need to disable and re-enable autostart).</li>
+                        <li>Windows software rendering now works without a GPU (AMD64 &amp; ARM64).</li>
+                    </ul>
+                </div>
+
+                <div class="highlight-card" style="margin: 16px 0;">
+                    <h3>🗺️ Road Map &mdash; Coming Weeks</h3>
+                    <ul style="color: #94a3b8; font-size: 15px; line-height: 1.6; margin: 0; padding-left: 20px;">
+                        <li><strong>News &amp; Alerts backend:</strong> building the services that will power timely
+                            weather news and alerts.</li>
+                        <li><strong>Refreshed website:</strong> showcasing the latest features and releases.</li>
+                        <li><strong>WeatherApp News &amp; Alerts:</strong> the app will begin delivering news and alerts
+                            straight to you.</li>
+                    </ul>
+                </div>
+
+                <div class="highlight-card" style="margin: 16px 0;">
+                    <h3>⬇️ Download Directly</h3>
+                    <p style="text-align: center; margin: 0 0 12px;">
+                        <a href="https://apps.microsoft.com/store/detail/XPDFD8FPS5G4HK"
+                            style="display:inline-block;margin:4px;padding:10px 18px;border-radius:8px;background:#1a1736;border:1px solid #2d2854;color:#00f2fe;font-weight:700;font-size:14px;text-decoration:none;">Microsoft
+                            Store</a>
+                        <a href="https://flathub.org/en-GB/apps/uk.co.easysmartapps.WeatherWidget"
+                            style="display:inline-block;margin:4px;padding:10px 18px;border-radius:8px;background:#1a1736;border:1px solid #2d2854;color:#00f2fe;font-weight:700;font-size:14px;text-decoration:none;">Flatpak
+                            (Flathub)</a>
+                        <a href="https://snapcraft.io/weatherwidget"
+                            style="display:inline-block;margin:4px;padding:10px 18px;border-radius:8px;background:#1a1736;border:1px solid #2d2854;color:#00f2fe;font-weight:700;font-size:14px;text-decoration:none;">Snap
+                            Store</a>
+                        <a href="https://github.com/gcclinux/WeatherWidget/releases/tag/v2.2.0"
+                            style="display:inline-block;margin:4px;padding:10px 18px;border-radius:8px;background:#1a1736;border:1px solid #2d2854;color:#00f2fe;font-weight:700;font-size:14px;text-decoration:none;">Homebrew
+                            / GitHub</a>
+                    </p>
+                    <p style="margin: 0; font-size: 13px;">Or install from the command line:</p>
+                    <code
+                        style="display:block;margin-top:4px;padding:8px 12px;background:#0d0c1d;border-radius:6px;color:#f8fafc;font-family:Menlo,Consolas,monospace;font-size:13px;">flatpak install flathub uk.co.easysmartapps.WeatherWidget</code>
+                    <code
+                        style="display:block;margin-top:4px;padding:8px 12px;background:#0d0c1d;border-radius:6px;color:#f8fafc;font-family:Menlo,Consolas,monospace;font-size:13px;">snap install weatherwidget</code>
+                    <code
+                        style="display:block;margin-top:4px;padding:8px 12px;background:#0d0c1d;border-radius:6px;color:#f8fafc;font-family:Menlo,Consolas,monospace;font-size:13px;">brew install --cask gcclinux/tap/weatherwidget</code>
+                    <code
+                        style="display:block;margin-top:4px;padding:8px 12px;background:#0d0c1d;border-radius:6px;color:#f8fafc;font-family:Menlo,Consolas,monospace;font-size:13px;">winget install weatherwidget</code>
+                </div>
+
+                <p style="margin-top: 24px;">Get the update or read the full release notes:</p>
+                <p style="text-align: center; margin: 24px 0;">
+                    <a href="https://github.com/gcclinux/WeatherWidget/releases/tag/v2.2.0" class="btn-cta">View v2.2.0
+                        Release Notes</a>
+                </p>
+                <p>Found a problem? Contact <a href="https://easysmartapps.co.uk/contact"
+                        style="color: #00f2fe;">Support</a>
+                    or open an <a href="https://github.com/gcclinux/WeatherWidget/issues"
+                        style="color: #00f2fe;">Issue</a>.</p>
+                <p>Thank you for being part of our community!</p>
+            </div>
+            <div class="footer">
+                <p>&copy; 2026 EasySmartApps. All rights reserved.<br>
+                    You received this update because you subscribed at easysmartapps.co.uk.</p>
+                <p style="margin-top: 14px;">
+                    <a href="https://easysmartapps.co.uk/unsubscribe?email={{email}}" target="_blank"
+                        style="display: inline-block; padding: 6px 16px; background: rgba(239, 68, 68, 0.15); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 6px; font-size: 11px; font-weight: 600; text-decoration: none;">
+                        Unsubscribe from Updates
+                    </a>
+                </p>
+            </div>
+        </div>
+    </div>
+</body>
+
+</html>

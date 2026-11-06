@@ -182,9 +182,13 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 		u.showSettingsInfo(title, msg, win, settingsTh)
 	}
 
-	screenW, screenH := getScreenSize()
+	var fallbackScale float32 = 1.0
+	if u.widget != nil && u.widget.Canvas() != nil && u.widget.Canvas().Scale() > 0 {
+		fallbackScale = u.widget.Canvas().Scale()
+	}
+	screenW, screenH := getLogicalWorkArea(cfg.MonitorIndex, fallbackScale)
 	winW := float32(945)
-	if float32(screenW) < winW {
+	if float32(screenW)*0.9 < winW {
 		winW = float32(screenW) * 0.9
 	}
 	winH := float32(screenH) * 0.605
@@ -195,10 +199,16 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 	if winH < 700 {
 		winH = 700
 	}
-	if winH > float32(screenH)*0.9 {
-		winH = float32(screenH) * 0.9
+	// Reserve room for native window title bar and borders (~48 dp) within the work area.
+	maxH := float32(screenH) * 0.88
+	if float32(screenH)-48 < maxH {
+		maxH = float32(screenH) - 48
+	}
+	if maxH > 400 && winH > maxH {
+		winH = maxH
 	}
 	win.Resize(fyne.NewSize(winW, winH))
+	win.CenterOnScreen()
 
 	state := &settingsState{
 		cities:            copyCities(cfg.Cities),
@@ -213,6 +223,9 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 		customX:           cfg.CustomX,
 		customY:           cfg.CustomY,
 		noBackground:      cfg.NoBackground,
+	}
+	if len(state.cities) == 0 {
+		state.cities = copyCities(config.DefaultCities())
 	}
 	if state.selectedLang == "" {
 		state.selectedLang = "en-GB"
@@ -233,6 +246,9 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 	// It is called initially and again when the language changes to rebuild
 	// all labels with the new locale.
 	selectedTabIndex := 0 // tracks the active tab across rebuilds
+	if cfg.APIConfig == nil || strings.TrimSpace(cfg.APIConfig.APIKey) == "" {
+		selectedTabIndex = 2 // open on Data Provider tab if no API key is configured
+	}
 	var buildSettingsUI func()
 	buildSettingsUI = func() {
 		var tabs *container.AppTabs
@@ -379,22 +395,72 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 			applyProviderSliderConstraints("openweathermap", false)
 		}
 
-		// Track the initial provider so we can detect changes.
-		initialProvider := "openweathermap"
-		if cfg.APIConfig != nil && cfg.APIConfig.Provider != "" {
-			initialProvider = cfg.APIConfig.Provider
+		providerSelect.OnChanged = func(selected string) {
+			newProvider := providerDisplayToValue[selected]
+			applyProviderSliderConstraints(newProvider, true)
+
+			if newProvider == "openweathermap" {
+				getApiBtn.SetText(u.t("settings.provider.getFreeApi"))
+				getApiBtn.OnTapped = func() {
+					parsedURL, _ := url.Parse("https://openweathermap.org/")
+					_ = u.app.OpenURL(parsedURL)
+				}
+				activationCard.Hide()
+			} else {
+				getApiBtn.SetText(u.t("settings.provider.getProApi"))
+				getApiBtn.OnTapped = handleGetProAPI
+
+				// If the current key is already an EWW-length key, show the activation card.
+				currentKey := strings.TrimSpace(apiKeyEntry.Text)
+				if len(currentKey) == ewwAPIKeyLen {
+					showActivationCard(currentKey)
+				} else {
+					activationCard.Hide()
+				}
+			}
 		}
 
-		// Provider change handler is set below, after refreshCityList is defined,
-		// because switching providers clears the city list.
-		providerSelect.OnChanged = func(selected string) {
-			applyProviderSliderConstraints(providerDisplayToValue[selected], true)
+		testConnBtn := widget.NewButtonWithIcon(u.t("settings.provider.checkConnection"), theme.ViewRefreshIcon(), nil)
+		testConnBtn.Importance = widget.MediumImportance
+		testConnBtn.OnTapped = func() {
+			apiKey := strings.TrimSpace(apiKeyEntry.Text)
+			selectedDisplay := providerSelect.Selected
+			currentProvider := providerDisplayToValue[selectedDisplay]
+			if apiKey == "" {
+				showError(fmt.Errorf("%s", u.t("settings.provider.apiKeyEmpty")))
+				return
+			}
+			testConnBtn.SetText(u.t("settings.provider.checkingConnection"))
+			testConnBtn.Disable()
+			go func() {
+				defer fyne.Do(func() {
+					testConnBtn.SetText(u.t("settings.provider.checkConnection"))
+					testConnBtn.Enable()
+				})
+				adapter := remoteapi.NewRemoteAPIAdapter(currentProvider, apiKey)
+				ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+				defer cancel()
+				if err := adapter.TestConnection(ctx); err != nil {
+					fyne.Do(func() {
+						showError(fmt.Errorf("%s", u.tFmt("settings.provider.connectionFailedMsg", selectedDisplay, err)))
+					})
+					return
+				}
+				fyne.Do(func() {
+					showInfo(
+						u.t("settings.provider.connectionSuccessTitle"),
+						u.tFmt("settings.provider.connectionSuccessMsg", selectedDisplay),
+					)
+				})
+			}()
 		}
+
+		apiKeyItemContent := container.NewBorder(nil, nil, nil, testConnBtn, apiKeyEntry)
 
 		apiSection := container.NewVBox(
 			widget.NewForm(
 				widget.NewFormItem(u.t("settings.provider.label"), container.NewBorder(nil, nil, nil, getApiBtn, providerSelect)),
-				widget.NewFormItem(u.t("settings.provider.apiKeyLabel"), apiKeyEntry),
+				widget.NewFormItem(u.t("settings.provider.apiKeyLabel"), apiKeyItemContent),
 				widget.NewFormItem(u.t("settings.interval.title"), container.NewHBox(intervalSlider, intervalLabel)),
 			),
 			noteCard,
@@ -777,40 +843,6 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 		}
 		refreshCityList()
 
-		// Now that refreshCityList is defined, upgrade the provider change handler
-		// to also clear cities when the provider switches.
-		providerSelect.OnChanged = func(selected string) {
-			newProvider := providerDisplayToValue[selected]
-			applyProviderSliderConstraints(newProvider, true)
-
-			if newProvider == "openweathermap" {
-				getApiBtn.SetText(u.t("settings.provider.getFreeApi"))
-				getApiBtn.OnTapped = func() {
-					parsedURL, _ := url.Parse("https://openweathermap.org/")
-					_ = u.app.OpenURL(parsedURL)
-				}
-				activationCard.Hide()
-			} else {
-				getApiBtn.SetText(u.t("settings.provider.getProApi"))
-				getApiBtn.OnTapped = handleGetProAPI
-
-				// If the current key is already an EWW-length key, show the activation card.
-				currentKey := strings.TrimSpace(apiKeyEntry.Text)
-				if len(currentKey) == ewwAPIKeyLen {
-					showActivationCard(currentKey)
-				} else {
-					activationCard.Hide()
-				}
-			}
-
-			// Clear the city list when switching providers — each provider uses
-			// its own search API, so existing cities may not be valid.
-			if newProvider != initialProvider {
-				state.cities = nil
-				refreshCityList()
-			}
-		}
-
 		cityListScroll := container.NewVScroll(cityListBox)
 		cityListScroll.SetMinSize(fyne.NewSize(0, 120))
 
@@ -905,7 +937,10 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 			}
 			currentProvider := providerDisplayToValue[providerSelect.Selected]
 			apiKey := strings.TrimSpace(apiKeyEntry.Text)
-			isPro := currentProvider == "easyweatherwidget" && apiKey != ""
+			if apiKey == "" && cfg.APIConfig != nil {
+				apiKey = cfg.APIConfig.APIKey
+			}
+			isPro := (currentProvider == "easyweatherwidget" && apiKey != "") || cfg.IsPro()
 			maxCities := config.MaxCitiesFree
 			if isPro {
 				maxCities = config.MaxCitiesPro
@@ -968,6 +1003,9 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 			}
 
 			apiKey := strings.TrimSpace(apiKeyEntry.Text)
+			if apiKey == "" && cfg.APIConfig != nil {
+				apiKey = cfg.APIConfig.APIKey
+			}
 			if apiKey == "" {
 				showError(fmt.Errorf("%s", u.t("error.settings.apiKeyRequired")))
 				return
@@ -1060,7 +1098,7 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 						searchBtn.Enable()
 					})
 
-					uStr := fmt.Sprintf("http://api.openweathermap.org/geo/1.0/direct?q=%s&limit=1&appid=%s", url.QueryEscape(searchName), url.QueryEscape(searchKey))
+					uStr := fmt.Sprintf("https://api.openweathermap.org/geo/1.0/direct?q=%s&limit=1&appid=%s", url.QueryEscape(searchName), url.QueryEscape(searchKey))
 					resp, err := http.Get(uStr)
 					if err != nil {
 						fyne.Do(func() { showError(fmt.Errorf("%s", u.tFmt("error.settings.searchFailed", err))) })
@@ -1903,6 +1941,14 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 			// Other platforms: Use standard AppTabs
 			tabs = container.NewAppTabs(appearanceTab, widgetTab, providerTab, locationsTab, languageTab, aboutTab)
 			tabs.SetTabLocation(container.TabLocationLeading)
+			tabs.OnSelected = func(tab *container.TabItem) {
+				for i, item := range tabs.Items {
+					if item == tab {
+						selectedTabIndex = i
+						break
+					}
+				}
+			}
 			if selectedTabIndex > 0 && selectedTabIndex < len(tabs.Items) {
 				tabs.SelectIndex(selectedTabIndex)
 			}
@@ -1910,7 +1956,8 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 		}
 
 		// ── SAVE BAR (full width, pinned at bottom) ───────────────────────────
-		saveBtn := widget.NewButtonWithIcon(u.t("settings.save"), theme.DocumentSaveIcon(), func() {
+		var saveBtn *widget.Button
+		saveBtn = widget.NewButtonWithIcon(u.t("settings.save"), theme.DocumentSaveIcon(), func() {
 			newCfg := buildConfigFromUI(
 				providerSelect, apiKeyEntry,
 				intervalSlider, state, positionValueMap, positionRadio, monitorSelect, cfg,
@@ -1924,12 +1971,35 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 				showError(fmt.Errorf("%s", strings.Join(msgs, "\n")))
 				return
 			}
-			if err := onSave(newCfg); err != nil {
-				showError(err)
-				return
-			}
-			state.saved = true
-			showInfo(u.t("settings.dialog.saved"), u.t("settings.dialog.savedMsg"))
+			saveBtn.Disable()
+			saveBtn.SetText(u.t("settings.saving"))
+			go func() {
+				err := onSave(newCfg)
+				fyne.Do(func() {
+					saveBtn.Enable()
+					saveBtn.SetText(u.t("settings.save"))
+					if err != nil {
+						showError(err)
+						return
+					}
+					*cfg = *newCfg
+					state.saved = true
+					origPosition = cfg.CornerPosition
+					origMonitor = cfg.MonitorIndex
+					origUnit = config.NormalizeTemperatureUnit(cfg.TemperatureUnit)
+					origWindUnit = config.NormalizeWindSpeedUnit(cfg.WindSpeedUnit)
+					origIconTheme = config.NormalizeIconTheme(cfg.IconTheme)
+					origViewMode = config.NormalizeViewMode(cfg.ViewMode)
+					origNoBackground = cfg.NoBackground
+					origCustomX = cfg.CustomX
+					origCustomY = cfg.CustomY
+					if tabs != nil {
+						selectedTabIndex = tabs.SelectedIndex()
+					}
+					buildSettingsUI()
+					showInfo(u.t("settings.dialog.saved"), u.t("settings.dialog.savedMsg"))
+				})
+			}()
 		})
 		saveBtn.Importance = widget.HighImportance
 
@@ -1966,6 +2036,7 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 	}
 
 	buildSettingsUI()
+	win.Resize(fyne.NewSize(winW, winH))
 
 	win.SetOnClosed(func() {
 		// Stop preview panel clocks.
@@ -1992,6 +2063,14 @@ func (u *UIManager) ShowSettings(cfg *config.Config, onSave func(*config.Config)
 		u.settings = nil
 	})
 	win.Show()
+	syncSettingsWindow(win, cfg.MonitorIndex)
+	time.AfterFunc(50*time.Millisecond, func() {
+		fyne.Do(func() {
+			if u.settings == win {
+				syncSettingsWindow(win, cfg.MonitorIndex)
+			}
+		})
+	})
 }
 
 // buildConfigFromUI reads all form fields and constructs a Config struct.
@@ -2045,9 +2124,14 @@ func buildConfigFromUI(
 		locale = "en-GB"
 	}
 
+	cities := copyCities(state.cities)
+	if len(cities) == 0 {
+		cities = config.DefaultCities()
+	}
+
 	cfg := &config.Config{
 		DataSource:      config.DataSourceRemoteAPI,
-		Cities:          copyCities(state.cities),
+		Cities:          cities,
 		RefreshInterval: int(intervalSlider.Value),
 		CornerPosition:  cornerPosition,
 		MonitorIndex:    monitorIndex,

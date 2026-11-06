@@ -31,3 +31,9 @@ func getMonitorCount() int { return 1 }
 
 // getMonitorBounds returns the default screen bounds on unsupported platforms.
 func getMonitorBounds(_ int) (int, int, int, int) { return 0, 0, 1920, 1080 }
+
+// getLogicalWorkArea returns the default work-area dimensions in dp on non-Windows platforms.
+func getLogicalWorkArea(_ int, _ float32) (int, int) { return 1920, 1080 }
+
+// syncSettingsWindow is a no-op on non-Windows platforms.
+func syncSettingsWindow(_ fyne.Window, _ int) {}

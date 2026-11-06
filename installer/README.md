@@ -118,8 +118,9 @@ calls).
 .\installer\build-msi.ps1 -Version "1.0.6" -CertPath "cert.pfx" -CertPassword "pass"
 ```
 
-Each build creates both `build/WeatherWidget-<version>.msi` and the
-standard double-click installer `build/WeatherWidget-<version>-Setup.exe`.
+Each build creates both `build/WeatherWidget-<version>-install-<arch>.msi` and the
+standard double-click installer `build/WeatherWidget-<version>-setup-<arch>.exe`
+(`<arch>` is `amd64` or `arm64`, matching the host).
 The setup executable bundles the MSI and is the recommended file to distribute
 to end users.
 

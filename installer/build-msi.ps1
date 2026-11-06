@@ -3,7 +3,7 @@
 # ============================================================================
 # Usage:
 #   # Sign with certificate from Windows certificate store (by thumbprint):
-#   .\installer\build-msi.ps1 -Version "0.0.6.1" -CertThumbprint "A9D97675327F7BF344BA308A357E91141A1DDE50"
+#   .\installer\build-msi.ps1 -Version "0.0.6.1" -CertThumbprint "017C71948F14B125A4D23550D361C73E1F732A85"
 #
 #   # Sign with a .pfx file:
 #   .\installer\build-msi.ps1 -Version "0.0.6.1" -CertPath "cert.pfx" -CertPassword "pass"
@@ -24,7 +24,7 @@ param(
     [Parameter(Mandatory=$true)]
     [string]$Version,
 
-    [string]$CertThumbprint = "A9D97675327F7BF344BA308A357E91141A1DDE50",
+    [string]$CertThumbprint = "017C71948F14B125A4D23550D361C73E1F732A85",
     [string]$CertPath = "",
     [string]$CertPassword = "",
     [switch]$SkipSign,
@@ -35,12 +35,52 @@ $ErrorActionPreference = "Stop"
 $ProjectRoot = Split-Path -Parent $PSScriptRoot
 if (-not $ProjectRoot) { $ProjectRoot = (Get-Location).Path }
 
-# Resolve go-winres from GOPATH/bin (may not be on PATH)
+# Detect current host architecture
+$HostArch = if ($env:PROCESSOR_ARCHITECTURE -match "ARM64|AARCH64" -or $env:PROCESSOR_ARCHITEW6432 -match "ARM64|AARCH64") {
+    "arm64"
+} else {
+    "amd64"
+}
+$WixArch = if ($HostArch -eq "arm64") { "arm64" } else { "x64" }
+
+# Configure compiler and environment variables for the current host architecture
+function Set-CompilerForHost {
+    $env:GOOS = "windows"
+    $env:GOARCH = $HostArch
+    $env:CGO_ENABLED = "1"
+
+    if ($HostArch -eq "arm64") {
+        if (Test-Path "C:\msys64\clangarm64\bin\clang.exe") {
+            $env:PATH = "C:\msys64\clangarm64\bin;$env:PATH"
+            $env:CC = "clang"
+            $env:CXX = "clang++"
+        } elseif (Test-Path "C:\msys64\clangarm64\bin\gcc.exe") {
+            $env:PATH = "C:\msys64\clangarm64\bin;$env:PATH"
+            $env:CC = "gcc"
+            $env:CXX = "g++"
+        }
+    } elseif ($HostArch -eq "amd64") {
+        if (Test-Path "C:\msys64\ucrt64\bin\gcc.exe") {
+            $env:PATH = "C:\msys64\ucrt64\bin;$env:PATH"
+            $env:CC = "gcc"
+            $env:CXX = "g++"
+        } elseif (Test-Path "C:\msys64\mingw64\bin\gcc.exe") {
+            $env:PATH = "C:\msys64\mingw64\bin;$env:PATH"
+            $env:CC = "gcc"
+            $env:CXX = "g++"
+        }
+    }
+}
+
+# Resolve go-winres from GOPATH/bin or PATH (only required when not skipping build)
 $GoPath = (go env GOPATH) | Out-String
 $GoPath = $GoPath.Trim()
 $GoWinRes = Join-Path $GoPath "bin\go-winres.exe"
 if (-not (Test-Path $GoWinRes)) {
-    throw "go-winres not found at $GoWinRes. Install with: go install github.com/tc-hib/go-winres@latest"
+    $GoWinRes = (Get-Command "go-winres.exe" -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Source)
+}
+if (-not $SkipBuild -and (-not $GoWinRes -or -not (Test-Path $GoWinRes))) {
+    throw "go-winres not found at $GoPath\bin\go-winres.exe. Install with: go install github.com/tc-hib/go-winres@latest"
 }
 
 # Determine signing mode
@@ -53,12 +93,44 @@ if (-not $SkipSign) {
     }
 }
 
+# Helper function to find signtool.exe from PATH, user SDK, or Windows Kits
+function Get-SignTool {
+    # Check PATH first
+    $cmd = Get-Command "signtool.exe" -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Source
+    if ($cmd) { return $cmd }
+
+    # Candidate roots: user-local installation or standard Program Files
+    $roots = @(
+        "$env:LocalAppData\Microsoft\WindowsSDK\bin\Windows Kits\10\bin",
+        "${env:ProgramFiles(x86)}\Windows Kits\10\bin",
+        "${env:ProgramFiles}\Windows Kits\10\bin"
+    )
+
+    $archOrder = if ($HostArch -eq "arm64") { @("arm64", "x64") } else { @("x64", "x86") }
+
+    foreach ($kitsRoot in $roots) {
+        if (Test-Path $kitsRoot) {
+            $versions = Get-ChildItem -Path $kitsRoot -Directory -ErrorAction SilentlyContinue |
+                Where-Object { $_.Name -match '^\d+\.\d+\.\d+\.\d+$' } |
+                Sort-Object { [version]$_.Name } -Descending
+            foreach ($ver in $versions) {
+                foreach ($arch in $archOrder) {
+                    $candidate = Join-Path $ver.FullName "$arch\signtool.exe"
+                    if (Test-Path $candidate) { return $candidate }
+                }
+            }
+        }
+    }
+    throw "signtool.exe not found on PATH or in Windows Kits. Install the Windows SDK Signing Tools."
+}
+
 # Helper function to sign a file
 function Sign-File {
     param([string]$FilePath, [string]$Description)
 
     if ($SignMode -eq "none") { return }
 
+    $signTool = Get-SignTool
     $signArgs = @("sign", "/fd", "SHA256", "/tr", "http://timestamp.digicert.com", "/td", "SHA256")
 
     if ($SignMode -eq "thumbprint") {
@@ -74,7 +146,7 @@ function Sign-File {
 
     $signArgs += $FilePath
 
-    & signtool @signArgs
+    & $signTool @signArgs
     if ($LASTEXITCODE -ne 0) { throw "Signing failed for $FilePath" }
 }
 
@@ -82,12 +154,12 @@ Push-Location $ProjectRoot
 
 try {
     $BuildDir = ".\build"
-    $OutputMsi = ".\build\WeatherWidget-$Version.msi"
-    $OutputSetupExe = ".\build\WeatherWidget-$Version-Setup.exe"
+    $OutputMsi = ".\build\WeatherWidget-$Version-install-$HostArch.msi"
+    $OutputSetupExe = ".\build\WeatherWidget-$Version-setup-$HostArch.exe"
 
     Write-Host ""
     Write-Host "============================================" -ForegroundColor Cyan
-    Write-Host "  Weather Widget Windows Installer Builder v$Version" -ForegroundColor Cyan
+    Write-Host "  Weather Widget Windows Installer Builder v$Version ($HostArch)" -ForegroundColor Cyan
     Write-Host "  Sign mode: $SignMode" -ForegroundColor Cyan
     Write-Host "============================================" -ForegroundColor Cyan
     Write-Host ""
@@ -96,7 +168,9 @@ try {
     # Step 1: Clean previous build
     # -------------------------------------------------------------------------
     Write-Host "[1/6] Cleaning previous build..." -ForegroundColor Yellow
-    if (Test-Path $BuildDir) { Remove-Item -Recurse -Force $BuildDir }
+    if (-not $SkipBuild) {
+        if (Test-Path $BuildDir) { Remove-Item -Recurse -Force $BuildDir }
+    }
     New-Item -ItemType Directory -Path $BuildDir -Force | Out-Null
     Write-Host "       Done." -ForegroundColor Green
 
@@ -104,7 +178,7 @@ try {
     # Step 2: Generate Windows resources
     # -------------------------------------------------------------------------
     if (-not $SkipBuild) {
-        Write-Host "[2/6] Generating Windows resources..." -ForegroundColor Yellow
+        Write-Host "[2/6] Generating Windows resources ($HostArch)..." -ForegroundColor Yellow
 
         # Update version in winres.json before generating
         $winresJson = Get-Content ".\winres\winres.json" -Raw | ConvertFrom-Json
@@ -114,27 +188,32 @@ try {
         $winresJson.RT_VERSION.'#1'.'0409'.info.'0409'.ProductVersion = $Version
         $winresJson | ConvertTo-Json -Depth 10 | Set-Content ".\winres\winres.json"
 
-        & $GoWinRes make --in .\winres\winres.json --product-version $Version --file-version $Version
+        & $GoWinRes make --in .\winres\winres.json --out .\cmd\weatherwidget\rsrc --arch $HostArch --product-version $Version --file-version $Version
         if ($LASTEXITCODE -ne 0) { throw "go-winres failed" }
         Write-Host "       Done." -ForegroundColor Green
 
         # ---------------------------------------------------------------------
         # Step 3: Build the executable
         # ---------------------------------------------------------------------
-        Write-Host "[3/6] Building weatherwidget.exe..." -ForegroundColor Yellow
-        $env:GOOS = "windows"
-        $env:GOARCH = "amd64"
-        $env:CGO_ENABLED = "1"
+        Write-Host "[3/6] Building weatherwidget.exe ($HostArch)..." -ForegroundColor Yellow
+        $patchScript = ".\scripts\patch-fyne.ps1"
+        if (Test-Path $patchScript) {
+            & $patchScript
+        }
+        Set-CompilerForHost
 
         $ldflags = "-H windowsgui -s -w -X main.version=$Version"
         go build -ldflags="$ldflags" -o "$BuildDir\weatherwidget.exe" .\cmd\weatherwidget\
         if ($LASTEXITCODE -ne 0) { throw "Go build failed" }
-        Write-Host "       Done. Output: $BuildDir\weatherwidget.exe" -ForegroundColor Green
+        Write-Host "       Done. Output: $BuildDir\weatherwidget.exe ($HostArch)" -ForegroundColor Green
     } else {
         Write-Host "[2/6] Skipping (SkipBuild)." -ForegroundColor DarkGray
         Write-Host "[3/6] Skipping (SkipBuild)." -ForegroundColor DarkGray
+        if (-not (Test-Path "$BuildDir\weatherwidget.exe") -and (Test-Path ".\scripts\build\weatherwidget.exe")) {
+            Copy-Item ".\scripts\build\weatherwidget.exe" "$BuildDir\weatherwidget.exe" -Force
+        }
         if (-not (Test-Path "$BuildDir\weatherwidget.exe")) {
-            throw "No existing exe found at $BuildDir\weatherwidget.exe. Remove -SkipBuild flag."
+            throw "No existing exe found at $BuildDir\weatherwidget.exe or .\scripts\build\weatherwidget.exe. Remove -SkipBuild flag."
         }
     }
 
@@ -152,12 +231,31 @@ try {
     # -------------------------------------------------------------------------
     # Step 5: Build MSI with WiX
     # -------------------------------------------------------------------------
-    Write-Host "[5/6] Building MSI with WiX..." -ForegroundColor Yellow
+    Write-Host "[5/6] Building MSI with WiX ($WixArch)..." -ForegroundColor Yellow
+
+    # Ensure dotnet and dotnet global tools are configured for the current session
+    $dotnetDir = if (Test-Path "$env:LocalAppData\Microsoft\dotnet") {
+        "$env:LocalAppData\Microsoft\dotnet"
+    } elseif (Test-Path "${env:ProgramFiles}\dotnet") {
+        "${env:ProgramFiles}\dotnet"
+    } else {
+        $null
+    }
+    if ($dotnetDir) {
+        $env:DOTNET_ROOT = $dotnetDir
+        if ($env:PATH -notlike "*$dotnetDir*") {
+            $env:PATH = "$dotnetDir;$env:PATH"
+        }
+    }
+    if ((Test-Path "$env:USERPROFILE\.dotnet\tools") -and ($env:PATH -notlike "*$env:USERPROFILE\.dotnet\tools*")) {
+        $env:PATH = "$env:USERPROFILE\.dotnet\tools;$env:PATH"
+    }
 
     # Resolve wix.exe — check PATH first, then known install locations
     $wixExe = (Get-Command "wix" -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Source)
     if (-not $wixExe) {
         $wixPaths = @(
+            "$env:USERPROFILE\.dotnet\tools\wix.exe",
             "${env:ProgramFiles}\WiX Toolset v7.0\bin\wix.exe",
             "${env:ProgramFiles}\WiX Toolset v4.0\bin\wix.exe"
         )
@@ -170,7 +268,7 @@ try {
     }
     Write-Host "       Using WiX: $wixExe" -ForegroundColor DarkGray
 
-    & $wixExe build .\installer\Package.wxs -d BuildDir=$BuildDir -d Version=$Version -o $OutputMsi
+    & $wixExe build .\installer\Package.wxs -arch $WixArch -d BuildDir=$BuildDir -d Version=$Version -o $OutputMsi
     if ($LASTEXITCODE -ne 0) { throw "WiX build failed" }
     Write-Host "       MSI created." -ForegroundColor Green
 
@@ -197,8 +295,8 @@ try {
 
     Write-Host ""
     Write-Host "============================================" -ForegroundColor Green
-    Write-Host "  BUILD SUCCESSFUL" -ForegroundColor Green
-    Write-Host "  MSI:      $OutputMsi" -ForegroundColor Green
+    Write-Host "  BUILD SUCCESSFUL ($HostArch)" -ForegroundColor Green
+    Write-Host "  MSI:       $OutputMsi" -ForegroundColor Green
     Write-Host "  Setup EXE: $OutputSetupExe" -ForegroundColor Green
     Write-Host "============================================" -ForegroundColor Green
     Write-Host ""
