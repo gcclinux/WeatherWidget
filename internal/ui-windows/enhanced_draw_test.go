@@ -173,9 +173,14 @@ func TestPollutionRowKeepsTextWithinShorterCard(t *testing.T) {
 	actual := image.NewRGBA(image.Rect(0, 0, enhancedWidth, height))
 	drawer.drawEnhancedPollution(actual, rect, cfg, data, nil)
 	face := drawer.getFace(true, 12)
+	slots := 7
+	cell := rect.Dx() / slots
 	for i, row := range rows {
-		left := rect.Min.X + i*rect.Dx()/len(rows)
-		right := rect.Min.X + (i+1)*rect.Dx()/len(rows)
+		left := rect.Max.X - (len(rows)-i)*cell
+		right := left + cell
+		if row.Metric == weather.MetricAQI {
+			left, right = rect.Min.X, rect.Min.X+110
+		}
 		center := (left + right) / 2
 		expected := image.NewRGBA(image.Rect(0, 0, enhancedWidth, height+20))
 		drawCentered(expected, row.ValueText, center, rect.Min.Y+61, face, enhancedWhite)

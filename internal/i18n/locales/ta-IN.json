@@ -14,6 +14,7 @@
   "settings.windows.query": "வானிலை வினவல்",
   "settings.windows.support": "ஆதரவு",
   "settings.windows.autofillRequired": "நகரம் மற்றும் நாட்டை உள்ளிட்டு தானாக நிரப்பவும்.",
+  "settings.windows.apply": "பயன்படுத்து",
   "settings.windows.error": "பிழை: %v",
   "_locale.code": "ta-IN",
   "_locale.displayName": "Tamil",

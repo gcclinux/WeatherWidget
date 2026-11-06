@@ -295,6 +295,19 @@ func (w *Widget) UpdateSurface(img *image.RGBA) {
 	}
 }
 
+// GetPosition returns the widget's current screen coordinates.
+func (w *Widget) GetPosition() (int, int) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if w.hwnd != 0 {
+		var r rect
+		if ret, _, _ := procGetWindowRect.Call(w.hwnd, uintptr(unsafe.Pointer(&r))); ret != 0 {
+			return int(r.Left), int(r.Top)
+		}
+	}
+	return w.posX, w.posY
+}
+
 // SetPosition moves the widget window to screen coordinates (x, y) maintaining Z-order.
 func (w *Widget) SetPosition(x, y int) {
 	w.mu.Lock()

@@ -190,13 +190,35 @@ func (wd *WidgetDrawer) cardBackground(w, h int, night bool, opacity int) *image
 	return layer
 }
 
+// smokeAlpha maps the transparency slider (25–100) to the dark tint drawn when
+// the panel background is removed: 100 is fully transparent, 25 is the darkest.
+func smokeAlpha(opacity int) uint8 {
+	if opacity <= 0 || opacity > 100 {
+		opacity = 100
+	}
+	if opacity < 25 {
+		opacity = 25
+	}
+	const maxAlpha = 0.70
+	return uint8(float64(100-opacity) / 75 * maxAlpha * 255)
+}
+
+// drawSmoke fills the card with a translucent dark shadow for transparent mode.
+func drawSmoke(dst *image.RGBA, rect image.Rectangle, opacity int) {
+	if a := smokeAlpha(opacity); a > 0 {
+		fillRoundedRect(dst, rect.Min.X, rect.Min.Y, rect.Dx(), rect.Dy(), 12, color.RGBA{0, 0, 0, a})
+	}
+}
+
 func (wd *WidgetDrawer) drawEnhancedCard(dst *image.RGBA, rect image.Rectangle, city config.CityConfig, result *weather.WeatherResult, cfg *config.Config, lm *i18n.LocaleManager, now time.Time, index, infoWidth int) {
 	x, y, w, h := rect.Min.X, rect.Min.Y, rect.Dx(), rect.Dy()
 	local := now.UTC()
 	if loc, err := time.LoadLocation(city.Timezone); err == nil {
 		local = now.In(loc)
 	}
-	if !cfg.NoBackground {
+	if cfg.NoBackground {
+		drawSmoke(dst, rect, cfg.Opacity)
+	} else {
 		if bg := wd.cardBackground(w, h, weather.IsNight(local), cfg.Opacity); bg != nil {
 			draw.Draw(dst, rect, bg, image.Point{}, draw.Over)
 		}
@@ -401,9 +423,24 @@ func (wd *WidgetDrawer) drawEnhancedPollution(dst *image.RGBA, rect image.Rectan
 		return
 	}
 	nameFace, valueFace := wd.getFace(false, 10), wd.getFace(true, 12)
+	// AQI stays on the left; the other metrics pack from the right edge.
+	slots := len(rows)
+	if slots < 7 {
+		slots = 7
+	}
+	cell := rect.Dx() / slots
 	for i, row := range rows {
-		left := rect.Min.X + i*rect.Dx()/len(rows)
-		right := rect.Min.X + (i+1)*rect.Dx()/len(rows)
+		var left, right int
+		if row.Metric == weather.MetricAQI {
+			aqiW := cell
+			if aqiW < 110 {
+				aqiW = 110
+			}
+			left, right = rect.Min.X, rect.Min.X+aqiW
+		} else {
+			right = rect.Max.X - (len(rows)-1-i)*cell
+			left = right - cell
+		}
 		center := (left + right) / 2
 		drawImageContained(dst, wd.loadIcon("air/"+row.IconFile), image.Rect(center-15, rect.Min.Y+2, center+15, rect.Min.Y+23))
 		name := weather.PollutionMetricName(row.Metric, lm)
@@ -411,7 +448,7 @@ func (wd *WidgetDrawer) drawEnhancedPollution(dst *image.RGBA, rect image.Rectan
 		if int(row.Metric) < len(keys) {
 			name = translateNative(lm, "pollution.short."+keys[row.Metric], name)
 		}
-		clipped := dst.SubImage(image.Rect(left, rect.Min.Y, right, rect.Max.Y).Intersect(dst.Bounds())).(*image.RGBA)
+		clipped := dst.SubImage(rect.Intersect(dst.Bounds())).(*image.RGBA)
 		drawCentered(clipped, name, center, rect.Min.Y+39, nameFace, enhancedMuted)
 		drawCentered(clipped, row.ValueText, center, rect.Min.Y+61, valueFace, enhancedWhite)
 	}

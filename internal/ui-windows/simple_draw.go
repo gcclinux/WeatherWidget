@@ -114,6 +114,9 @@ func (wd *WidgetDrawer) renderSimpleView(cities []config.CityConfig, results []w
 
 func (wd *WidgetDrawer) drawSimpleCard(dst *image.RGBA, rect image.Rectangle, city config.CityConfig, result *weather.WeatherResult, cfg *config.Config, lm *i18n.LocaleManager, now time.Time, light bool) {
 	text := enhancedWhite
+	if cfg.NoBackground {
+		drawSmoke(dst, rect, cfg.Opacity)
+	}
 	if light {
 		text = color.RGBA{24, 24, 28, 255}
 		if !cfg.NoBackground {
