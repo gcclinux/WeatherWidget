@@ -196,10 +196,6 @@ try {
         # Step 3: Build the executable
         # ---------------------------------------------------------------------
         Write-Host "[3/6] Building weatherwidget.exe ($HostArch)..." -ForegroundColor Yellow
-        $patchScript = ".\scripts\patch-fyne.ps1"
-        if (Test-Path $patchScript) {
-            & $patchScript
-        }
         Set-CompilerForHost
 
         $ldflags = "-H windowsgui -s -w -X main.version=$Version"

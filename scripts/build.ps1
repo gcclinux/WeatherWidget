@@ -162,11 +162,6 @@ switch ($Target) {
         Update-LocaleVersions -Ver $Version
         Update-WinresVersion -Ver $Version
 
-        $patchScript = Join-Path $PSScriptRoot "patch-fyne.ps1"
-        if (Test-Path $patchScript) {
-            & $patchScript
-        }
-
         switch ($Arch) {
             "amd64" {
                 $built = Invoke-ArchBuild -TargetArch "amd64" -OutputName "weatherwidget_${Version}_portable-amd64.exe"
