@@ -21,17 +21,17 @@ var (
 	procDeleteDC           = gdi32.NewProc("DeleteDC")
 	procDeleteObject       = gdi32.NewProc("DeleteObject")
 
-	procGetDC                   = user32.NewProc("GetDC")
-	procReleaseDC               = user32.NewProc("ReleaseDC")
-	procUpdateLayeredWindow     = user32.NewProc("UpdateLayeredWindow")
-	procSetWindowPos            = user32.NewProc("SetWindowPos")
-	procGetWindowRect           = user32.NewProc("GetWindowRect")
-	procGetSystemMetrics        = user32.NewProc("GetSystemMetrics")
-	procEnumDisplayMonitors     = user32.NewProc("EnumDisplayMonitors")
-	procGetMonitorInfoW         = user32.NewProc("GetMonitorInfoW")
-	procSetCapture              = user32.NewProc("SetCapture")
-	procReleaseCapture          = user32.NewProc("ReleaseCapture")
-	procShowWindow              = user32.NewProc("ShowWindow")
+	procGetDC               = user32.NewProc("GetDC")
+	procReleaseDC           = user32.NewProc("ReleaseDC")
+	procUpdateLayeredWindow = user32.NewProc("UpdateLayeredWindow")
+	procSetWindowPos        = user32.NewProc("SetWindowPos")
+	procGetWindowRect       = user32.NewProc("GetWindowRect")
+	procGetSystemMetrics    = user32.NewProc("GetSystemMetrics")
+	procEnumDisplayMonitors = user32.NewProc("EnumDisplayMonitors")
+	procGetMonitorInfoW     = user32.NewProc("GetMonitorInfoW")
+	procSetCapture          = user32.NewProc("SetCapture")
+	procReleaseCapture      = user32.NewProc("ReleaseCapture")
+	procShowWindow          = user32.NewProc("ShowWindow")
 )
 
 // Win32 Layered Window Constants
@@ -122,6 +122,7 @@ type Widget struct {
 	hdcScreen uintptr
 	hdcMem    uintptr
 	hBitmap   uintptr
+	oldBitmap uintptr
 	pBits     unsafe.Pointer
 
 	width  int
@@ -207,6 +208,7 @@ func (w *Widget) UpdateSurface(img *image.RGBA) {
 	// Reallocate DIBSection if dimensions changed
 	if imgW != w.width || imgH != w.height || w.hBitmap == 0 {
 		if w.hBitmap != 0 {
+			procSelectObject.Call(w.hdcMem, w.oldBitmap)
 			procDeleteObject.Call(w.hBitmap)
 			w.hBitmap = 0
 		}
@@ -231,7 +233,7 @@ func (w *Widget) UpdateSurface(img *image.RGBA) {
 			return
 		}
 
-		procSelectObject.Call(w.hdcMem, hBitmap)
+		w.oldBitmap, _, _ = procSelectObject.Call(w.hdcMem, hBitmap)
 		w.hBitmap = hBitmap
 		w.width = imgW
 		w.height = imgH
@@ -260,9 +262,9 @@ func (w *Widget) UpdateSurface(img *image.RGBA) {
 			dstPix[si+2] = r
 			dstPix[si+3] = 255
 		} else {
-			dstPix[si] = byte((uint32(b)*uint32(a) + 127) / 255)
-			dstPix[si+1] = byte((uint32(g)*uint32(a) + 127) / 255)
-			dstPix[si+2] = byte((uint32(r)*uint32(a) + 127) / 255)
+			dstPix[si] = b
+			dstPix[si+1] = g
+			dstPix[si+2] = r
 			dstPix[si+3] = a
 		}
 	}
@@ -290,8 +292,6 @@ func (w *Widget) UpdateSurface(img *image.RGBA) {
 	)
 	if ret == 0 {
 		log.Printf("uiwindows: UpdateLayeredWindow failed: %v (hwnd=%#x, w=%d, h=%d)", err, w.hwnd, imgW, imgH)
-	} else {
-		log.Printf("uiwindows: UpdateLayeredWindow succeeded (hwnd=%#x, pos=(%d,%d), size=(%d,%d))", w.hwnd, w.posX, w.posY, imgW, imgH)
 	}
 }
 
@@ -412,6 +412,7 @@ func (w *Widget) Destroy() {
 	defer w.mu.Unlock()
 
 	if w.hBitmap != 0 {
+		procSelectObject.Call(w.hdcMem, w.oldBitmap)
 		procDeleteObject.Call(w.hBitmap)
 		w.hBitmap = 0
 	}
@@ -488,6 +489,7 @@ func widgetWndProc(hwnd uintptr, umsg uint32, wparam, lparam uintptr) uintptr {
 // ── Multi-Monitor Bounds Helper ──────────────────────────────────────────────
 
 var monList []uintptr
+var monMu sync.Mutex
 
 func monEnumCallback(hMonitor, hdc, lprcClip, dwData uintptr) uintptr {
 	monList = append(monList, hMonitor)
@@ -496,6 +498,8 @@ func monEnumCallback(hMonitor, hdc, lprcClip, dwData uintptr) uintptr {
 
 // getMonitorBounds retrieves the work area rectangle for the specified monitor index.
 func getMonitorBounds(index int) (left, top, width, height int) {
+	monMu.Lock()
+	defer monMu.Unlock()
 	monList = nil
 	cb := syscall.NewCallback(monEnumCallback)
 	procEnumDisplayMonitors.Call(0, 0, cb, 0)
@@ -506,6 +510,7 @@ func getMonitorBounds(index int) (left, top, width, height int) {
 		if cx == 0 || cy == 0 {
 			return 0, 0, 1920, 1080
 		}
+
 		return 0, 0, int(cx), int(cy)
 	}
 
@@ -523,4 +528,15 @@ func getMonitorBounds(index int) (left, top, width, height int) {
 
 	work := mi.RcWork
 	return int(work.Left), int(work.Top), int(work.Right - work.Left), int(work.Bottom - work.Top)
+}
+
+func monitorCount() int {
+	monMu.Lock()
+	defer monMu.Unlock()
+	monList = nil
+	procEnumDisplayMonitors.Call(0, 0, syscall.NewCallback(monEnumCallback), 0)
+	if len(monList) == 0 {
+		return 1
+	}
+	return len(monList)
 }

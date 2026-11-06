@@ -5,7 +5,10 @@ package uiwindows
 import (
 	"fmt"
 	"log"
+	"net"
+	"net/url"
 	"runtime"
+	"strconv"
 	"sync"
 	"time"
 	"unsafe"
@@ -16,6 +19,7 @@ import (
 	"weatherwidget/internal/power"
 	"weatherwidget/internal/scheduler"
 	"weatherwidget/internal/weather"
+	"weatherwidget/internal/weather/database"
 	"weatherwidget/internal/weather/remoteapi"
 )
 
@@ -40,8 +44,10 @@ type Manager struct {
 	appDataDir string
 	cfgSvc     *config.ConfigService
 	cfg        *config.Config
+	preview    *config.Config
 	lm         *i18n.LocaleManager
 	weatherSvc *weather.WeatherService
+	dbAdapter  *database.DatabaseAdapter
 	sched      *scheduler.RefreshScheduler
 	guard      *guard.SingleInstanceGuard
 
@@ -54,6 +60,8 @@ type Manager struct {
 
 	results   []weather.WeatherResult
 	resultsMu sync.Mutex
+	redrawMu  sync.Mutex
+	saveMu    sync.Mutex
 
 	dragTimer *time.Timer
 	stopClock chan struct{}
@@ -112,10 +120,7 @@ func Run(appDataDir string, openSettings bool) error {
 		m.widget = widget
 		defer m.widget.Destroy()
 
-		// Apply placement (custom X/Y or corner pinning, clamped to monitor bounds)
-		m.widget.ApplyPlacement(cfg.CustomX, cfg.CustomY, cfg.CornerPosition, cfg.MonitorIndex)
-
-		// Initial render to establish dimensions and surface at placement
+		// Rendering establishes the dimensions before placement.
 		m.redraw()
 
 		if m.isWidgetVisible {
@@ -127,7 +132,11 @@ func Run(appDataDir string, openSettings bool) error {
 	go m.startClockLoop()
 
 	// 6. Initialize weather service and scheduler.
-	provider := m.buildProvider(cfg)
+	provider, dbAdapter, err := m.buildProvider(cfg)
+	if err != nil {
+		return fmt.Errorf("create weather provider: %w", err)
+	}
+	m.dbAdapter = dbAdapter
 	m.weatherSvc = weather.NewWeatherService(provider)
 
 	interval := time.Duration(cfg.RefreshInterval) * time.Minute
@@ -195,6 +204,8 @@ func Run(appDataDir string, openSettings bool) error {
 
 // redraw renders all cards and updates the layered window surface.
 func (m *Manager) redraw() {
+	m.redrawMu.Lock()
+	defer m.redrawMu.Unlock()
 	if m.widget == nil || m.drawer == nil {
 		return
 	}
@@ -208,6 +219,12 @@ func (m *Manager) redraw() {
 	cities := make([]config.CityConfig, len(cfg.Cities))
 	copy(cities, cfg.Cities)
 	cfgCopy := *cfg
+	if m.preview != nil {
+		cfgCopy = *m.preview
+		cfgCopy.Cities = cities
+		cfgCopy.CustomX, cfgCopy.CustomY = cfg.CustomX, cfg.CustomY
+		cfgCopy.CornerPosition, cfgCopy.MonitorIndex = cfg.CornerPosition, cfg.MonitorIndex
+	}
 	m.mu.Unlock()
 
 	m.resultsMu.Lock()
@@ -216,21 +233,34 @@ func (m *Manager) redraw() {
 	m.resultsMu.Unlock()
 
 	img := m.drawer.Render(cities, res, &cfgCopy, m.lm, time.Now())
+	m.widget.mu.Lock()
+	resized := m.widget.width != img.Bounds().Dx() || m.widget.height != img.Bounds().Dy()
+	m.widget.mu.Unlock()
 	m.widget.UpdateSurface(img)
+	if resized {
+		m.widget.ApplyPlacement(cfgCopy.CustomX, cfgCopy.CustomY, cfgCopy.CornerPosition, cfgCopy.MonitorIndex)
+	}
 }
 
-// startClockLoop runs a 1-second ticker that updates clocks on the widget.
+// startClockLoop updates clocks and animates the ticker and original icon set.
 func (m *Manager) startClockLoop() {
-	ticker := time.NewTicker(1 * time.Second)
+	ticker := time.NewTicker(100 * time.Millisecond)
 	defer ticker.Stop()
 
+	var lastSecond int64
 	for {
 		select {
 		case <-m.stopClock:
 			return
 		case <-ticker.C:
-			if m.isWidgetVisible {
+			m.mu.Lock()
+			visible := m.isWidgetVisible
+			animated := m.cfg != nil && (m.cfg.GetPollutionFields().ShowTicker || config.NormalizeIconTheme(m.cfg.IconTheme) == config.IconThemeOriginal)
+			m.mu.Unlock()
+			second := time.Now().Unix()
+			if visible && (animated || second != lastSecond) {
 				m.redraw()
+				lastSecond = second
 			}
 		}
 	}
@@ -255,6 +285,8 @@ func (m *Manager) onWidgetDragEnd(x, y int) {
 	}
 
 	m.dragTimer = time.AfterFunc(400*time.Millisecond, func() {
+		m.saveMu.Lock()
+		defer m.saveMu.Unlock()
 		m.mu.Lock()
 		defer m.mu.Unlock()
 
@@ -276,7 +308,20 @@ func (m *Manager) onWidgetContextMenu() {
 }
 
 // buildProvider creates a WeatherProvider based on the config.
-func (m *Manager) buildProvider(cfg *config.Config) weather.WeatherProvider {
+func (m *Manager) buildProvider(cfg *config.Config) (weather.WeatherProvider, *database.DatabaseAdapter, error) {
+	if cfg.DataSource == config.DataSourceLocalDatabase {
+		if cfg.DatabaseConfig == nil {
+			return nil, nil, fmt.Errorf("database configuration is required")
+		}
+		db := cfg.DatabaseConfig
+		conn := url.URL{Scheme: "postgres", User: url.UserPassword(db.Username, db.Password),
+			Host: net.JoinHostPort(db.Host, strconv.Itoa(db.Port)), Path: "/" + db.DBName}
+		adapter, err := database.NewDatabaseAdapter(conn.String(), db.Query)
+		if err != nil {
+			return nil, nil, err
+		}
+		return adapter, adapter, nil
+	}
 	provider := "easyweatherwidget"
 	apiKey := ""
 	if cfg.APIConfig != nil {
@@ -288,15 +333,18 @@ func (m *Manager) buildProvider(cfg *config.Config) weather.WeatherProvider {
 	if apiKey == "" {
 		provider = "openmeteo"
 	}
-	return remoteapi.NewRemoteAPIAdapter(provider, apiKey)
+	return remoteapi.NewRemoteAPIAdapter(provider, apiKey), nil, nil
 }
 
 // t translates a localization key.
 func (m *Manager) t(key string) string {
-	if m.lm == nil {
+	m.mu.Lock()
+	lm := m.lm
+	m.mu.Unlock()
+	if lm == nil {
 		return key
 	}
-	return m.lm.T(key)
+	return lm.T(key)
 }
 
 // showWidget makes the widget window visible.
@@ -348,10 +396,12 @@ func (m *Manager) shutdown() {
 		close(m.stopClock)
 	}
 
+	m.redrawMu.Lock()
 	if m.widget != nil {
 		m.widget.Destroy()
 		m.widget = nil
 	}
+	m.redrawMu.Unlock()
 
 	if m.tray != nil {
 		m.tray.Destroy()

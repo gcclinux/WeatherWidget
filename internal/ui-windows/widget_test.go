@@ -49,10 +49,11 @@ func TestWidgetLifecycle(t *testing.T) {
 	}
 
 	// Test ApplyPlacement
-	customX, customY := 350, 450
+	left, top, _, _ := getMonitorBounds(0)
+	customX, customY := left+30, top+30
 	w.ApplyPlacement(&customX, &customY, "bottom-right", 0)
-	if w.posX != 350 || w.posY != 450 {
-		t.Errorf("expected custom placement (350, 450), got (%d, %d)", w.posX, w.posY)
+	if w.posX != customX || w.posY != customY {
+		t.Errorf("expected custom placement (%d, %d), got (%d, %d)", customX, customY, w.posX, w.posY)
 	}
 
 	// Test Show and Hide
@@ -123,10 +124,10 @@ func TestWidgetDrawerRender(t *testing.T) {
 	if imgEnhanced == nil {
 		t.Fatal("drawer.Render returned nil in enhanced mode")
 	}
-	if imgEnhanced.Bounds().Dx() != 380 {
-		t.Errorf("expected enhanced width 380, got %d", imgEnhanced.Bounds().Dx())
+	if imgEnhanced.Bounds().Dx() != enhancedWidth {
+		t.Errorf("expected enhanced width %d, got %d", enhancedWidth, imgEnhanced.Bounds().Dx())
 	}
-	expectedEnhancedH := 2*250 + 8
+	expectedEnhancedH := 2*172 + 6
 	if imgEnhanced.Bounds().Dy() != expectedEnhancedH {
 		t.Errorf("expected enhanced height %d, got %d", expectedEnhancedH, imgEnhanced.Bounds().Dy())
 	}
@@ -137,11 +138,20 @@ func TestWidgetDrawerRender(t *testing.T) {
 	if imgSimple == nil {
 		t.Fatal("drawer.Render returned nil in simple mode")
 	}
-	expectedSimpleW := 2*140 + 8
+	expectedSimpleW := 2*160 + 6
 	if imgSimple.Bounds().Dx() != expectedSimpleW {
 		t.Errorf("expected simple width %d, got %d", expectedSimpleW, imgSimple.Bounds().Dx())
 	}
-	if imgSimple.Bounds().Dy() != 560 {
-		t.Errorf("expected simple height 560, got %d", imgSimple.Bounds().Dy())
+	expectedSimpleH := simpleCardHeight(cfg.GetDisplayFields(), nil, cfg)
+	if imgSimple.Bounds().Dy() != expectedSimpleH {
+		t.Errorf("expected simple height %d, got %d", expectedSimpleH, imgSimple.Bounds().Dy())
+	}
+
+	cfg.FontSizeCityTime = 40
+	cfg.FontSizeTempIcon = 70
+	cfg.FontSizeConditions = 30
+	larger := drawer.Render(cities, results, cfg, nil, time.Now())
+	if larger.Bounds().Dx() <= imgSimple.Bounds().Dx() || larger.Bounds().Dy() <= imgSimple.Bounds().Dy() {
+		t.Errorf("simple layout did not expand for larger fonts: default %v, larger %v", imgSimple.Bounds(), larger.Bounds())
 	}
 }
