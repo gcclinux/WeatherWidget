@@ -32,7 +32,27 @@ var (
 	procSetCapture          = user32.NewProc("SetCapture")
 	procReleaseCapture      = user32.NewProc("ReleaseCapture")
 	procShowWindow          = user32.NewProc("ShowWindow")
+	procGetDpiForWindow     = user32.NewProc("GetDpiForWindow")
+	procGetDpiForSystem     = user32.NewProc("GetDpiForSystem")
 )
+
+// GetWindowDPI returns the monitor DPI where hwnd is displayed, or system DPI,
+// or 96 (standard 100% scale) as fallback.
+func GetWindowDPI(hwnd uintptr) int {
+	if procGetDpiForWindow.Find() == nil && hwnd != 0 {
+		dpi, _, _ := procGetDpiForWindow.Call(hwnd)
+		if dpi > 0 {
+			return int(dpi)
+		}
+	}
+	if procGetDpiForSystem.Find() == nil {
+		dpi, _, _ := procGetDpiForSystem.Call()
+		if dpi > 0 {
+			return int(dpi)
+		}
+	}
+	return 96
+}
 
 // Win32 Layered Window Constants
 const (
@@ -136,6 +156,7 @@ type Widget struct {
 
 	onPositionChanged func(x, y int)
 	onContextMenu     func()
+	onDPIChanged      func()
 }
 
 // activeWidget points to the current active widget instance for wndProc dispatch.
@@ -186,8 +207,21 @@ func NewWidget(onPosChanged func(x, y int), onContextMenu func()) (*Widget, erro
 	return w, nil
 }
 
-// UpdateSurface updates the layered window with the provided 32-bit ARGB image.
+// SetOnDPIChanged sets the callback invoked when the monitor DPI changes.
+func (w *Widget) SetOnDPIChanged(fn func()) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	w.onDPIChanged = fn
+}
+
+// UpdateSurface updates the layered window with the provided 32-bit ARGB image at 1:1 scale.
 func (w *Widget) UpdateSurface(img *image.RGBA) {
+	w.UpdateSurfaceScaled(img, 1.0)
+}
+
+// UpdateSurfaceScaled updates the layered window with the provided 32-bit ARGB image
+// scaled by the specified factor (e.g. 1.0 for 100%, 2.0 for 200%).
+func (w *Widget) UpdateSurfaceScaled(img *image.RGBA, scale float64) {
 	if img == nil {
 		return
 	}
@@ -205,8 +239,19 @@ func (w *Widget) UpdateSurface(img *image.RGBA) {
 		return
 	}
 
+	if scale <= 0 {
+		scale = 1.0
+	}
+
+	targetW := int(float64(imgW)*scale + 0.5)
+	targetH := int(float64(imgH)*scale + 0.5)
+	if targetW <= 0 || targetH <= 0 {
+		targetW = imgW
+		targetH = imgH
+	}
+
 	// Reallocate DIBSection if dimensions changed
-	if imgW != w.width || imgH != w.height || w.hBitmap == 0 {
+	if targetW != w.width || targetH != w.height || w.hBitmap == 0 {
 		if w.hBitmap != 0 {
 			procSelectObject.Call(w.hdcMem, w.oldBitmap)
 			procDeleteObject.Call(w.hBitmap)
@@ -215,8 +260,8 @@ func (w *Widget) UpdateSurface(img *image.RGBA) {
 
 		var bmi bitmapInfo
 		bmi.BmiHeader.BiSize = uint32(unsafe.Sizeof(bmi.BmiHeader))
-		bmi.BmiHeader.BiWidth = int32(imgW)
-		bmi.BmiHeader.BiHeight = -int32(imgH) // negative height = top-down DIB
+		bmi.BmiHeader.BiWidth = int32(targetW)
+		bmi.BmiHeader.BiHeight = -int32(targetH) // negative height = top-down DIB
 		bmi.BmiHeader.BiPlanes = 1
 		bmi.BmiHeader.BiBitCount = 32
 		bmi.BmiHeader.BiCompression = 0 // BI_RGB
@@ -235,43 +280,43 @@ func (w *Widget) UpdateSurface(img *image.RGBA) {
 
 		w.oldBitmap, _, _ = procSelectObject.Call(w.hdcMem, hBitmap)
 		w.hBitmap = hBitmap
-		w.width = imgW
-		w.height = imgH
+		w.width = targetW
+		w.height = targetH
 	}
 
-	// Fast convert RGBA to premultiplied BGRA directly into the DIBSection buffer
-	pixCount := imgW * imgH
-	srcPix := img.Pix
-	dstPix := (*[1 << 28]byte)(w.pBits)[: pixCount*4 : pixCount*4]
+	dstPix := (*[1 << 28]byte)(w.pBits)[: targetW*targetH*4 : targetW*targetH*4]
 
-	for i := 0; i < pixCount; i++ {
-		si := i * 4
-		r := srcPix[si]
-		g := srcPix[si+1]
-		b := srcPix[si+2]
-		a := srcPix[si+3]
+	if targetW == imgW && targetH == imgH {
+		// Fast 1:1 convert RGBA to premultiplied BGRA directly into the DIBSection buffer
+		pixCount := imgW * imgH
+		srcPix := img.Pix
+		for i := 0; i < pixCount; i++ {
+			si := i * 4
+			r := srcPix[si]
+			g := srcPix[si+1]
+			b := srcPix[si+2]
+			a := srcPix[si+3]
 
-		if a == 0 {
-			dstPix[si] = 0
-			dstPix[si+1] = 0
-			dstPix[si+2] = 0
-			dstPix[si+3] = 0
-		} else if a == 255 {
-			dstPix[si] = b
-			dstPix[si+1] = g
-			dstPix[si+2] = r
-			dstPix[si+3] = 255
-		} else {
-			dstPix[si] = b
-			dstPix[si+1] = g
-			dstPix[si+2] = r
-			dstPix[si+3] = a
+			if a == 0 {
+				dstPix[si] = 0
+				dstPix[si+1] = 0
+				dstPix[si+2] = 0
+				dstPix[si+3] = 0
+			} else {
+				dstPix[si] = b
+				dstPix[si+1] = g
+				dstPix[si+2] = r
+				dstPix[si+3] = a
+			}
 		}
+	} else {
+		// High-performance bilinear scale and premultiply directly into DIBSection buffer
+		fastScaleAndPremultiply(img, dstPix, targetW, targetH)
 	}
 
 	ptDst := point{X: int32(w.posX), Y: int32(w.posY)}
 	ptSrc := point{X: 0, Y: 0}
-	sz := winSize{CX: int32(imgW), CY: int32(imgH)}
+	sz := winSize{CX: int32(targetW), CY: int32(targetH)}
 	blend := blendFunction{
 		BlendOp:             acSrcOver,
 		BlendFlags:          0,
@@ -291,7 +336,79 @@ func (w *Widget) UpdateSurface(img *image.RGBA) {
 		ulwAlpha,
 	)
 	if ret == 0 {
-		log.Printf("uiwindows: UpdateLayeredWindow failed: %v (hwnd=%#x, w=%d, h=%d)", err, w.hwnd, imgW, imgH)
+		log.Printf("uiwindows: UpdateLayeredWindow failed: %v (hwnd=%#x, w=%d, h=%d)", err, w.hwnd, targetW, targetH)
+	}
+}
+
+// fastScaleAndPremultiply scales src into dst with bilinear interpolation and premultiplies alpha for AC_SRC_ALPHA.
+func fastScaleAndPremultiply(src *image.RGBA, dst []byte, dstW, dstH int) {
+	srcW := src.Bounds().Dx()
+	srcH := src.Bounds().Dy()
+	if srcW <= 0 || srcH <= 0 || dstW <= 0 || dstH <= 0 {
+		return
+	}
+	srcPix := src.Pix
+	srcStride := src.Stride
+
+	xMap := make([]int, dstW)
+	xWeight := make([]int, dstW)
+	for dx := 0; dx < dstW; dx++ {
+		srcXFixed := (dx * (srcW - 1) << 16) / max(1, dstW-1)
+		xMap[dx] = srcXFixed >> 16
+		xWeight[dx] = (srcXFixed >> 8) & 0xFF
+	}
+
+	for dy := 0; dy < dstH; dy++ {
+		srcYFixed := (dy * (srcH - 1) << 16) / max(1, dstH-1)
+		sy0 := srcYFixed >> 16
+		sy1 := sy0 + 1
+		if sy1 >= srcH {
+			sy1 = sy0
+		}
+		wy1 := (srcYFixed >> 8) & 0xFF
+		wy0 := 256 - wy1
+
+		row0Off := sy0 * srcStride
+		row1Off := sy1 * srcStride
+		dstOff := dy * dstW * 4
+
+		for dx := 0; dx < dstW; dx++ {
+			sx0 := xMap[dx]
+			sx1 := sx0 + 1
+			if sx1 >= srcW {
+				sx1 = sx0
+			}
+			wx1 := xWeight[dx]
+			wx0 := 256 - wx1
+
+			w00 := wx0 * wy0
+			w10 := wx1 * wy0
+			w01 := wx0 * wy1
+			w11 := wx1 * wy1
+
+			i00 := row0Off + sx0*4
+			i10 := row0Off + sx1*4
+			i01 := row1Off + sx0*4
+			i11 := row1Off + sx1*4
+
+			r := (int(srcPix[i00])*w00 + int(srcPix[i10])*w10 + int(srcPix[i01])*w01 + int(srcPix[i11])*w11) >> 16
+			g := (int(srcPix[i00+1])*w00 + int(srcPix[i10+1])*w10 + int(srcPix[i01+1])*w01 + int(srcPix[i11+1])*w11) >> 16
+			b := (int(srcPix[i00+2])*w00 + int(srcPix[i10+2])*w10 + int(srcPix[i01+2])*w01 + int(srcPix[i11+2])*w11) >> 16
+			a := (int(srcPix[i00+3])*w00 + int(srcPix[i10+3])*w10 + int(srcPix[i01+3])*w01 + int(srcPix[i11+3])*w11) >> 16
+
+			di := dstOff + dx*4
+			if a == 0 {
+				dst[di] = 0
+				dst[di+1] = 0
+				dst[di+2] = 0
+				dst[di+3] = 0
+			} else {
+				dst[di] = byte(b)
+				dst[di+1] = byte(g)
+				dst[di+2] = byte(r)
+				dst[di+3] = byte(a)
+			}
+		}
 	}
 }
 
@@ -346,19 +463,16 @@ func (w *Widget) ApplyPlacement(customX, customY *int, corner string, monitorInd
 		y := *customY
 
 		// Check if coordinates fall outside the monitor work area
-		maxX := monLeft + monWidth - 80
-		maxY := monTop + monHeight - 80
-
-		if x < monLeft || x > maxX || y < monTop || y > maxY {
-			log.Printf("uiwindows: saved coordinates (%d, %d) outside work area (%d, %d, %dx%d); safely clamping",
-				x, y, monLeft, monTop, monWidth, monHeight)
-			if x > monLeft+monWidth-cardW {
+		if x < monLeft || x+cardW > monLeft+monWidth || y < monTop || y+cardH > monTop+monHeight {
+			log.Printf("uiwindows: saved coordinates (%d, %d, %dx%d) outside work area (%d, %d, %dx%d); safely clamping",
+				x, y, cardW, cardH, monLeft, monTop, monWidth, monHeight)
+			if x+cardW > monLeft+monWidth {
 				x = monLeft + monWidth - cardW - margin
 			}
 			if x < monLeft {
 				x = monLeft + margin
 			}
-			if y > monTop+monHeight-cardH {
+			if y+cardH > monTop+monHeight {
 				y = monTop + monHeight - cardH - margin
 			}
 			if y < monTop {
@@ -491,6 +605,12 @@ func widgetWndProc(hwnd uintptr, umsg uint32, wparam, lparam uintptr) uintptr {
 	case wmRButtonUp, wmContextMenu:
 		if w.onContextMenu != nil {
 			w.onContextMenu()
+		}
+		return 0
+
+	case 0x02E0: // WM_DPICHANGED
+		if w.onDPIChanged != nil {
+			w.onDPIChanged()
 		}
 		return 0
 	}

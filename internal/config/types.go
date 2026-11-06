@@ -122,6 +122,11 @@ type Config struct {
 	// (description, humidity, wind, and all rows below temperature).
 	// Defaults to 10px when 0.
 	FontSizeConditions int `json:"fontSizeConditions,omitempty"`
+
+	// WidgetScale controls the display scaling (percent) for the desktop weather widget.
+	// 0 means "auto" (match monitor DPI / resolution).
+	// Positive values (e.g. 100, 125, 150, 175, 200, 250) set an explicit scale percentage.
+	WidgetScale int `json:"widgetScale,omitempty"`
 }
 
 // DisplayFields controls which elements are visible on each city panel.
@@ -384,4 +389,12 @@ func (c *Config) GetFontSizeConditions() int {
 		return 10
 	}
 	return c.FontSizeConditions
+}
+
+// GetWidgetScale returns the configured widget scale percentage (0 = auto).
+func (c *Config) GetWidgetScale() int {
+	if c.WidgetScale < 0 {
+		return 0
+	}
+	return c.WidgetScale
 }

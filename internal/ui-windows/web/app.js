@@ -60,6 +60,9 @@ const translationTargets = {
   '#tab-language .pane-title': 'settings.language.title',
   '#tab-language .pane-desc': 'settings.language.subtitle',
   'label[for="sel-monitor"]': 'settings.monitor.label',
+  'label[for="sel-widget-scale"]': 'settings.widgetScale.title',
+  '#widget-scale-hint': 'settings.widgetScale.subtitle',
+  '#sel-widget-scale option[value="0"]': 'settings.widgetScale.auto',
   'label[for="font-city"]': 'settings.fontSize.cityTime',
   'label[for="font-temp"]': 'settings.fontSize.tempIcon',
   'label[for="font-conditions"]': 'settings.fontSize.conditions',
@@ -93,23 +96,16 @@ const translationTargets = {
   '#tab-display .card > .setting-hint': 'settings.pollution.proNote',
   '#tab-api .pane-title': 'settings.provider.title',
   '#tab-api .pane-desc': 'settings.provider.subtitle',
-  'label[for="sel-data-source"]': 'settings.windows.dataSource',
-  '#sel-data-source option[value="remote_api"]': 'settings.windows.remote',
-  '#sel-data-source option[value="local_database"]': 'settings.windows.database',
   '#remote-settings .setting-row:first-child .setting-label': 'settings.provider.label',
   '#remote-settings .setting-row:first-child .setting-hint': 'settings.provider.subtitle',
   '#row-api-key .setting-label': 'settings.provider.apiKeyLabel',
   '#row-api-key .setting-hint': 'settings.provider.note',
-  '#remote-settings a:first-child': 'settings.provider.getFreeApi',
-  '#remote-settings a:last-child': 'settings.provider.getProApi',
-  'label[for="db-host"]': 'settings.windows.host',
-  'label[for="db-port"]': 'settings.windows.port',
-  'label[for="db-name"]': 'settings.windows.database',
-  'label[for="db-user"]': 'settings.windows.username',
-  'label[for="db-password"]': 'settings.windows.password',
-  'label[for="db-query"]': 'settings.windows.query',
-  '#tab-api .card > .setting-row:nth-last-of-type(2) .setting-label': 'settings.interval.title',
-  '#tab-api .card > .setting-row:nth-last-of-type(2) .setting-hint': 'settings.interval.subtitle',
+  '#activation-title': 'settings.provider.apiKeyActivation.title',
+  '#activation-message': 'settings.provider.apiKeyActivation.message',
+  '#link-get-free-api': 'settings.provider.getFreeApi',
+  '#link-get-pro-api': 'settings.provider.getProApi',
+  '#row-refresh-interval .setting-label': 'settings.interval.title',
+  '#row-refresh-interval .setting-hint': 'settings.interval.subtitle',
   '#tab-about .pane-title': 'settings.tab.about',
   '#tab-about .pane-desc': 'settings.about.description',
   '#tab-about .setting-label': 'settings.startup.autostart',
@@ -187,6 +183,7 @@ function populateUI(cfg) {
   el('sel-icon-theme').value = cfg.iconTheme || 'new';
   selectedLocale = cfg.locale || 'en-GB';
   el('sel-monitor').value = String(cfg.monitorIndex || 0);
+  el('sel-widget-scale').value = String(cfg.widgetScale || 0);
   el('font-city').value = cfg.fontSizeCityTime || 14;
   el('font-temp').value = cfg.fontSizeTempIcon || 32;
   el('font-conditions').value = cfg.fontSizeConditions || 10;
@@ -199,15 +196,8 @@ function populateUI(cfg) {
   el('sel-ticker-profile').value = cfg.pollutionFields?.tickerProfile || 'everyday';
   el('sel-provider').value = cfg.apiConfig?.provider || 'easyweatherwidget';
   el('input-api-key').value = cfg.apiConfig?.apiKey || '';
-  el('sel-data-source').value = cfg.dataSource || 'remote_api';
-  el('db-host').value = cfg.databaseConfig?.host || '';
-  el('db-port').value = cfg.databaseConfig?.port || 5432;
-  el('db-name').value = cfg.databaseConfig?.dbName || '';
-  el('db-user').value = cfg.databaseConfig?.username || '';
-  el('db-password').value = cfg.databaseConfig?.password || '';
-  el('db-query').value = cfg.databaseConfig?.query || '';
-  updateDataSource();
   el('sel-refresh-interval').value = cfg.refreshInterval;
+  updateActivationCard();
 }
 
 function renderCityList() {
@@ -293,12 +283,68 @@ el('btn-search-city').addEventListener('click', async () => {
 
 function updateOpacityHint() { el('opacity-hint').textContent = `${t('settings.transparency.title')} (${el('slider-opacity').value}%)`; }
 el('slider-opacity').addEventListener('input', updateOpacityHint);
-function updateDataSource() {
-  const remote = el('sel-data-source').value === 'remote_api';
-  el('remote-settings').hidden = !remote;
-  el('database-settings').hidden = remote;
+
+let apiKeyVisible = false;
+function maskApiKey(key) {
+  if (!key) return '';
+  return key.replace(/[^-]/g, '•');
 }
-el('sel-data-source').addEventListener('change', updateDataSource);
+function updateActivationCard() {
+  const key = el('input-api-key').value.trim();
+  const isProProvider = el('sel-provider').value === 'easyweatherwidget';
+  const showCard = key.length > 0 || isProProvider;
+  el('activation-card').hidden = !showCard;
+  const keyEl = el('activation-key');
+  if (key.length > 0) {
+    keyEl.hidden = false;
+    keyEl.textContent = apiKeyVisible ? key : maskApiKey(key);
+  } else {
+    keyEl.hidden = true;
+    keyEl.textContent = '';
+  }
+}
+el('btn-toggle-api-key').addEventListener('click', () => {
+  apiKeyVisible = !apiKeyVisible;
+  el('input-api-key').type = apiKeyVisible ? 'text' : 'password';
+  el('btn-toggle-api-key').setAttribute('aria-pressed', String(apiKeyVisible));
+  el('icon-key-show').hidden = apiKeyVisible;
+  el('icon-key-hide').hidden = !apiKeyVisible;
+  updateActivationCard();
+});
+el('input-api-key').addEventListener('input', updateActivationCard);
+el('sel-provider').addEventListener('change', updateActivationCard);
+
+el('link-get-pro-api').addEventListener('click', async e => {
+  e.preventDefault();
+  try {
+    const clientRef = await window.goGetProAPI(el('input-api-key').value.trim());
+    el('sel-provider').value = 'easyweatherwidget';
+    el('input-api-key').value = clientRef;
+    if (currentConfig) {
+      currentConfig.apiConfig = {...currentConfig.apiConfig, provider: 'easyweatherwidget', apiKey: clientRef};
+    }
+    updateActivationCard();
+  } catch (err) {
+    showToast(format('settings.windows.error', err), true);
+  }
+});
+
+el('link-get-free-api').addEventListener('click', async e => {
+  e.preventDefault();
+  try {
+    await window.goOpenURL('https://openweathermap.org/');
+  } catch (err) {
+    showToast(format('settings.windows.error', err), true);
+  }
+});
+
+document.querySelectorAll('#tab-about .about-links a').forEach(link => {
+  link.addEventListener('click', async e => {
+    e.preventDefault();
+    try { await window.goOpenURL(link.href); } catch (_) {}
+  });
+});
+
 function updateLanguageSelection() {
   el('language-list').querySelectorAll('button').forEach(button => button.setAttribute('aria-checked', String(button.dataset.locale === selectedLocale)));
 }
@@ -391,17 +437,14 @@ function collectConfigFromUI() {
 
   cfg.iconTheme = el('sel-icon-theme').value;
   cfg.locale = selectedLocale;
+  cfg.widgetScale = Number(el('sel-widget-scale').value);
   cfg.fontSizeCityTime = Number(el('font-city').value);
   cfg.fontSizeTempIcon = Number(el('font-temp').value);
   cfg.fontSizeConditions = Number(el('font-conditions').value);
   cfg.refreshInterval = Number(el('sel-refresh-interval').value);
-  cfg.dataSource = el('sel-data-source').value;
+  cfg.dataSource = 'remote_api';
+  delete cfg.databaseConfig;
   cfg.apiConfig = {...cfg.apiConfig, provider: el('sel-provider').value, apiKey: el('input-api-key').value.trim()};
-  if (cfg.dataSource === 'local_database') {
-    cfg.databaseConfig = {...cfg.databaseConfig, host: el('db-host').value.trim(), port: Number(el('db-port').value),
-      dbName: el('db-name').value.trim(), username: el('db-user').value.trim(),
-      password: el('db-password').value, query: el('db-query').value};
-  }
   cfg.displayFields = {...cfg.displayFields};
   Object.entries(displayFields).forEach(([id, key]) => { cfg.displayFields[key] = el(id).checked; });
   cfg.pollutionFields = {...cfg.pollutionFields, tickerProfile: el('sel-ticker-profile').value};
