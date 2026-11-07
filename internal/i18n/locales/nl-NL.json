@@ -223,6 +223,7 @@
   "settings.pollution.no2": "Stikstofdioxide (NO₂)",
   "settings.pollution.o3": "Ozon (O₃)",
   "settings.pollution.pm10": "Fijnstof (PM10)",
+  "settings.pollution.proRequired": "Ontgrendel luchtkwaliteit en de vervuilingsticker met een Pro API-sleutel.",
   "settings.pollution.pm2_5": "Fijnstof (PM2.5)",
   "settings.pollution.proNote": "🍃 Altijd-aan desktopmonitor voor luchtkwaliteit \u0026 UV (Pro): Volg live PM2.5, natuurbrandrook, smog (NO₂, O₃) \u0026 LKI in maximaal 5 steden met updates per 10 min — ideaal voor hardlopers, gezinnen en bij allergie of astma.",
   "settings.pollution.profile.active": "Hardloper en fietser",

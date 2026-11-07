@@ -223,6 +223,7 @@
   "settings.pollution.no2": "Azot dioksit (NO₂)",
   "settings.pollution.o3": "Ozon (O₃)",
   "settings.pollution.pm10": "Partikül madde (PM10)",
+  "settings.pollution.proRequired": "Pro API anahtarıyla hava kalitesi ve kirlilik kayan yazısını açın.",
   "settings.pollution.pm2_5": "Partikül madde (PM2.5)",
   "settings.pollution.proNote": "🍃 Her Zaman Açık Masaüstü Hava Kalitesi ve UV Monitörü (Pro): 10 dakikalık güncellemelerle 5 şehre kadar canlı PM2.5, orman yangını dumanı, hava kirliliği (NO₂, O₃) ve HKİ takibi — koşucular, aileler ve alerji/astım bakımı için idealdir.",
   "settings.pollution.profile.active": "Koşucu ve bisikletçi",

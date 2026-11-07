@@ -111,38 +111,42 @@ type settingsLocale struct {
 	Flag        string
 }
 
-// computeSettingsWindowBounds calculates the initial Settings window size and
-// placement. On standard 96-DPI displays (scale <= 1.0), it preserves the exact
-// 1150x724 size and default OS placement so normal 100%-scale physical systems
-// are completely unaffected. On high-DPI displays (scale > 1.0, such as Retina
-// VMs at 192 DPI / 200%), it scales the window proportionally to the monitor
-// DPI and centers it within the monitor's work area (above the taskbar).
+// computeSettingsWindowBounds sizes the settings window to show the preview
+// cities when space permits, while keeping its height within the work area.
+// High-DPI windows are scaled, clamped, and centered in that work area.
 func computeSettingsWindowBounds(dpi, monLeft, monTop, monWidth, monHeight int) (width, height uint, center bool, posX, posY int) {
 	const (
 		defaultWidth  = 1150
-		defaultHeight = 724
+		defaultHeight = 880
 	)
 
+	clampHeight := func(h int) int {
+		if monHeight > 120 && h > monHeight-80 {
+			return monHeight - 80
+		}
+		if monHeight > 0 && h > monHeight {
+			return monHeight
+		}
+		return h
+	}
+
 	if dpi <= 96 {
-		return defaultWidth, defaultHeight, false, 0, 0
+		return defaultWidth, uint(clampHeight(defaultHeight)), false, 0, 0
 	}
 
 	scale := float64(dpi) / 96.0
 	w := int(float64(1080)*scale + 0.5)
-	h := int(float64(790)*scale + 0.5)
+	h := int(float64(defaultHeight)*scale + 0.5)
 
-	if monWidth > 160 && w > monWidth-120 {
-		w = monWidth - 120
-	}
-	if monHeight > 120 && h > monHeight-80 {
-		h = monHeight - 80
-	}
 	if w < defaultWidth {
 		w = defaultWidth
 	}
-	if h < defaultHeight {
-		h = defaultHeight
+	if monWidth > 160 && w > monWidth-120 {
+		w = monWidth - 120
+	} else if monWidth > 0 && w > monWidth {
+		w = monWidth
 	}
+	h = clampHeight(h)
 
 	x := monLeft + (monWidth-w)/2
 	y := monTop + (monHeight-h)/2

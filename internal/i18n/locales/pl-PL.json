@@ -223,6 +223,7 @@
   "settings.pollution.no2": "Dwutlenek azotu (NO₂)",
   "settings.pollution.o3": "Ozon (O₃)",
   "settings.pollution.pm10": "Pył zawieszony (PM10)",
+  "settings.pollution.proRequired": "Odblokuj jakość powietrza i pasek zanieczyszczeń za pomocą klucza API Pro.",
   "settings.pollution.pm2_5": "Pył zawieszony (PM2.5)",
   "settings.pollution.proNote": "🍃 Stały monitor jakości powietrza i UV na pulpicie (Pro): Śledź na żywo PM2.5, dym z pożarów, smog (NO₂, O₃) i AQI w maks. 5 miastach z odświeżaniem co 10 min — idealny dla biegaczy, rodzin oraz alergików i astmatyków.",
   "settings.pollution.profile.active": "Biegacz i rowerzysta",

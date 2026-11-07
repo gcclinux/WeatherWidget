@@ -223,6 +223,7 @@
   "settings.pollution.no2": "Nitrogen dioxide (NO₂)",
   "settings.pollution.o3": "Ozone (O₃)",
   "settings.pollution.pm10": "Particulates (PM10)",
+  "settings.pollution.proRequired": "Unlock air quality and the pollution ticker with a Pro API key.",
   "settings.pollution.pm2_5": "Particulates (PM2.5)",
   "settings.pollution.proNote": "🍃 Always-On Desktop Air Quality \u0026 UV Monitor (Pro): Track live PM2.5, Wildfire Smoke, Smog (NO₂, O₃) \u0026 AQI across up to 5 cities with 10-min updates — ideal for runners, families, and allergy/asthma care.",
   "settings.pollution.profile.active": "Runner \u0026 Cyclist",

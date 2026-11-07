@@ -28,6 +28,10 @@ const translationTargets = {
   '[data-tab="tab-about"] .nav-label': 'settings.tab.about',
   '.app-subtitle': 'settings.title',
   '#tab-cities .pane-desc': 'settings.locations.savedSubtitle',
+  '#demo-banner-title': 'settings.locations.demoBanner.title',
+  '#demo-banner-subtitle': 'settings.locations.demoBanner.subtitle',
+  '#demo-banner-pro': 'settings.locations.demoBanner.proBtn',
+  '#demo-banner-free': 'settings.locations.demoBanner.freeBtn',
   '#btn-save': 'settings.save', '#btn-cancel': 'settings.cancel',
   '#tab-cities .pane-title': 'settings.locations.savedTitle',
   '#btn-add-city': 'settings.locations.addBtn', '#btn-search-city': 'settings.locations.searchBtn',
@@ -92,7 +96,9 @@ const translationTargets = {
   '#sel-corner option[value="top-right"]': 'settings.position.topRight',
   '#sel-corner option[value="bottom-left"]': 'settings.position.bottomLeft',
   '#sel-corner option[value="bottom-right"]': 'settings.position.bottomRight',
-  '#tab-display .card-subtitle:nth-of-type(2)': 'settings.pollution.title',
+  '#pollution-title': 'settings.pollution.title',
+  '#pollution-locked-message': 'settings.pollution.proRequired',
+  '#pollution-get-pro': 'settings.locations.demoBanner.proBtn',
   '#tab-display .card > .setting-hint': 'settings.pollution.proNote',
   '#tab-api .pane-title': 'settings.provider.title',
   '#tab-api .pane-desc': 'settings.provider.subtitle',
@@ -152,13 +158,36 @@ const placeholderTargets = {
   '#new-city-lon': 'settings.locations.lonLabel',
   '#input-api-key': 'settings.provider.apiKeyPlaceholder'
 };
-document.querySelectorAll('.nav-item').forEach(item => {
-  item.addEventListener('click', () => {
-    document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active'));
-    document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
-    item.classList.add('active');
-    el(item.dataset.tab).classList.add('active');
-  });
+function selectTab(item) {
+  document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active'));
+  document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+  item.classList.add('active');
+  el(item.dataset.tab).classList.add('active');
+}
+document.querySelectorAll('.nav-item').forEach(item => item.addEventListener('click', () => selectTab(item)));
+
+function updateDemoBanner() {
+  el('demo-banner').hidden = !!(currentConfig?.apiConfig?.apiKey || currentConfig?.databaseConfig?.host);
+}
+
+function updatePollutionControls() {
+  const isPro = !!(currentConfig?.apiConfig?.provider === 'easyweatherwidget' && currentConfig.apiConfig.apiKey);
+  el('pollution-controls').disabled = !isPro;
+  el('pollution-unlock').hidden = isPro;
+  if (isPro) el('pollution-controls').removeAttribute('aria-describedby');
+  else el('pollution-controls').setAttribute('aria-describedby', 'pollution-locked-message');
+}
+
+el('demo-banner-pro').addEventListener('click', () => {
+  selectTab(document.querySelector('[data-tab="tab-api"]'));
+  el('link-get-pro-api').click();
+});
+el('pollution-get-pro').addEventListener('click', () => el('demo-banner-pro').click());
+el('demo-banner-free').addEventListener('click', () => {
+  selectTab(document.querySelector('[data-tab="tab-api"]'));
+  el('sel-provider').value = 'openweathermap';
+  el('sel-provider').dispatchEvent(new Event('change'));
+  el('input-api-key').focus();
 });
 
 function showToast(message, isError = false) {
@@ -198,6 +227,8 @@ function populateUI(cfg) {
   el('input-api-key').value = cfg.apiConfig?.apiKey || '';
   el('sel-refresh-interval').value = cfg.refreshInterval;
   updateActivationCard();
+  updateDemoBanner();
+  updatePollutionControls();
 }
 
 function renderCityList() {
@@ -322,8 +353,12 @@ el('link-get-pro-api').addEventListener('click', async e => {
     el('input-api-key').value = clientRef;
     if (currentConfig) {
       currentConfig.apiConfig = {...currentConfig.apiConfig, provider: 'easyweatherwidget', apiKey: clientRef};
+      currentConfig.dataSource = 'remote_api';
+      delete currentConfig.databaseConfig;
     }
     updateActivationCard();
+    updateDemoBanner();
+    updatePollutionControls();
   } catch (err) {
     showToast(format('settings.windows.error', err), true);
   }
@@ -478,6 +513,8 @@ el('btn-save').addEventListener('click', async () => {
     const cfg = collectConfigFromUI();
     await window.goSaveConfig(JSON.stringify(cfg));
     currentConfig = cfg;
+    updateDemoBanner();
+    updatePollutionControls();
     showToast(t('settings.dialog.savedMsg'));
   } catch (err) {
     showToast(format('error.settings.saveFailed', err), true);

@@ -223,6 +223,7 @@
   "settings.pollution.no2": "Dioxyde d'azote (NO₂)",
   "settings.pollution.o3": "Ozone (O₃)",
   "settings.pollution.pm10": "Particules (PM10)",
+  "settings.pollution.proRequired": "Débloquez la qualité de l'air et le bandeau de pollution avec une clé API Pro.",
   "settings.pollution.pm2_5": "Particules fines (PM2.5)",
   "settings.pollution.proNote": "🍃 Moniteur permanent de qualité de l'air et UV (Pro) : Suivez en direct PM2.5, fumées d'incendies, smog (NO₂, O₃) et IQA dans jusqu'à 5 villes toutes les 10 min — idéal pour les coureurs, les familles et le suivi des allergies/de l'asthme.",
   "settings.pollution.profile.active": "Course et vélo",
