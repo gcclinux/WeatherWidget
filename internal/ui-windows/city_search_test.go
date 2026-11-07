@@ -43,3 +43,29 @@ func TestCityAutofillRequiresCountryAndUsesItInSearch(t *testing.T) {
 		t.Fatalf("incorrect auto-fill result: %+v", city)
 	}
 }
+
+func TestCityAutofillEWWWeatherNews(t *testing.T) {
+	lm, err := i18n.NewLocaleManager(i18n.LocaleFS)
+	if err != nil {
+		t.Fatal(err)
+	}
+	old := http.DefaultClient
+	t.Cleanup(func() { http.DefaultClient = old })
+	var gotPath string
+	http.DefaultClient = &http.Client{Transport: searchRoundTripper(func(req *http.Request) (*http.Response, error) {
+		gotPath = req.URL.Path
+		body := `{"city_name":"Holambra","country_code":"BR","lat":-22.6332028,"lon":-47.0545305}`
+		return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader(body)), Header: make(http.Header)}, nil
+	})}
+	city, err := searchSettingsCity("Holambra", "BR", "easyweatherwidget", "free", lm)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantPath := "/api/v1/weather-news/key=free/Holambra,BR"
+	if gotPath != wantPath {
+		t.Fatalf("search path = %q, want %q", gotPath, wantPath)
+	}
+	if city.Name != "Holambra" || city.Region != "BR" || city.Timezone != "America/Sao_Paulo" || city.Latitude != -22.6332028 || city.Longitude != -47.0545305 {
+		t.Fatalf("incorrect EWW auto-fill result: %+v", city)
+	}
+}

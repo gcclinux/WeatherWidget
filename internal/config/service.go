@@ -61,10 +61,10 @@ func (s *ConfigService) Load() (*Config, error) {
 	// Normalize wind speed unit: invalid or missing values default to km/h.
 	cfg.WindSpeedUnit = NormalizeWindSpeedUnit(cfg.WindSpeedUnit)
 
-	// Enforce free mode: without a license, only default cities are allowed.
-	if !cfg.HasLicense() {
-		cfg.Cities = DefaultCities()
-	}
+	// Enforce free/demo mode: without a license (no API key and no database),
+	// only the built-in default cities are loaded so the widget keeps working
+	// instead of failing to fetch cities that require an API key.
+	cfg.ApplyDemoMode()
 
 	return &cfg, nil
 }

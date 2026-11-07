@@ -22,6 +22,8 @@ extern void settingsSaveCB(const char *newCfgJSON);
 extern void settingsClosedCB(void);
 extern int  settingsAutostartGetCB(void);
 extern int  settingsAutostartSetCB(int enabled);
+extern char *settingsTestConnectionCB(const char *provider, const char *apiKey);
+extern char *settingsSearchCityCB(const char *provider, const char *apiKey, const char *name, const char *region);
 
 // ── Supported languages ───────────────────────────────────────────────────────
 // The language list (code / native name / English name / flag path) is now
@@ -561,70 +563,40 @@ static WWSettingsController *g_settingsController = nil;
     _checkConnBtn.title = [self L:@"settings.provider.checkingConnection" fallback:@"Checking..."];
 
     BOOL isOwm = (_providerPop.indexOfSelectedItem == 1);
+    NSString *provider = isOwm ? @"openweathermap" : @"easyweatherwidget";
     NSString *providerName = [(_providerPop.titleOfSelectedItem ?: (isOwm ? @"OpenWeatherMap (Free)" : @"EasyWeatherWidget (Pro)")) copy];
-    NSString *testURL = nil;
-    if (isOwm) {
-        testURL = [NSString stringWithFormat:@"https://api.openweathermap.org/data/2.5/weather?q=London&appid=%@&units=metric",
-            [apiKey stringByAddingPercentEncodingWithAllowedCharacters:[NSCharacterSet URLQueryAllowedCharacterSet]]];
-    } else {
-        testURL = [NSString stringWithFormat:@"https://weather-gateway-ricardo.web.app/api/v1/weather/key=%@/London,GB",
-            [apiKey stringByAddingPercentEncodingWithAllowedCharacters:[NSCharacterSet URLPathAllowedCharacterSet]]];
-    }
-
+    NSString *capturedKey = [apiKey copy];
     WWSettingsController *weakSelf = self;
-    NSURL *url = [NSURL URLWithString:testURL];
-    NSURLRequest *req = [NSURLRequest requestWithURL:url cachePolicy:NSURLRequestReloadIgnoringLocalCacheData timeoutInterval:10.0];
 
-    NSURLSessionDataTask *task = [[NSURLSession sharedSession] dataTaskWithRequest:req
-        completionHandler:^(NSData *data, NSURLResponse *response, NSError *error) {
-            dispatch_async(dispatch_get_main_queue(), ^{
-                WWSettingsController *s = weakSelf;
-                if (s) {
-                    s.checkConnBtn.enabled = YES;
-                    s.checkConnBtn.title = [s L:@"settings.provider.checkConnection" fallback:@"Check Connection"];
+    dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+        char *cErr = settingsTestConnectionCB([provider UTF8String], [capturedKey UTF8String]);
+        NSString *errStr = cErr ? [[NSString alloc] initWithUTF8String:cErr] : nil;
+        if (cErr) free(cErr);
 
-                    if (error) {
-                        if (s.activationCard) s.activationCard.hidden = YES;
-                        NSString *msg = [s formatConnectionFailedMsgWithProvider:providerName detail:error.localizedDescription];
-                        [s showAlert:[s L:@"settings.provider.connectionFailedTitle" fallback:@"Connection Failed"] info:msg];
-                    } else {
-                        NSHTTPURLResponse *httpResp = (NSHTTPURLResponse *)response;
-                        if (httpResp && (httpResp.statusCode == 200)) {
-                            [s updateActivationCardState];
-                            [s updateLocationsUnlockedState];
-                            [s updatePollutionUnlockedState];
-                            NSString *msg = [s formatConnectionSuccessMsgWithProvider:providerName];
-                            [s showAlert:[s L:@"settings.provider.connectionSuccessTitle" fallback:@"Connection Successful"]
-                                    info:msg];
-                        } else {
-                            if (s.activationCard) s.activationCard.hidden = YES;
-                            NSInteger code = httpResp ? httpResp.statusCode : 0;
-                            NSString *detail = @"";
-                            if (data && data.length > 0) {
-                                NSDictionary *errJson = [NSJSONSerialization JSONObjectWithData:data options:0 error:nil];
-                                if ([errJson isKindOfClass:[NSDictionary class]]) {
-                                    if (errJson[@"message"]) detail = [NSString stringWithFormat:@" (%@)", errJson[@"message"]];
-                                    else if (errJson[@"error"]) detail = [NSString stringWithFormat:@" (%@)", errJson[@"error"]];
-                                } else {
-                                    NSString *bodyStr = [[[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding] autorelease];
-                                    bodyStr = [bodyStr stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
-                                    if (bodyStr.length > 0 && bodyStr.length < 200) {
-                                        detail = [NSString stringWithFormat:@" (%@)", bodyStr];
-                                    }
-                                }
-                            }
-                            NSString *errInfo = (code == 401)
-                                ? [NSString stringWithFormat:@"invalid API key (HTTP %ld)%@", (long)code, detail]
-                                : [NSString stringWithFormat:@"HTTP %ld%@", (long)code, detail];
-                            NSString *msg = [s formatConnectionFailedMsgWithProvider:providerName detail:errInfo];
-                            [s showAlert:[s L:@"settings.provider.connectionFailedTitle" fallback:@"Connection Failed"] info:msg];
-                        }
-                    }
+        dispatch_async(dispatch_get_main_queue(), ^{
+            WWSettingsController *s = weakSelf;
+            if (s) {
+                s.checkConnBtn.enabled = YES;
+                s.checkConnBtn.title = [s L:@"settings.provider.checkConnection" fallback:@"Check Connection"];
+
+                if (errStr) {
+                    if (s.activationCard) s.activationCard.hidden = YES;
+                    NSString *msg = [s formatConnectionFailedMsgWithProvider:providerName detail:errStr];
+                    [s showAlert:[s L:@"settings.provider.connectionFailedTitle" fallback:@"Connection Failed"] info:msg];
+                } else {
+                    [s updateActivationCardState];
+                    [s updateLocationsUnlockedState];
+                    [s updatePollutionUnlockedState];
+                    NSString *msg = [s formatConnectionSuccessMsgWithProvider:providerName];
+                    [s showAlert:[s L:@"settings.provider.connectionSuccessTitle" fallback:@"Connection Successful"]
+                            info:msg];
                 }
-                [providerName release];
-            });
-        }];
-    [task resume];
+            }
+            [errStr release];
+            [capturedKey release];
+            [providerName release];
+        });
+    });
 }
 
 - (void)triggerGetProAPI {
@@ -977,122 +949,46 @@ static WWSettingsController *g_settingsController = nil;
         __block NSString *foundTZ     = nil;
         __block NSString *errorMsg    = nil;
 
-        if ([capturedProvider isEqualToString:@"easyweatherwidget"]) {
-            // ── EasyWeatherWidget geocoding API ──────────────────────────────
-            NSString *query = [NSString stringWithFormat:@"%@,%@", capturedName, capturedRegion];
-            NSString *encodedQuery = [query stringByAddingPercentEncodingWithAllowedCharacters:
-                [NSCharacterSet URLPathAllowedCharacterSet]];
-            NSString *encodedKey = [capturedKey stringByAddingPercentEncodingWithAllowedCharacters:
-                [NSCharacterSet URLPathAllowedCharacterSet]];
-            NSString *uStr = [NSString stringWithFormat:
-                @"https://weather-gateway-ricardo.web.app/api/v1/weather/key=%@/%@",
-                encodedKey, encodedQuery];
-            NSURL *url = [NSURL URLWithString:uStr];
-            NSURLRequest *req = [NSURLRequest requestWithURL:url
-                cachePolicy:NSURLRequestReloadIgnoringLocalCacheData timeoutInterval:10.0];
-            dispatch_semaphore_t sem = dispatch_semaphore_create(0);
-            [[[NSURLSession sharedSession] dataTaskWithRequest:req completionHandler:^(NSData *data, NSURLResponse *resp, NSError *err) {
-                if (err || !data) {
-                    errorMsg = [(err ? err.localizedDescription : @"No data") copy];
-                } else {
-                    NSDictionary *result = [NSJSONSerialization JSONObjectWithData:data options:0 error:nil];
-                    NSString *neighborhood = result[@"Neighborhood"];
-                    NSString *country      = result[@"Country"];
-                    NSNumber *latNum       = result[@"Lat"];
-                    NSNumber *lonNum       = result[@"Lon"];
-                    if (neighborhood.length > 0 && latNum && lonNum) {
-                        foundName   = [neighborhood copy];
-                        foundRegion = [(country ?: @"") copy];
-                        foundLat    = [[NSString stringWithFormat:@"%f", [latNum doubleValue]] copy];
-                        foundLon    = [[NSString stringWithFormat:@"%f", [lonNum doubleValue]] copy];
-                        // Timezone lookup via the OpenStreetMap nominatim-style TZ offset API.
-                        double lat = [latNum doubleValue];
-                        double lon = [lonNum doubleValue];
-                        NSString *tzUrl = [NSString stringWithFormat:
-                            @"https://nominatim.openstreetmap.org/reverse?format=json&lat=%f&lon=%f",
-                            lat, lon];
-                        NSData *tzData = [NSData dataWithContentsOfURL:[NSURL URLWithString:tzUrl]];
-                        NSDictionary *tzResult = tzData ? [NSJSONSerialization JSONObjectWithData:tzData options:0 error:nil] : nil;
-                        NSString *tz = tzResult[@"address"][@"country_code"];
-                        // Fallback: look up IANA timezone from the TimeZoneDB or use UTC.
-                        // For a richer lookup use the dedicated timezone API.
-                        NSString *tzApiUrl = [NSString stringWithFormat:
-                            @"https://timeapi.io/api/timezone/coordinate?latitude=%f&longitude=%f",
-                            lat, lon];
-                        NSData *tzApiData = [NSData dataWithContentsOfURL:[NSURL URLWithString:tzApiUrl]];
-                        if (tzApiData) {
-                            NSDictionary *tzApiResult = [NSJSONSerialization JSONObjectWithData:tzApiData options:0 error:nil];
-                            NSString *ianaZone = tzApiResult[@"timeZone"];
-                            if (ianaZone.length > 0) {
-                                foundTZ = [ianaZone copy];
-                            }
-                        }
-                        if (!foundTZ) foundTZ = @"";
-                    } else {
-                        errorMsg = [[NSString stringWithFormat:@"no city found matching \u2018%@\u2019", capturedName] copy];
-                    }
-                }
-                dispatch_semaphore_signal(sem);
-            }] resume];
-            // Wait unconditionally so the completion handler (which signals the
-            // semaphore) has finished before we release it — signalling an
-            // already-released dispatch object would crash under MRC.
-            dispatch_semaphore_wait(sem, DISPATCH_TIME_FOREVER);
-            dispatch_release(sem);
-
+        char *cRes = settingsSearchCityCB(
+            [capturedProvider UTF8String],
+            [capturedKey UTF8String],
+            [capturedName UTF8String],
+            [capturedRegion UTF8String]);
+        if (!cRes) {
+            errorMsg = [@"No data" copy];
         } else {
-            // ── OpenWeatherMap geocoding API ─────────────────────────────────
-            NSString *encodedName = [capturedName stringByAddingPercentEncodingWithAllowedCharacters:
-                [NSCharacterSet URLQueryAllowedCharacterSet]];
-            NSString *encodedKey = [capturedKey stringByAddingPercentEncodingWithAllowedCharacters:
-                [NSCharacterSet URLQueryAllowedCharacterSet]];
-            NSString *uStr = [NSString stringWithFormat:
-                @"http://api.openweathermap.org/geo/1.0/direct?q=%@&limit=1&appid=%@",
-                encodedName, encodedKey];
-            NSURL *url = [NSURL URLWithString:uStr];
-            NSURLRequest *req = [NSURLRequest requestWithURL:url
-                cachePolicy:NSURLRequestReloadIgnoringLocalCacheData timeoutInterval:10.0];
-            dispatch_semaphore_t sem = dispatch_semaphore_create(0);
-            [[[NSURLSession sharedSession] dataTaskWithRequest:req completionHandler:^(NSData *data, NSURLResponse *resp, NSError *err) {
-                if (err || !data) {
-                    errorMsg = [(err ? err.localizedDescription : @"No data") copy];
+            NSData *resData = [NSData dataWithBytes:cRes length:strlen(cRes)];
+            free(cRes);
+            NSDictionary *res = [NSJSONSerialization JSONObjectWithData:resData options:0 error:nil];
+            NSString *errField = [res isKindOfClass:[NSDictionary class]] ? res[@"error"] : nil;
+            BOOL notFound = [res isKindOfClass:[NSDictionary class]] && [res[@"notFound"] boolValue];
+            if (notFound) {
+                errorMsg = [[NSString stringWithFormat:@"no city found matching \u2018%@\u2019", capturedName] copy];
+            } else if (errField.length > 0) {
+                errorMsg = [errField copy];
+            } else if ([res isKindOfClass:[NSDictionary class]]) {
+                NSString *rName   = res[@"name"];
+                NSString *rRegion = res[@"region"];
+                NSNumber *rLat    = res[@"latitude"];
+                NSNumber *rLon    = res[@"longitude"];
+                NSString *rTZ     = res[@"timezone"];
+                if (rName.length > 0 && rLat && rLon) {
+                    foundName   = [rName copy];
+                    foundRegion = [(rRegion ?: @"") copy];
+                    foundLat    = [[NSString stringWithFormat:@"%f", [rLat doubleValue]] copy];
+                    foundLon    = [[NSString stringWithFormat:@"%f", [rLon doubleValue]] copy];
+                    foundTZ     = [(rTZ ?: @"") copy];
                 } else {
-                    NSArray *results = [NSJSONSerialization JSONObjectWithData:data options:0 error:nil];
-                    NSDictionary *r = results.firstObject;
-                    if (r) {
-                        NSString *state   = r[@"state"];
-                        NSString *country = r[@"country"] ?: @"";
-                        foundName   = [(r[@"name"] ?: @"") copy];
-                        foundRegion = [((state.length > 0)
-                            ? [NSString stringWithFormat:@"%@, %@", state, country]
-                            : country) copy];
-                        double lat = [r[@"lat"] doubleValue];
-                        double lon = [r[@"lon"] doubleValue];
-                        foundLat = [[NSString stringWithFormat:@"%f", lat] copy];
-                        foundLon = [[NSString stringWithFormat:@"%f", lon] copy];
-                        // Timezone lookup via timeapi.io.
-                        NSString *tzApiUrl = [NSString stringWithFormat:
-                            @"https://timeapi.io/api/timezone/coordinate?latitude=%f&longitude=%f",
-                            lat, lon];
-                        NSData *tzApiData = [NSData dataWithContentsOfURL:[NSURL URLWithString:tzApiUrl]];
-                        if (tzApiData) {
-                            NSDictionary *tzResult = [NSJSONSerialization JSONObjectWithData:tzApiData options:0 error:nil];
-                            NSString *ianaZone = tzResult[@"timeZone"];
-                            if (ianaZone.length > 0) foundTZ = [ianaZone copy];
-                        }
-                        if (!foundTZ) foundTZ = @"";
-                    } else {
-                        errorMsg = [[NSString stringWithFormat:@"no city found matching \u2018%@\u2019", capturedName] copy];
-                    }
+                    errorMsg = [[NSString stringWithFormat:@"no city found matching \u2018%@\u2019", capturedName] copy];
                 }
-                dispatch_semaphore_signal(sem);
-            }] resume];
-            // Wait unconditionally so the completion handler (which signals the
-            // semaphore) has finished before we release it — signalling an
-            // already-released dispatch object would crash under MRC.
-            dispatch_semaphore_wait(sem, DISPATCH_TIME_FOREVER);
-            dispatch_release(sem);
+            } else {
+                errorMsg = [@"Invalid search response" copy];
+            }
         }
+        [capturedProvider release];
+        [capturedKey release];
+        [capturedName release];
+        [capturedRegion release];
 
         // ── Back on the main thread: populate fields or show error ────────────
         dispatch_async(dispatch_get_main_queue(), ^{

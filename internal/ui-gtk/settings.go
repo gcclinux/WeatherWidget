@@ -5,12 +5,9 @@ package uitk
 import (
 	"context"
 	"crypto/rand"
-	"encoding/json"
+	"errors"
 	"fmt"
-	"io"
 	"log"
-	"net/http"
-	"net/url"
 	"os/exec"
 	"strconv"
 	"strings"
@@ -1771,96 +1768,40 @@ func buildLocationsTab(m *manager, dlg *gtk.Dialog, initialCities []config.CityC
 		go func() {
 			defer runOnUI(func() { searchBtn.SetSensitive(true) })
 
-			var foundName, foundRegion, foundTZ string
-			var foundLat, foundLon float64
-			var searchErr error
-
-			switch provider {
-			case "easyweatherwidget":
-				if region == "" {
-					runOnUI(func() {
-						statusLbl.SetText(m.t("error.settings.regionRequiredEww"))
-					})
-					return
-				}
-				query := name + "," + region
-				uStr := fmt.Sprintf("https://weather-gateway-ricardo.web.app/api/v1/weather/key=%s/%s",
-					url.PathEscape(apiKey), url.PathEscape(query))
-				ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-				defer cancel()
-				req, _ := http.NewRequestWithContext(ctx, "GET", uStr, nil)
-				resp, err := http.DefaultClient.Do(req)
-				if err != nil {
-					searchErr = err
-					break
-				}
-				defer resp.Body.Close()
-				body, _ := io.ReadAll(resp.Body)
-				var result struct {
-					Neighborhood string  `json:"Neighborhood"`
-					Country      string  `json:"Country"`
-					Lat          float64 `json:"Lat"`
-					Lon          float64 `json:"Lon"`
-				}
-				if err := json.Unmarshal(body, &result); err != nil || result.Neighborhood == "" {
-					n := name
-					runOnUI(func() { statusLbl.SetText(fmt.Sprintf(m.t("error.settings.noCityFound"), n)) })
-					return
-				}
-				foundName = result.Neighborhood
-				foundRegion = result.Country
-				foundLat = result.Lat
-				foundLon = result.Lon
-				foundTZ = lookupTimezone(foundLat, foundLon)
-
-			default: // openweathermap
-				uStr := fmt.Sprintf("https://api.openweathermap.org/geo/1.0/direct?q=%s&limit=1&appid=%s",
-					url.QueryEscape(name), url.QueryEscape(apiKey))
-				ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-				defer cancel()
-				req, _ := http.NewRequestWithContext(ctx, "GET", uStr, nil)
-				resp, err := http.DefaultClient.Do(req)
-				if err != nil {
-					searchErr = err
-					break
-				}
-				defer resp.Body.Close()
-				body, _ := io.ReadAll(resp.Body)
-				var results []struct {
-					Name    string  `json:"name"`
-					Lat     float64 `json:"lat"`
-					Lon     float64 `json:"lon"`
-					Country string  `json:"country"`
-					State   string  `json:"state"`
-				}
-				if err := json.Unmarshal(body, &results); err != nil || len(results) == 0 {
-					n := name
-					runOnUI(func() { statusLbl.SetText(fmt.Sprintf(m.t("error.settings.noCityFound"), n)) })
-					return
-				}
-				r := results[0]
-				foundName = r.Name
-				foundRegion = r.Country
-				if r.State != "" {
-					foundRegion = r.State + ", " + r.Country
-				}
-				foundLat = r.Lat
-				foundLon = r.Lon
-				foundTZ = lookupTimezone(foundLat, foundLon)
-			}
-
-			if searchErr != nil {
-				err := searchErr
-				runOnUI(func() { statusLbl.SetText(fmt.Sprintf(m.t("error.settings.searchFailed"), err)) })
+			if provider == "easyweatherwidget" && region == "" {
+				runOnUI(func() {
+					statusLbl.SetText(m.t("error.settings.regionRequiredEww"))
+				})
 				return
 			}
 
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+
+			adapter := remoteapi.NewRemoteAPIAdapter(provider, apiKey)
+			city, err := adapter.SearchCity(ctx, name, region)
+			if err != nil {
+				var se *remoteapi.CitySearchError
+				if errors.As(err, &se) && se.Kind == remoteapi.SearchErrRequest {
+					reqErr := se.Err
+					runOnUI(func() { statusLbl.SetText(fmt.Sprintf(m.t("error.settings.searchFailed"), reqErr)) })
+					return
+				}
+				n := name
+				runOnUI(func() { statusLbl.SetText(fmt.Sprintf(m.t("error.settings.noCityFound"), n)) })
+				return
+			}
+
+			foundTZ := city.Timezone
+			if foundTZ == "" {
+				foundTZ = lookupTimezone(city.Latitude, city.Longitude)
+			}
 			if foundTZ == "" {
 				foundTZ = "UTC"
 			}
 
-			fName, fRegion, fTZ := foundName, foundRegion, foundTZ
-			fLat, fLon := foundLat, foundLon
+			fName, fRegion, fTZ := city.Name, city.Region, foundTZ
+			fLat, fLon := city.Latitude, city.Longitude
 			runOnUI(func() {
 				suppressEntryChange = true
 				nameEntry.SetText(fName)

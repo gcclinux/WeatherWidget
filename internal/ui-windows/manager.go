@@ -116,6 +116,11 @@ func Run(appDataDir string, openSettings bool) error {
 		log.Printf("uiwindows: failed to load config, using defaults: %v", err)
 		cfg = config.DefaultConfig()
 	}
+	// No API key (Pro or Free) and no database configured: start in demo mode
+	// with the three built-in cities, which are fetched without an API key.
+	if cfg.ApplyDemoMode() {
+		log.Println("uiwindows: no API key configured, loading demo cities")
+	}
 	m.cfg = cfg
 
 	// 3. Load localization manager.
@@ -365,14 +370,12 @@ func (m *Manager) onWidgetContextMenu() {
 // buildProvider creates a WeatherProvider based on the config.
 func (m *Manager) buildProvider(cfg *config.Config) (weather.WeatherProvider, error) {
 	provider := "easyweatherwidget"
-	apiKey := ""
-	if cfg.APIConfig != nil {
-		if cfg.APIConfig.Provider != "" {
-			provider = cfg.APIConfig.Provider
-		}
-		apiKey = cfg.APIConfig.APIKey
+	apiKey := cfg.APIKeyValue()
+	if cfg.APIConfig != nil && cfg.APIConfig.Provider != "" {
+		provider = cfg.APIConfig.Provider
 	}
 	if apiKey == "" {
+		// Demo mode: the default cities are served by Open-Meteo without a key.
 		provider = "openmeteo"
 	}
 	return remoteapi.NewRemoteAPIAdapter(provider, apiKey), nil

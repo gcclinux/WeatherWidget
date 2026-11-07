@@ -22,11 +22,13 @@ func TestProperty1_EWWResponseParsingConsistency(t *testing.T) {
 	rapid.Check(t, func(t *rapid.T) {
 		// Generate an arbitrary ewwResponse
 		eww := ewwResponse{
-			Temp:         rapid.Float64Range(-100, 100).Draw(t, "Temp"),
-			Neighborhood: rapid.String().Draw(t, "Neighborhood"),
-			Country:      rapid.String().Draw(t, "Country"),
-			FreeText:     rapid.String().Draw(t, "FreeText"),
+			CityName:     rapid.String().Draw(t, "CityName"),
+			CountryCode:  rapid.String().Draw(t, "CountryCode"),
 			ObsTimeLocal: rapid.String().Draw(t, "ObsTimeLocal"),
+			Weather: ewwWeather{
+				Temp:     rapid.Float64Range(-100, 100).Draw(t, "Temp"),
+				FreeText: rapid.String().Draw(t, "FreeText"),
+			},
 		}
 
 		// Serve the response via httptest.Server
@@ -52,9 +54,9 @@ func TestProperty1_EWWResponseParsingConsistency(t *testing.T) {
 		}
 
 		// Assert: Temperature == int(math.Round(Temp))
-		expectedTemp := int(math.Round(eww.Temp))
+		expectedTemp := int(math.Round(eww.Weather.Temp))
 		if data.Temperature != expectedTemp {
-			t.Fatalf("Temperature = %d, want %d (from Temp = %f)", data.Temperature, expectedTemp, eww.Temp)
+			t.Fatalf("Temperature = %d, want %d (from Temp = %f)", data.Temperature, expectedTemp, eww.Weather.Temp)
 		}
 
 		// Assert: CityName == city.Name
@@ -68,8 +70,8 @@ func TestProperty1_EWWResponseParsingConsistency(t *testing.T) {
 		}
 
 		// Assert: Description == FreeText
-		if data.Description != eww.FreeText {
-			t.Fatalf("Description = %q, want %q", data.Description, eww.FreeText)
+		if data.Description != eww.Weather.FreeText {
+			t.Fatalf("Description = %q, want %q", data.Description, eww.Weather.FreeText)
 		}
 
 		// Assert: IconCode ∈ AllIconCodes

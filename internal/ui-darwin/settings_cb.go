@@ -13,8 +13,14 @@ package uidarwin
 import "C"
 
 import (
+	"context"
+	"encoding/json"
+	"errors"
 	"log"
 	"sync"
+	"time"
+
+	"weatherwidget/internal/weather/remoteapi"
 )
 
 var (
@@ -76,4 +82,67 @@ func settingsAutostartSetCB(enabled C.int) C.int {
 		return 0
 	}
 	return 1
+}
+
+// settingsTestConnectionCB verifies the remote API credentials via RemoteAPIAdapter.
+// Returns NULL on success, or a newly allocated C string with the error message
+// (which the caller must free).
+//
+//export settingsTestConnectionCB
+func settingsTestConnectionCB(provider *C.char, apiKey *C.char) *C.char {
+	prov := C.GoString(provider)
+	key := C.GoString(apiKey)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	adapter := remoteapi.NewRemoteAPIAdapter(prov, key)
+	if err := adapter.TestConnection(ctx); err != nil {
+		return C.CString(err.Error())
+	}
+	return nil
+}
+
+// settingsSearchCityCB searches for a city via RemoteAPIAdapter.SearchCity and
+// returns a newly allocated JSON C string (which the caller must free).
+//
+//export settingsSearchCityCB
+func settingsSearchCityCB(provider *C.char, apiKey *C.char, name *C.char, region *C.char) *C.char {
+	type searchResult struct {
+		Name      string  `json:"name,omitempty"`
+		Region    string  `json:"region,omitempty"`
+		Latitude  float64 `json:"latitude,omitempty"`
+		Longitude float64 `json:"longitude,omitempty"`
+		Timezone  string  `json:"timezone,omitempty"`
+		Error     string  `json:"error,omitempty"`
+		NotFound  bool    `json:"notFound,omitempty"`
+	}
+
+	prov := C.GoString(provider)
+	key := C.GoString(apiKey)
+	cityName := C.GoString(name)
+	cityRegion := C.GoString(region)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	adapter := remoteapi.NewRemoteAPIAdapter(prov, key)
+	city, err := adapter.SearchCity(ctx, cityName, cityRegion)
+	var out searchResult
+	if err != nil {
+		var se *remoteapi.CitySearchError
+		if errors.As(err, &se) && (se.Kind == remoteapi.SearchErrNotFound || se.Kind == remoteapi.SearchErrAPIStatus || se.Kind == remoteapi.SearchErrDecode) {
+			out.NotFound = true
+		}
+		out.Error = err.Error()
+	} else {
+		out = searchResult{
+			Name:      city.Name,
+			Region:    city.Region,
+			Latitude:  city.Latitude,
+			Longitude: city.Longitude,
+			Timezone:  city.Timezone,
+		}
+	}
+	b, _ := json.Marshal(out)
+	return C.CString(string(b))
 }
