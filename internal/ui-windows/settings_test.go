@@ -158,22 +158,40 @@ func TestSettingsSwitchRemoteProviderAndRejectDatabase(t *testing.T) {
 }
 
 func TestComputeSettingsWindowBounds(t *testing.T) {
-	// 1. Standard 96-DPI physical PC: untouched 1150x724 and default OS placement.
+	// Standard DPI keeps the existing width and default OS placement.
 	w, h, center, _, _ := computeSettingsWindowBounds(96, 0, 0, 1920, 1040)
-	if w != 1150 || h != 724 || center {
-		t.Fatalf("expected (1150, 724, false) at 96 DPI, got (%d, %d, %v)", w, h, center)
+	if w != 1150 || h != 880 || center {
+		t.Fatalf("expected (1150, 880, false) at 96 DPI, got (%d, %d, %v)", w, h, center)
 	}
 
-	// 2. High-DPI 192-DPI (200%) Retina VM (2880x1704 work area): scaled and work-area centered.
-	w, h, center, x, y := computeSettingsWindowBounds(192, 0, 0, 2880, 1704)
-	if w != 2160 || h != 1580 || !center || x != 360 || y != 62 {
-		t.Fatalf("expected (2160, 1580, true, 360, 62) at 192 DPI, got (%d, %d, %v, %d, %d)", w, h, center, x, y)
+	// The larger initial height still fits a short standard-DPI work area.
+	w, h, center, _, _ = computeSettingsWindowBounds(96, 0, 0, 1366, 728)
+	if w != 1150 || h != 648 || center {
+		t.Fatalf("expected (1150, 648, false) on a short work area, got (%d, %d, %v)", w, h, center)
 	}
 
-	// 3. High-DPI on smaller screen (144 DPI / 150% on 1920x1032 work area): safely clamped inside work area.
+	// High DPI scales the height when the work area is large enough.
+	w, h, center, x, y := computeSettingsWindowBounds(192, 0, 0, 2880, 2000)
+	if w != 2160 || h != 1760 || !center || x != 360 || y != 120 {
+		t.Fatalf("expected (2160, 1760, true, 360, 120), got (%d, %d, %v, %d, %d)", w, h, center, x, y)
+	}
+
+	// High-DPI windows are clamped and centered when the work area is shorter.
+	w, h, center, x, y = computeSettingsWindowBounds(192, 0, 0, 2880, 1704)
+	if w != 2160 || h != 1624 || !center || x != 360 || y != 40 {
+		t.Fatalf("expected (2160, 1624, true, 360, 40) at 192 DPI, got (%d, %d, %v, %d, %d)", w, h, center, x, y)
+	}
+
+	// High DPI on a smaller screen remains inside the work area.
 	w, h, center, x, y = computeSettingsWindowBounds(144, 0, 0, 1920, 1032)
 	if !center || int(w) > 1920-120 || int(h) > 1032-80 || x < 0 || y < 0 || y+int(h) > 1032 {
 		t.Fatalf("expected bounds clamped within 1920x1032 work area, got (%d, %d, %v, %d, %d)", w, h, center, x, y)
+	}
+
+	// A work area smaller than the normal window dimensions must still win.
+	w, h, center, x, y = computeSettingsWindowBounds(120, -1000, 100, 1000, 600)
+	if w != 880 || h != 520 || !center || x != -940 || y != 140 {
+		t.Fatalf("expected bounds clamped and centered on a small monitor, got (%d, %d, %v, %d, %d)", w, h, center, x, y)
 	}
 }
 

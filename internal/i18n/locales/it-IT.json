@@ -223,6 +223,7 @@
   "settings.pollution.no2": "Biossido di azoto (NO₂)",
   "settings.pollution.o3": "Ozono (O₃)",
   "settings.pollution.pm10": "Particolato (PM10)",
+  "settings.pollution.proRequired": "Sblocca la qualità dell'aria e il ticker dell'inquinamento con una chiave API Pro.",
   "settings.pollution.pm2_5": "Particolato (PM2.5)",
   "settings.pollution.proNote": "🍃 Monitor sempre attivo di qualità dell'aria e UV (Pro): Monitora in tempo reale PM2.5, fumo di incendi, smog (NO₂, O₃) e IQA fino a 5 città ogni 10 min — ideale per runner, famiglie e chi soffre di allergie o asma.",
   "settings.pollution.profile.active": "Corridore e ciclista",

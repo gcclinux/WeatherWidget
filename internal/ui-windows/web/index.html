@@ -56,6 +56,14 @@
 
       <!-- Tab 1: Cities -->
       <section id="tab-cities" class="tab-pane active">
+        <div id="demo-banner" class="demo-banner" hidden>
+          <div id="demo-banner-title" class="demo-banner-title">🔒 Demo Mode Active (Showing 3 Preview Cities)</div>
+          <p id="demo-banner-subtitle">To unlock custom cities, choose an option below:</p>
+          <div class="demo-banner-actions">
+            <button type="button" id="demo-banner-pro" class="btn btn-primary">⚡ Get an Instant Pro Key ($1.99/mo)</button>
+            <button type="button" id="demo-banner-free" class="btn btn-secondary">Enter a Free OpenWeatherMap Key in Data Provider</button>
+          </div>
+        </div>
         <h2 class="pane-title">Configured Cities</h2>
         <p class="pane-desc">Manage the locations displayed on your desktop weather widget.</p>
 
@@ -214,7 +222,14 @@
             <label class="checkbox-pill"><input type="checkbox" id="df-uv"> UV Index</label>
           </div>
 
-          <h3 class="card-subtitle" style="margin-top: 24px;">Air Quality & Pollutants</h3>
+          <div class="pollution-heading">
+            <h3 id="pollution-title" class="card-subtitle">Air Quality & Pollutants</h3>
+            <div id="pollution-unlock" class="pollution-unlock">
+              <span id="pollution-locked-message">Unlock air quality and the pollution ticker with a Pro API key.</span>
+              <button type="button" id="pollution-get-pro" class="btn btn-primary">⚡ Get an Instant Pro Key ($1.99/mo)</button>
+            </div>
+          </div>
+          <fieldset id="pollution-controls" class="pollution-controls" aria-labelledby="pollution-title" aria-describedby="pollution-locked-message" disabled>
           <div class="toggle-grid">
             <label class="checkbox-pill"><input type="checkbox" id="pf-aqi"> Air Quality Index (AQI)</label>
             <label class="checkbox-pill"><input type="checkbox" id="pf-pm25"> PM2.5</label>
@@ -234,6 +249,7 @@
               <option value="ventilation">Ventilation</option>
             </select>
           </div>
+          </fieldset>
           <p class="setting-hint">Pollution data is available with EasyWeatherWidget Pro.</p>
         </div>
       </section>

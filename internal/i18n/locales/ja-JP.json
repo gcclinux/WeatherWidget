@@ -224,6 +224,7 @@
   "settings.pollution.no2": "二酸化窒素 (NO₂)",
   "settings.pollution.o3": "オゾン (O₃)",
   "settings.pollution.pm10": "粒子状物質 (PM10)",
+  "settings.pollution.proRequired": "Pro APIキーで空気質と大気汚染ティッカーを利用できます。",
   "settings.pollution.pm2_5": "微小粒子状物質 (PM2.5)",
   "settings.pollution.proNote": "🍃 常時表示デスクトップ大気質＆UVモニター (Pro): PM2.5、山火事の煙、スモッグ (NO₂, O₃)、AQIを最大5都市・10分更新でリアルタイム追跡 — ランナー、ご家族、アレルギー・喘息ケアに最適です。",
   "settings.pollution.profile.active": "ランナーとサイクリスト",

@@ -223,6 +223,7 @@
   "settings.pollution.no2": "Stickstoffdioxid (NO₂)",
   "settings.pollution.o3": "Ozon (O₃)",
   "settings.pollution.pm10": "Feinstaub (PM10)",
+  "settings.pollution.proRequired": "Schalten Sie Luftqualität und den Umwelt-Ticker mit einem Pro-API-Schlüssel frei.",
   "settings.pollution.pm2_5": "Feinstaub (PM2.5)",
   "settings.pollution.proNote": "🍃 Permanenter Desktop-Monitor für Luftqualität \u0026 UV (Pro): Verfolgen Sie live PM2.5, Waldbrandrauch, Smog (NO₂, O₃) \u0026 AQI in bis zu 5 Städten mit 10-Minuten-Updates — ideal für Läufer, Familien sowie bei Allergien und Asthma.",
   "settings.pollution.profile.active": "Läufer \u0026 Radfahrer",

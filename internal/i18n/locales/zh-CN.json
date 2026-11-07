@@ -224,6 +224,7 @@
   "settings.pollution.no2": "二氧化氮 (NO₂)",
   "settings.pollution.o3": "臭氧 (O₃)",
   "settings.pollution.pm10": "可吸入颗粒物 (PM10)",
+  "settings.pollution.proRequired": "使用 Pro API 密钥解锁空气质量和污染信息滚动条。",
   "settings.pollution.pm2_5": "细颗粒物 (PM2.5)",
   "settings.pollution.proNote": "🍃 常驻桌面空气质量与紫外线监测仪 (Pro)：实时追踪多达 5 个城市的 PM2.5、野火烟雾、雾霾 (NO₂, O₃) 与 AQI，每 10 分钟更新 — 跑步者、家庭及过敏/哮喘护理的理想之选。",
   "settings.pollution.profile.active": "跑步与骑行",

@@ -223,6 +223,7 @@
   "settings.pollution.no2": "Dióxido de nitrógeno (NO₂)",
   "settings.pollution.o3": "Ozono (O₃)",
   "settings.pollution.pm10": "Partículas en suspensión (PM10)",
+  "settings.pollution.proRequired": "Desbloquee la calidad del aire y el ticker de contaminación con una clave API Pro.",
   "settings.pollution.pm2_5": "Partículas en suspensión (PM2.5)",
   "settings.pollution.proNote": "🍃 Monitor de calidad del aire y UV siempre activo (Pro): Sigue en vivo PM2.5, humo de incendios, smog (NO₂, O₃) e ICA en hasta 5 ciudades cada 10 min — ideal para corredores, familias y cuidado de alergias/asma.",
   "settings.pollution.profile.active": "Corredor y ciclista",
