@@ -324,10 +324,10 @@ func TestPlanPollutionTicker(t *testing.T) {
 	// When ShowTicker is true, a favourable condition emits an opportunity
 	// followed by context for the dominant selected pollutant.
 	fieldsOn := &config.PollutionFields{
-		ShowPM25:   true,
-		ShowNO2:    true,
-		ShowO3:     true,
-		ShowCO:     true, // absent in data
+		TickerPM25: true,
+		TickerNO2:  true,
+		TickerO3:   true,
+		TickerCO:   true, // absent in data
 		ShowTicker: true,
 	}
 	items := PlanPollutionTicker(fieldsOn, data)

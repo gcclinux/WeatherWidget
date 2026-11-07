@@ -125,11 +125,13 @@ func TestPlanPollutionTicker_ProTickerWithoutSelectedPollutants(t *testing.T) {
 		t.Errorf("item 1 kind = %v, want Context", itemsNoPollutants[1].Kind)
 	}
 
-	// 3. PRO with Ticker ON, and additional pollutions selected (e.g. PM2.5):
-	// should emit Opportunity, Context, PLUS the selected pollutant definitions
+	// 3. PRO with Ticker ON, and additional ticker pollutions selected (e.g. PM2.5):
+	// should emit Opportunity, Context, PLUS the selected ticker pollutant definitions,
+	// independent of card Data Settings (Show*).
 	fieldsWithPM25 := &config.PollutionFields{
 		ShowTicker:    true,
-		ShowPM25:      true,
+		ShowAQI:       true, // card data setting should not appear in ticker unless TickerAQI is set
+		TickerPM25:    true,
 		TickerProfile: config.TickerProfileEveryday,
 	}
 	itemsWithPM25 := PlanPollutionTicker(fieldsWithPM25, dataWithPollution)
@@ -138,6 +140,10 @@ func TestPlanPollutionTicker_ProTickerWithoutSelectedPollutants(t *testing.T) {
 	}
 	if itemsWithPM25[2].Metric != MetricPM25 {
 		t.Errorf("item 2 metric = %v, want PM25", itemsWithPM25[2].Metric)
+	}
+	rows := PlanPollutionRows(fieldsWithPM25, dataWithPollution)
+	if len(rows) != 1 || rows[0].Metric != MetricAQI {
+		t.Fatalf("PlanPollutionRows should only reflect Data Settings (ShowAQI), got %+v", rows)
 	}
 }
 

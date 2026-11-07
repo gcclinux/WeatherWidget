@@ -19,10 +19,16 @@ const pollutionFields = {
   'pf-o3': 'showO3', 'pf-so2': 'showSO2', 'pf-nh3': 'showNH3',
   'pf-pm25': 'showPM25', 'pf-pm10': 'showPM10', 'pf-ticker': 'showTicker'
 };
+const tickerFields = {
+  'tf-aqi': 'tickerAQI', 'tf-co': 'tickerCO', 'tf-no': 'tickerNO', 'tf-no2': 'tickerNO2',
+  'tf-o3': 'tickerO3', 'tf-so2': 'tickerSO2', 'tf-nh3': 'tickerNH3',
+  'tf-pm25': 'tickerPM25', 'tf-pm10': 'tickerPM10'
+};
 const translationTargets = {
   '[data-tab="tab-cities"] .nav-label': 'settings.tab.locations',
   '[data-tab="tab-appearance"] .nav-label': 'settings.tab.appearance',
   '[data-tab="tab-display"] .nav-label': 'settings.tab.widget',
+  '[data-tab="tab-ticker"] .nav-label': 'settings.tab.ticker',
   '[data-tab="tab-api"] .nav-label': 'settings.tab.provider',
   '[data-tab="tab-language"] .nav-label': 'settings.tab.language',
   '[data-tab="tab-about"] .nav-label': 'settings.tab.about',
@@ -54,6 +60,19 @@ const translationTargets = {
   '#pf-o3': 'settings.pollution.o3', '#pf-so2': 'settings.pollution.so2',
   '#pf-nh3': 'settings.pollution.nh3', '#pf-pm25': 'settings.pollution.pm2_5',
   '#pf-pm10': 'settings.pollution.pm10', '#pf-ticker': 'settings.pollution.ticker',
+  '#tf-aqi': 'settings.pollution.aqi', '#tf-co': 'settings.pollution.co',
+  '#tf-no': 'settings.pollution.no', '#tf-no2': 'settings.pollution.no2',
+  '#tf-o3': 'settings.pollution.o3', '#tf-so2': 'settings.pollution.so2',
+  '#tf-nh3': 'settings.pollution.nh3', '#tf-pm25': 'settings.pollution.pm2_5',
+  '#tf-pm10': 'settings.pollution.pm10',
+  '#tab-ticker .pane-title': 'settings.ticker.title',
+  '#tab-ticker .pane-desc': 'settings.ticker.subtitle',
+  '#ticker-section-title': 'settings.ticker.title',
+  '#ticker-locked-message': 'settings.pollution.proRequired',
+  '#ticker-get-pro': 'settings.locations.demoBanner.proBtn',
+  '#ticker-profile-hint': 'settings.pollution.profile.subtitle',
+  '#ticker-pollutants-title': 'settings.ticker.pollutantsTitle',
+  '#tab-ticker .card > .setting-hint': 'settings.pollution.proNote',
   'label[for="sel-ticker-profile"]': 'settings.pollution.profile.title',
   '#sel-ticker-profile option[value="everyday"]': 'settings.pollution.profile.everyday',
   '#sel-ticker-profile option[value="active"]': 'settings.pollution.profile.active',
@@ -176,6 +195,11 @@ function updatePollutionControls() {
   el('pollution-unlock').hidden = isPro;
   if (isPro) el('pollution-controls').removeAttribute('aria-describedby');
   else el('pollution-controls').setAttribute('aria-describedby', 'pollution-locked-message');
+
+  el('ticker-controls').disabled = !isPro;
+  el('ticker-unlock').hidden = isPro;
+  if (isPro) el('ticker-controls').removeAttribute('aria-describedby');
+  else el('ticker-controls').setAttribute('aria-describedby', 'ticker-locked-message');
 }
 
 el('demo-banner-pro').addEventListener('click', () => {
@@ -183,6 +207,7 @@ el('demo-banner-pro').addEventListener('click', () => {
   el('link-get-pro-api').click();
 });
 el('pollution-get-pro').addEventListener('click', () => el('demo-banner-pro').click());
+el('ticker-get-pro').addEventListener('click', () => el('demo-banner-pro').click());
 el('demo-banner-free').addEventListener('click', () => {
   selectTab(document.querySelector('[data-tab="tab-api"]'));
   el('sel-provider').value = 'openweathermap';
@@ -220,6 +245,9 @@ function populateUI(cfg) {
     el(id).checked = cfg.displayFields ? !!cfg.displayFields[key] : true;
   });
   Object.entries(pollutionFields).forEach(([id, key]) => {
+    el(id).checked = !!cfg.pollutionFields?.[key];
+  });
+  Object.entries(tickerFields).forEach(([id, key]) => {
     el(id).checked = !!cfg.pollutionFields?.[key];
   });
   el('sel-ticker-profile').value = cfg.pollutionFields?.tickerProfile || 'everyday';
@@ -484,12 +512,13 @@ function collectConfigFromUI() {
   Object.entries(displayFields).forEach(([id, key]) => { cfg.displayFields[key] = el(id).checked; });
   cfg.pollutionFields = {...cfg.pollutionFields, tickerProfile: el('sel-ticker-profile').value};
   Object.entries(pollutionFields).forEach(([id, key]) => { cfg.pollutionFields[key] = el(id).checked; });
+  Object.entries(tickerFields).forEach(([id, key]) => { cfg.pollutionFields[key] = el(id).checked; });
   return cfg;
 }
 
 let previewTimer;
 let previewInFlight = Promise.resolve();
-document.querySelectorAll('#tab-appearance input, #tab-appearance select, #tab-display input, #tab-display select').forEach(input => {
+document.querySelectorAll('#tab-appearance input, #tab-appearance select, #tab-display input, #tab-display select, #tab-ticker input, #tab-ticker select').forEach(input => {
   input.addEventListener('change', () => {
     if (!currentConfig) return;
     clearTimeout(previewTimer);

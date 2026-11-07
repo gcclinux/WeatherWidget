@@ -28,7 +28,11 @@
         </li>
         <li class="nav-item" data-tab="tab-display">
           <span class="nav-icon">📊</span>
-          <span class="nav-label">Display & Metrics</span>
+          <span class="nav-label">Data Settings</span>
+        </li>
+        <li class="nav-item" data-tab="tab-ticker">
+          <span class="nav-icon">🍃</span>
+          <span class="nav-label">Ticker Settings</span>
         </li>
         <li class="nav-item" data-tab="tab-api">
           <span class="nav-icon">🔑</span>
@@ -240,17 +244,58 @@
             <label class="checkbox-pill"><input type="checkbox" id="pf-co"> Carbon Monoxide (CO)</label>
             <label class="checkbox-pill"><input type="checkbox" id="pf-no"> Nitric Oxide (NO)</label>
             <label class="checkbox-pill"><input type="checkbox" id="pf-nh3"> Ammonia (NH3)</label>
-            <label class="checkbox-pill"><input type="checkbox" id="pf-ticker"> Pollution ticker</label>
-          </div>
-          <div class="setting-row"><label for="sel-ticker-profile">Ticker profile</label>
-            <select id="sel-ticker-profile" class="input-select">
-              <option value="everyday">Everyday Outdoors</option><option value="active">Active Outdoors</option>
-              <option value="family">Family</option><option value="sensitive">Sensitive</option>
-              <option value="ventilation">Ventilation</option>
-            </select>
           </div>
           </fieldset>
-          <p class="setting-hint">Pollution data is available with EasyWeatherWidget Pro.</p>
+          <p class="setting-hint" style="margin-top: 16px;">Pollution data is available with EasyWeatherWidget Pro.</p>
+        </div>
+      </section>
+
+      <!-- Tab 4: Ticker Settings -->
+      <section id="tab-ticker" class="tab-pane">
+        <h2 class="pane-title">Ticker Settings</h2>
+        <p class="pane-desc">Choose which profile and air quality metrics appear in the scrolling ticker.</p>
+
+        <div class="card">
+          <div class="pollution-heading" style="margin-top: 0;">
+            <h3 id="ticker-section-title" class="card-subtitle">Ticker Settings</h3>
+            <div id="ticker-unlock" class="pollution-unlock">
+              <span id="ticker-locked-message">Unlock air quality and the pollution ticker with a Pro API key.</span>
+              <button type="button" id="ticker-get-pro" class="btn btn-primary">⚡ Get an Instant Pro Key ($1.99/mo)</button>
+            </div>
+          </div>
+          <fieldset id="ticker-controls" class="pollution-controls" aria-labelledby="ticker-section-title" aria-describedby="ticker-locked-message" disabled>
+            <div class="toggle-grid">
+              <label class="checkbox-pill"><input type="checkbox" id="pf-ticker"> Pollution Info Ticker</label>
+            </div>
+            <div class="setting-row">
+              <div class="setting-info">
+                <label for="sel-ticker-profile" class="setting-label">Ticker Profile</label>
+                <span id="ticker-profile-hint" class="setting-hint">Choose how the Pro ticker turns air-quality data into guidance.</span>
+              </div>
+              <select id="sel-ticker-profile" class="input-select">
+                <option value="everyday">Everyday Outdoors</option>
+                <option value="active">Runner &amp; Cyclist</option>
+                <option value="family">Family &amp; School Run</option>
+                <option value="sensitive">Sensitive Airways</option>
+                <option value="ventilation">Open Windows</option>
+              </select>
+            </div>
+            <div class="pollution-heading">
+              <h3 id="ticker-pollutants-title" class="card-subtitle">Air Quality &amp; Pollution</h3>
+            </div>
+            <div class="toggle-grid">
+              <label class="checkbox-pill"><input type="checkbox" id="tf-aqi"> Air Quality Index (AQI)</label>
+              <label class="checkbox-pill"><input type="checkbox" id="tf-pm25"> Particulates (PM2.5)</label>
+              <label class="checkbox-pill"><input type="checkbox" id="tf-pm10"> Particulates (PM10)</label>
+              <label class="checkbox-pill"><input type="checkbox" id="tf-o3"> Ozone (O3)</label>
+              <label class="checkbox-pill"><input type="checkbox" id="tf-no2"> Nitrogen Dioxide (NO2)</label>
+              <label class="checkbox-pill"><input type="checkbox" id="tf-so2"> Sulphur Dioxide (SO2)</label>
+              <label class="checkbox-pill"><input type="checkbox" id="tf-co"> Carbon Monoxide (CO)</label>
+              <label class="checkbox-pill"><input type="checkbox" id="tf-no"> Nitric Oxide (NO)</label>
+              <label class="checkbox-pill"><input type="checkbox" id="tf-nh3"> Ammonia (NH3)</label>
+            </div>
+          </fieldset>
+          <p class="setting-hint" style="margin-top: 16px;">Pollution data is available with EasyWeatherWidget Pro.</p>
         </div>
       </section>
 

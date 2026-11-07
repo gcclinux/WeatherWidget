@@ -623,7 +623,7 @@ func planPollutionTicker(fields *config.PollutionFields, d PollutionData, w *Wea
 		)
 		switch m {
 		case MetricAQI:
-			selected = fields.ShowAQI
+			selected = fields.TickerAQI
 			if d.AQI != nil {
 				present = true
 				lvl := *d.AQI
@@ -635,49 +635,49 @@ func planPollutionTicker(fields *config.PollutionFields, d PollutionData, w *Wea
 				level = lvl
 			}
 		case MetricCO:
-			selected = fields.ShowCO
+			selected = fields.TickerCO
 			if d.CO != nil {
 				present = true
 				level = PollutantLevel(m, *d.CO)
 			}
 		case MetricNO:
-			selected = fields.ShowNO
+			selected = fields.TickerNO
 			if d.NO != nil {
 				present = true
 				level = PollutantLevel(m, *d.NO)
 			}
 		case MetricNO2:
-			selected = fields.ShowNO2
+			selected = fields.TickerNO2
 			if d.NO2 != nil {
 				present = true
 				level = PollutantLevel(m, *d.NO2)
 			}
 		case MetricO3:
-			selected = fields.ShowO3
+			selected = fields.TickerO3
 			if d.O3 != nil {
 				present = true
 				level = PollutantLevel(m, *d.O3)
 			}
 		case MetricSO2:
-			selected = fields.ShowSO2
+			selected = fields.TickerSO2
 			if d.SO2 != nil {
 				present = true
 				level = PollutantLevel(m, *d.SO2)
 			}
 		case MetricNH3:
-			selected = fields.ShowNH3
+			selected = fields.TickerNH3
 			if d.NH3 != nil {
 				present = true
 				level = PollutantLevel(m, *d.NH3)
 			}
 		case MetricPM25:
-			selected = fields.ShowPM25
+			selected = fields.TickerPM25
 			if d.PM25 != nil {
 				present = true
 				level = PollutantLevel(m, *d.PM25)
 			}
 		case MetricPM10:
-			selected = fields.ShowPM10
+			selected = fields.TickerPM10
 			if d.PM10 != nil {
 				present = true
 				level = PollutantLevel(m, *d.PM10)

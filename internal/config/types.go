@@ -212,6 +212,15 @@ type PollutionFields struct {
 	ShowAQI       bool          `json:"showAQI,omitempty"`
 	ShowTicker    bool          `json:"showTicker,omitempty"`
 	TickerProfile TickerProfile `json:"tickerProfile,omitempty"`
+	TickerAQI     bool          `json:"tickerAQI,omitempty"`
+	TickerCO      bool          `json:"tickerCO,omitempty"`
+	TickerNO      bool          `json:"tickerNO,omitempty"`
+	TickerNO2     bool          `json:"tickerNO2,omitempty"`
+	TickerO3      bool          `json:"tickerO3,omitempty"`
+	TickerSO2     bool          `json:"tickerSO2,omitempty"`
+	TickerNH3     bool          `json:"tickerNH3,omitempty"`
+	TickerPM25    bool          `json:"tickerPM25,omitempty"`
+	TickerPM10    bool          `json:"tickerPM10,omitempty"`
 }
 
 // DefaultPollutionFields returns a PollutionFields with all metrics initially off.
