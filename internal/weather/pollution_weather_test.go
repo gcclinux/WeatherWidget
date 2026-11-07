@@ -10,7 +10,7 @@ import (
 
 func TestPlanPollutionTickerWithWeather_Advice(t *testing.T) {
 	pm25 := 5.0
-	fields := &config.PollutionFields{ShowPM25: true, ShowTicker: true, TickerProfile: config.TickerProfileEveryday}
+	fields := &config.PollutionFields{ShowPM25: true, ShowTicker: true, TickerProfile: config.TickerProfileEveryday, TickerWeatherTips: true}
 	feels := 3.0
 	night := time.Date(2026, 10, 22, 20, 12, 0, 0, time.UTC)
 	day := time.Date(2026, 10, 22, 13, 0, 0, 0, time.UTC)

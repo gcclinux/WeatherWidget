@@ -146,23 +146,67 @@ type DisplayFields struct {
 	ShowDewPoint bool `json:"showDewPoint"`
 	ShowPressure bool `json:"showPressure"`
 	ShowUVIndex  bool `json:"showUVIndex"`
+
+	// Extended live weather metrics for the 6-tile grid
+	ShowSunrise    bool `json:"showSunrise,omitempty"`
+	ShowSunset     bool `json:"showSunset,omitempty"`
+	ShowClouds     bool `json:"showClouds,omitempty"`
+	ShowVisibility bool `json:"showVisibility,omitempty"`
+	ShowPrecipRate bool `json:"showPrecipRate,omitempty"`
+
+	// Grid content mode: "live" (default), "today", "tomorrow"
+	GridMode string `json:"gridMode,omitempty"`
+
+	// Today's forecast tile toggles
+	TodayShowTempMax      bool `json:"todayShowTempMax,omitempty"`
+	TodayShowTempMin      bool `json:"todayShowTempMin,omitempty"`
+	TodayShowPrecipProb   bool `json:"todayShowPrecipProb,omitempty"`
+	TodayShowPrecipAmount bool `json:"todayShowPrecipAmount,omitempty"`
+	TodayShowUVMax        bool `json:"todayShowUVMax,omitempty"`
+	TodayShowGustMax      bool `json:"todayShowGustMax,omitempty"`
+
+	// Tomorrow's forecast tile toggles
+	TomorrowShowTempMax      bool `json:"tomorrowShowTempMax,omitempty"`
+	TomorrowShowTempMin      bool `json:"tomorrowShowTempMin,omitempty"`
+	TomorrowShowPrecipProb   bool `json:"tomorrowShowPrecipProb,omitempty"`
+	TomorrowShowPrecipAmount bool `json:"tomorrowShowPrecipAmount,omitempty"`
+	TomorrowShowUVMax        bool `json:"tomorrowShowUVMax,omitempty"`
+	TomorrowShowGustMax      bool `json:"tomorrowShowGustMax,omitempty"`
 }
 
 // DefaultDisplayFields returns a DisplayFields with all elements visible.
 func DefaultDisplayFields() *DisplayFields {
 	return &DisplayFields{
-		ShowCity:     true,
-		ShowIcon:     true,
-		ShowTemp:     true,
-		ShowDesc:     true,
-		ShowHumidity: true,
-		ShowWind:     true,
-		ShowTime:     true,
-		ShowDate:     true,
-		ShowWindGust: true,
-		ShowDewPoint: true,
-		ShowPressure: true,
-		ShowUVIndex:  true,
+		ShowCity:                 true,
+		ShowIcon:                 true,
+		ShowTemp:                 true,
+		ShowDesc:                 true,
+		ShowHumidity:             true,
+		ShowWind:                 true,
+		ShowTime:                 true,
+		ShowDate:                 true,
+		ShowWindGust:             true,
+		ShowDewPoint:             true,
+		ShowPressure:             true,
+		ShowUVIndex:              true,
+		ShowSunrise:              false,
+		ShowSunset:               false,
+		ShowClouds:               false,
+		ShowVisibility:           false,
+		ShowPrecipRate:           false,
+		GridMode:                 "live",
+		TodayShowTempMax:         true,
+		TodayShowTempMin:         true,
+		TodayShowPrecipProb:      true,
+		TodayShowPrecipAmount:    true,
+		TodayShowUVMax:           true,
+		TodayShowGustMax:         true,
+		TomorrowShowTempMax:      true,
+		TomorrowShowTempMin:      true,
+		TomorrowShowPrecipProb:   true,
+		TomorrowShowPrecipAmount: true,
+		TomorrowShowUVMax:        true,
+		TomorrowShowGustMax:      true,
 	}
 }
 
@@ -221,22 +265,75 @@ type PollutionFields struct {
 	TickerNH3     bool          `json:"tickerNH3,omitempty"`
 	TickerPM25    bool          `json:"tickerPM25,omitempty"`
 	TickerPM10    bool          `json:"tickerPM10,omitempty"`
+
+	// Ticker news feed & weather alert toggles
+	TickerAlert        bool `json:"tickerAlert,omitempty"`
+	TickerNewsToday    bool `json:"tickerNewsToday,omitempty"`
+	TickerNewsPrecip   bool `json:"tickerNewsPrecip,omitempty"`
+	TickerNewsTomorrow bool `json:"tickerNewsTomorrow,omitempty"`
+	TickerWeatherTips  bool `json:"tickerWeatherTips,omitempty"`
+
+	// Health Profile toggles for the ticker (can select any or none)
+	ProfileEveryday    bool `json:"profileEveryday,omitempty"`
+	ProfileActive      bool `json:"profileActive,omitempty"`
+	ProfileFamily      bool `json:"profileFamily,omitempty"`
+	ProfileSensitive   bool `json:"profileSensitive,omitempty"`
+	ProfileVentilation bool `json:"profileVentilation,omitempty"`
+}
+
+// SelectedProfiles returns all active health profiles chosen for the ticker.
+// If none are selected, it returns an empty slice (or fallback to legacy TickerProfile if set).
+func (f *PollutionFields) SelectedProfiles() []TickerProfile {
+	if f == nil {
+		return []TickerProfile{TickerProfileEveryday}
+	}
+	var res []TickerProfile
+	if f.ProfileEveryday {
+		res = append(res, TickerProfileEveryday)
+	}
+	if f.ProfileActive {
+		res = append(res, TickerProfileActive)
+	}
+	if f.ProfileFamily {
+		res = append(res, TickerProfileFamily)
+	}
+	if f.ProfileSensitive {
+		res = append(res, TickerProfileSensitive)
+	}
+	if f.ProfileVentilation {
+		res = append(res, TickerProfileVentilation)
+	}
+	// Fallback for legacy configs that only have TickerProfile set and no new profile flags
+	if len(res) == 0 && f.TickerProfile != "" && !f.ProfileEveryday && !f.ProfileActive && !f.ProfileFamily && !f.ProfileSensitive && !f.ProfileVentilation && !f.TickerAlert && !f.TickerNewsToday && !f.TickerNewsTomorrow {
+		res = append(res, NormalizeTickerProfile(f.TickerProfile))
+	}
+	return res
 }
 
 // DefaultPollutionFields returns a PollutionFields with all metrics initially off.
 func DefaultPollutionFields() *PollutionFields {
 	return &PollutionFields{
-		ShowCO:        false,
-		ShowNO:        false,
-		ShowNO2:       false,
-		ShowO3:        false,
-		ShowSO2:       false,
-		ShowNH3:       false,
-		ShowPM25:      false,
-		ShowPM10:      false,
-		ShowAQI:       false,
-		ShowTicker:    false,
-		TickerProfile: TickerProfileEveryday,
+		ShowCO:             false,
+		ShowNO:             false,
+		ShowNO2:            false,
+		ShowO3:             false,
+		ShowSO2:            false,
+		ShowNH3:            false,
+		ShowPM25:           false,
+		ShowPM10:           false,
+		ShowAQI:            false,
+		ShowTicker:         false,
+		TickerProfile:      TickerProfileEveryday,
+		ProfileEveryday:    true,
+		ProfileActive:      false,
+		ProfileFamily:      false,
+		ProfileSensitive:   false,
+		ProfileVentilation: false,
+		TickerAlert:        true,
+		TickerNewsToday:    true,
+		TickerNewsPrecip:   true,
+		TickerNewsTomorrow: true,
+		TickerWeatherTips:  true,
 	}
 }
 

@@ -293,23 +293,95 @@ func drawCentered(dst *image.RGBA, text string, center, baseline int, face font.
 }
 
 func (wd *WidgetDrawer) drawEnhancedMetrics(dst *image.RGBA, rect image.Rectangle, fields *config.DisplayFields, data *weather.WeatherData, cfg *config.Config, lm *i18n.LocaleManager) {
-	var humidity int
-	var wind, gust, dew, pressure, uv float64
+	var timezone string
 	var direction int
 	if data != nil {
-		humidity, wind, gust, dew, pressure, uv, direction = data.Humidity, data.WindSpeed, data.WindGust, data.DewPoint, data.Pressure, data.UVIndex, data.WindDirection
+		if !data.LocalTime.IsZero() {
+			timezone = data.LocalTime.Location().String()
+		}
+		direction = data.WindDirection
 	}
-	metrics := []struct {
+
+	type metricCandidate struct {
 		show bool
 		item weather.MetricDisplay
-	}{
-		{fields.ShowHumidity, weather.HumidityDisplay(humidity, lm)},
-		{fields.ShowWind, weather.WindDisplay(wind, direction, cfg.WindSpeedUnit, lm)},
-		{fields.ShowWindGust, weather.WindGustDisplay(gust, cfg.WindSpeedUnit, lm)},
-		{fields.ShowDewPoint, weather.DewPointDisplay(dew, lm)},
-		{fields.ShowPressure, weather.PressureDisplay(pressure, lm)},
-		{fields.ShowUVIndex, weather.UVIndexDisplay(uv, lm)},
 	}
+	var metrics []metricCandidate
+
+	switch fields.GridMode {
+	case "today":
+		if data != nil && data.Forecast != nil {
+			fc := data.Forecast
+			metrics = []metricCandidate{
+				{true, weather.ForecastTempMaxDisplay(fc.TodayTempMax, cfg.TemperatureUnit, lm)},
+				{true, weather.ForecastTempMinDisplay(fc.TodayTempMin, cfg.TemperatureUnit, lm)},
+				{true, weather.ForecastPrecipProbDisplay(fc.TodayPrecipProbMax, lm)},
+				{true, weather.ForecastPrecipAmountDisplay(fc.TodayPrecipSumMM, lm)},
+				{true, weather.ForecastUVMaxDisplay(fc.TodayUVMax, lm)},
+				{true, weather.ForecastGustMaxDisplay(fc.TodayGustMax, cfg.WindSpeedUnit, lm)},
+			}
+		} else {
+			metrics = []metricCandidate{
+				{true, weather.MetricDisplay{Emoji: "🔺", Name: translateNative(lm, "weather.forecast.tempMax", "High Temp"), Value: "--"}},
+				{true, weather.MetricDisplay{Emoji: "🔻", Name: translateNative(lm, "weather.forecast.tempMin", "Low Temp"), Value: "--"}},
+				{true, weather.MetricDisplay{Emoji: "☔", Name: translateNative(lm, "weather.forecast.precipProb", "Rain Chance"), Value: "--%"}},
+				{true, weather.MetricDisplay{Emoji: "🌧", Name: translateNative(lm, "weather.forecast.precipAmount", "Rain Sum"), Value: "-- mm"}},
+				{true, weather.MetricDisplay{Emoji: "☀️", Name: translateNative(lm, "weather.forecast.uvMax", "Peak UV"), Value: "--"}},
+				{true, weather.MetricDisplay{Emoji: "💨", Name: translateNative(lm, "weather.forecast.gustMax", "Max Gust"), Value: "--"}},
+			}
+		}
+	case "tomorrow":
+		if data != nil && data.Forecast != nil {
+			fc := data.Forecast
+			metrics = []metricCandidate{
+				{true, weather.ForecastTempMaxDisplay(fc.TomorrowTempMax, cfg.TemperatureUnit, lm)},
+				{true, weather.ForecastTempMinDisplay(fc.TomorrowTempMin, cfg.TemperatureUnit, lm)},
+				{true, weather.ForecastPrecipProbDisplay(fc.TomorrowPrecipProbMax, lm)},
+				{true, weather.ForecastPrecipAmountDisplay(fc.TomorrowPrecipSumMM, lm)},
+				{true, weather.ForecastUVMaxDisplay(fc.TomorrowUVMax, lm)},
+				{true, weather.ForecastGustMaxDisplay(fc.TomorrowGustMax, cfg.WindSpeedUnit, lm)},
+			}
+		} else {
+			metrics = []metricCandidate{
+				{true, weather.MetricDisplay{Emoji: "🔺", Name: translateNative(lm, "weather.forecast.tempMax", "High Temp"), Value: "--"}},
+				{true, weather.MetricDisplay{Emoji: "🔻", Name: translateNative(lm, "weather.forecast.tempMin", "Low Temp"), Value: "--"}},
+				{true, weather.MetricDisplay{Emoji: "☔", Name: translateNative(lm, "weather.forecast.precipProb", "Rain Chance"), Value: "--%"}},
+				{true, weather.MetricDisplay{Emoji: "🌧", Name: translateNative(lm, "weather.forecast.precipAmount", "Rain Sum"), Value: "-- mm"}},
+				{true, weather.MetricDisplay{Emoji: "☀️", Name: translateNative(lm, "weather.forecast.uvMax", "Peak UV"), Value: "--"}},
+				{true, weather.MetricDisplay{Emoji: "💨", Name: translateNative(lm, "weather.forecast.gustMax", "Max Gust"), Value: "--"}},
+			}
+		}
+	default: // "live"
+		var humidity, clouds int
+		var wind, gust, dew, pressure, uv, vis float64
+		var precipRate *float64
+		var sunrise, sunset int64
+		if data != nil {
+			humidity, wind, gust, dew, pressure, uv = data.Humidity, data.WindSpeed, data.WindGust, data.DewPoint, data.Pressure, data.UVIndex
+			clouds = data.Clouds
+			vis = data.Visibility
+			sunrise, sunset = data.Sunrise, data.Sunset
+			precipRate = data.PrecipRate
+		}
+		var pRate float64
+		if precipRate != nil {
+			pRate = *precipRate
+		}
+		metrics = []metricCandidate{
+			{fields.ShowHumidity, weather.HumidityDisplay(humidity, lm)},
+			{fields.ShowWind, weather.WindDisplay(wind, direction, cfg.WindSpeedUnit, lm)},
+			{fields.ShowWindGust, weather.WindGustDisplay(gust, cfg.WindSpeedUnit, lm)},
+			{fields.ShowDewPoint, weather.DewPointDisplay(dew, lm)},
+			{fields.ShowPressure, weather.PressureDisplay(pressure, lm)},
+			{fields.ShowUVIndex, weather.UVIndexDisplay(uv, lm)},
+			{fields.ShowSunrise, weather.SunriseDisplay(sunrise, timezone, lm)},
+			{fields.ShowSunset, weather.SunsetDisplay(sunset, timezone, lm)},
+			{fields.ShowClouds, weather.CloudsDisplay(clouds, lm)},
+			{fields.ShowVisibility, weather.VisibilityDisplay(vis, lm)},
+			{fields.ShowPrecipRate, weather.PrecipRateDisplay(pRate, lm)},
+		}
+	}
+
 	var visible []weather.MetricDisplay
 	for _, metric := range metrics {
 		if metric.show {
@@ -317,6 +389,9 @@ func (wd *WidgetDrawer) drawEnhancedMetrics(dst *image.RGBA, rect image.Rectangl
 				metric.item.Value = "--"
 			}
 			visible = append(visible, metric.item)
+			if len(visible) == 6 {
+				break
+			}
 		}
 	}
 	if len(visible) == 0 {

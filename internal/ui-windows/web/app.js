@@ -12,7 +12,9 @@ const displayFields = {
   'df-city': 'showCity', 'df-icon': 'showIcon', 'df-temp': 'showTemp',
   'df-desc': 'showDesc', 'df-humidity': 'showHumidity', 'df-wind': 'showWind',
   'df-time': 'showTime', 'df-date': 'showDate', 'df-gust': 'showWindGust',
-  'df-dew': 'showDewPoint', 'df-pressure': 'showPressure', 'df-uv': 'showUVIndex'
+  'df-dew': 'showDewPoint', 'df-pressure': 'showPressure', 'df-uv': 'showUVIndex',
+  'df-sunrise': 'showSunrise', 'df-sunset': 'showSunset', 'df-clouds': 'showClouds',
+  'df-visibility': 'showVisibility', 'df-precip-rate': 'showPrecipRate'
 };
 const pollutionFields = {
   'pf-aqi': 'showAQI', 'pf-co': 'showCO', 'pf-no': 'showNO', 'pf-no2': 'showNO2',
@@ -22,7 +24,17 @@ const pollutionFields = {
 const tickerFields = {
   'tf-aqi': 'tickerAQI', 'tf-co': 'tickerCO', 'tf-no': 'tickerNO', 'tf-no2': 'tickerNO2',
   'tf-o3': 'tickerO3', 'tf-so2': 'tickerSO2', 'tf-nh3': 'tickerNH3',
-  'tf-pm25': 'tickerPM25', 'tf-pm10': 'tickerPM10'
+  'tf-pm25': 'tickerPM25', 'tf-pm10': 'tickerPM10',
+  'tf-feed-alert': 'tickerAlert',
+  'tf-feed-today': 'tickerNewsToday',
+  'tf-feed-precip': 'tickerNewsPrecip',
+  'tf-feed-tomorrow': 'tickerNewsTomorrow',
+  'tf-feed-tips': 'tickerWeatherTips',
+  'prof-everyday': 'profileEveryday',
+  'prof-active': 'profileActive',
+  'prof-family': 'profileFamily',
+  'prof-sensitive': 'profileSensitive',
+  'prof-ventilation': 'profileVentilation'
 };
 const translationTargets = {
   '[data-tab="tab-cities"] .nav-label': 'settings.tab.locations',
@@ -49,17 +61,31 @@ const translationTargets = {
   '#tab-display .pane-title': 'settings.display.title',
   '#tab-display .pane-desc': 'settings.display.subtitle',
   '#tab-display .card-subtitle:first-child': 'settings.display.title',
+  'label[for="sel-grid-mode"]': 'settings.gridMode.title',
+  '#grid-mode-hint': 'settings.gridMode.subtitle',
+  '#sel-grid-mode option[value="live"]': 'settings.gridMode.live',
+  '#sel-grid-mode option[value="today"]': 'settings.gridMode.today',
+  '#sel-grid-mode option[value="tomorrow"]': 'settings.gridMode.tomorrow',
   '#df-city': 'settings.display.city', '#df-icon': 'settings.display.icon',
   '#df-temp': 'settings.display.temp', '#df-desc': 'settings.display.desc',
   '#df-time': 'settings.display.time', '#df-date': 'settings.display.date',
   '#df-humidity': 'settings.display.humidity', '#df-wind': 'settings.display.wind',
   '#df-gust': 'settings.display.windGust', '#df-dew': 'settings.display.dewPoint',
   '#df-pressure': 'settings.display.pressure', '#df-uv': 'settings.display.uvIndex',
+  '#df-sunrise': 'settings.display.sunrise', '#df-sunset': 'settings.display.sunset',
+  '#df-clouds': 'settings.display.clouds', '#df-visibility': 'settings.display.visibility',
+  '#df-precip-rate': 'settings.display.precipRate',
   '#pf-aqi': 'settings.pollution.aqi', '#pf-co': 'settings.pollution.co',
   '#pf-no': 'settings.pollution.no', '#pf-no2': 'settings.pollution.no2',
   '#pf-o3': 'settings.pollution.o3', '#pf-so2': 'settings.pollution.so2',
   '#pf-nh3': 'settings.pollution.nh3', '#pf-pm25': 'settings.pollution.pm2_5',
-  '#pf-pm10': 'settings.pollution.pm10', '#pf-ticker': 'settings.pollution.ticker',
+  '#pf-pm10': 'settings.pollution.pm10', '#pf-ticker': 'settings.ticker.enable',
+  '#tf-feed-title': 'settings.ticker.feedTitle',
+  '#tf-feed-alert': 'settings.ticker.alert',
+  '#tf-feed-today': 'settings.ticker.newsToday',
+  '#tf-feed-precip': 'settings.ticker.newsPrecip',
+  '#tf-feed-tomorrow': 'settings.ticker.newsTomorrow',
+  '#tf-feed-tips': 'settings.ticker.weatherTips',
   '#tf-aqi': 'settings.pollution.aqi', '#tf-co': 'settings.pollution.co',
   '#tf-no': 'settings.pollution.no', '#tf-no2': 'settings.pollution.no2',
   '#tf-o3': 'settings.pollution.o3', '#tf-so2': 'settings.pollution.so2',
@@ -70,15 +96,14 @@ const translationTargets = {
   '#ticker-section-title': 'settings.ticker.title',
   '#ticker-locked-message': 'settings.pollution.proRequired',
   '#ticker-get-pro': 'settings.locations.demoBanner.proBtn',
-  '#ticker-profile-hint': 'settings.pollution.profile.subtitle',
+  '#ticker-profile-title': 'settings.ticker.profilesTitle',
+  '#prof-everyday': 'settings.pollution.profile.everyday',
+  '#prof-active': 'settings.pollution.profile.active',
+  '#prof-family': 'settings.pollution.profile.family',
+  '#prof-sensitive': 'settings.pollution.profile.sensitive',
+  '#prof-ventilation': 'settings.pollution.profile.ventilation',
   '#ticker-pollutants-title': 'settings.ticker.pollutantsTitle',
   '#tab-ticker .card > .setting-hint': 'settings.pollution.proNote',
-  'label[for="sel-ticker-profile"]': 'settings.pollution.profile.title',
-  '#sel-ticker-profile option[value="everyday"]': 'settings.pollution.profile.everyday',
-  '#sel-ticker-profile option[value="active"]': 'settings.pollution.profile.active',
-  '#sel-ticker-profile option[value="family"]': 'settings.pollution.profile.family',
-  '#sel-ticker-profile option[value="sensitive"]': 'settings.pollution.profile.sensitive',
-  '#sel-ticker-profile option[value="ventilation"]': 'settings.pollution.profile.ventilation',
   'label[for="sel-icon-theme"]': 'settings.icons.title',
   '#tab-language .pane-title': 'settings.language.title',
   '#tab-language .pane-desc': 'settings.language.subtitle',
@@ -241,6 +266,7 @@ function populateUI(cfg) {
   el('font-city').value = cfg.fontSizeCityTime || 14;
   el('font-temp').value = cfg.fontSizeTempIcon || 32;
   el('font-conditions').value = cfg.fontSizeConditions || 10;
+  el('sel-grid-mode').value = cfg.displayFields?.gridMode || 'live';
   Object.entries(displayFields).forEach(([id, key]) => {
     el(id).checked = cfg.displayFields ? !!cfg.displayFields[key] : true;
   });
@@ -250,7 +276,18 @@ function populateUI(cfg) {
   Object.entries(tickerFields).forEach(([id, key]) => {
     el(id).checked = !!cfg.pollutionFields?.[key];
   });
-  el('sel-ticker-profile').value = cfg.pollutionFields?.tickerProfile || 'everyday';
+  const hasAnyProfile = !!(cfg.pollutionFields?.profileEveryday || cfg.pollutionFields?.profileActive || cfg.pollutionFields?.profileFamily || cfg.pollutionFields?.profileSensitive || cfg.pollutionFields?.profileVentilation);
+  if (!hasAnyProfile && cfg.pollutionFields?.tickerProfile) {
+    const legacyMap = {
+      everyday: 'prof-everyday',
+      active: 'prof-active',
+      family: 'prof-family',
+      sensitive: 'prof-sensitive',
+      ventilation: 'prof-ventilation'
+    };
+    const legacyKey = legacyMap[cfg.pollutionFields.tickerProfile] || 'prof-everyday';
+    if (el(legacyKey)) el(legacyKey).checked = true;
+  }
   el('sel-provider').value = cfg.apiConfig?.provider || 'easyweatherwidget';
   el('input-api-key').value = cfg.apiConfig?.apiKey || '';
   el('sel-refresh-interval').value = cfg.refreshInterval;
@@ -508,9 +545,9 @@ function collectConfigFromUI() {
   cfg.dataSource = 'remote_api';
   delete cfg.databaseConfig;
   cfg.apiConfig = {...cfg.apiConfig, provider: el('sel-provider').value, apiKey: el('input-api-key').value.trim()};
-  cfg.displayFields = {...cfg.displayFields};
+  cfg.displayFields = {...cfg.displayFields, gridMode: el('sel-grid-mode').value};
   Object.entries(displayFields).forEach(([id, key]) => { cfg.displayFields[key] = el(id).checked; });
-  cfg.pollutionFields = {...cfg.pollutionFields, tickerProfile: el('sel-ticker-profile').value};
+  cfg.pollutionFields = {...cfg.pollutionFields};
   Object.entries(pollutionFields).forEach(([id, key]) => { cfg.pollutionFields[key] = el(id).checked; });
   Object.entries(tickerFields).forEach(([id, key]) => { cfg.pollutionFields[key] = el(id).checked; });
   return cfg;

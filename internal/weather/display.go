@@ -2,6 +2,8 @@ package weather
 
 import (
 	"fmt"
+	"math"
+	"time"
 
 	"weatherwidget/internal/config"
 	"weatherwidget/internal/i18n"
@@ -88,6 +90,178 @@ func UVIndexDisplay(uvIndex float64, lm *i18n.LocaleManager) MetricDisplay {
 		Emoji: "☀",
 		Name:  tr(lm, "weather.uvIndex", "UV Index"),
 		Value: fmt.Sprintf("%.1f", uvIndex),
+	}
+}
+
+// SunriseDisplay returns the sunrise metric as emoji + name + formatted time.
+func SunriseDisplay(sunrise int64, timezone string, lm *i18n.LocaleManager) MetricDisplay {
+	val := "--:--"
+	if sunrise > 0 {
+		t := time.Unix(sunrise, 0)
+		val = FormatTime(t, timezone, lm)
+		if len(val) >= 5 {
+			val = val[:5]
+		}
+	}
+	return MetricDisplay{
+		Emoji: "🌅",
+		Name:  tr(lm, "weather.sunrise", "Sunrise"),
+		Value: val,
+	}
+}
+
+// SunsetDisplay returns the sunset metric as emoji + name + formatted time.
+func SunsetDisplay(sunset int64, timezone string, lm *i18n.LocaleManager) MetricDisplay {
+	val := "--:--"
+	if sunset > 0 {
+		t := time.Unix(sunset, 0)
+		val = FormatTime(t, timezone, lm)
+		if len(val) >= 5 {
+			val = val[:5]
+		}
+	}
+	return MetricDisplay{
+		Emoji: "🌇",
+		Name:  tr(lm, "weather.sunset", "Sunset"),
+		Value: val,
+	}
+}
+
+// CloudsDisplay returns cloud cover as emoji + name + percentage.
+func CloudsDisplay(clouds int, lm *i18n.LocaleManager) MetricDisplay {
+	return MetricDisplay{
+		Emoji: "☁",
+		Name:  tr(lm, "weather.clouds", "Clouds"),
+		Value: fmt.Sprintf("%d%%", clouds),
+	}
+}
+
+// VisibilityDisplay returns visibility as emoji + name + formatted km.
+func VisibilityDisplay(vis float64, lm *i18n.LocaleManager) MetricDisplay {
+	val := "--"
+	if vis > 0 {
+		if vis >= 1000 {
+			val = fmt.Sprintf("%.1f km", vis/1000.0)
+		} else {
+			val = fmt.Sprintf("%.0f m", vis)
+		}
+	}
+	return MetricDisplay{
+		Emoji: "👁",
+		Name:  tr(lm, "weather.visibility", "Visibility"),
+		Value: val,
+	}
+}
+
+// PrecipRateDisplay returns rainfall rate as emoji + name + mm/h.
+func PrecipRateDisplay(rate float64, lm *i18n.LocaleManager) MetricDisplay {
+	return MetricDisplay{
+		Emoji: "🌧",
+		Name:  tr(lm, "weather.precipRate", "Rain Rate"),
+		Value: fmt.Sprintf("%.1f mm/h", rate),
+	}
+}
+
+// ForecastTempMaxDisplay returns daily maximum temperature.
+func ForecastTempMaxDisplay(max *float64, unit config.TemperatureUnit, lm *i18n.LocaleManager) MetricDisplay {
+	val := "--"
+	if max != nil {
+		val = FormatTemperature(int(math.Round(*max)), unit)
+	}
+	return MetricDisplay{
+		Emoji: "🔺",
+		Name:  tr(lm, "weather.forecast.tempMax", "High Temp"),
+		Value: val,
+	}
+}
+
+// ForecastTempMinDisplay returns daily minimum temperature.
+func ForecastTempMinDisplay(min *float64, unit config.TemperatureUnit, lm *i18n.LocaleManager) MetricDisplay {
+	val := "--"
+	if min != nil {
+		val = FormatTemperature(int(math.Round(*min)), unit)
+	}
+	return MetricDisplay{
+		Emoji: "🔻",
+		Name:  tr(lm, "weather.forecast.tempMin", "Low Temp"),
+		Value: val,
+	}
+}
+
+// ForecastTempRangeDisplay returns high/low temperature span.
+func ForecastTempRangeDisplay(min, max *float64, unit config.TemperatureUnit, lm *i18n.LocaleManager) MetricDisplay {
+	val := "-- / --"
+	if min != nil && max != nil {
+		maxStr := FormatTemperature(int(math.Round(*max)), unit)
+		minStr := FormatTemperature(int(math.Round(*min)), unit)
+		val = fmt.Sprintf("%s / %s", maxStr, minStr)
+	}
+	return MetricDisplay{
+		Emoji: "🌡",
+		Name:  tr(lm, "weather.forecast.tempRange", "High / Low"),
+		Value: val,
+	}
+}
+
+// ForecastPrecipProbDisplay returns precipitation probability.
+func ForecastPrecipProbDisplay(prob int, lm *i18n.LocaleManager) MetricDisplay {
+	return MetricDisplay{
+		Emoji: "☔",
+		Name:  tr(lm, "weather.forecast.precipProb", "Rain Chance"),
+		Value: fmt.Sprintf("%d%%", prob),
+	}
+}
+
+// ForecastPrecipAmountDisplay returns expected rainfall in mm.
+func ForecastPrecipAmountDisplay(amount *float64, lm *i18n.LocaleManager) MetricDisplay {
+	val := "-- mm"
+	if amount != nil {
+		val = fmt.Sprintf("%.1f mm", *amount)
+	}
+	return MetricDisplay{
+		Emoji: "🌧",
+		Name:  tr(lm, "weather.forecast.precipAmount", "Rain Sum"),
+		Value: val,
+	}
+}
+
+// ForecastUVMaxDisplay returns peak UV index.
+func ForecastUVMaxDisplay(uv *float64, lm *i18n.LocaleManager) MetricDisplay {
+	val := "--"
+	if uv != nil {
+		val = fmt.Sprintf("%.1f", *uv)
+	}
+	return MetricDisplay{
+		Emoji: "☀️",
+		Name:  tr(lm, "weather.forecast.uvMax", "Peak UV"),
+		Value: val,
+	}
+}
+
+// ForecastGustMaxDisplay returns max wind gust.
+func ForecastGustMaxDisplay(gust *float64, unit config.WindSpeedUnit, lm *i18n.LocaleManager) MetricDisplay {
+	val := "--"
+	if gust != nil {
+		speed, unitLabel := ConvertWindSpeed(*gust, unit)
+		val = fmt.Sprintf("%.1f %s", speed, unitLabel)
+	}
+	return MetricDisplay{
+		Emoji: "💨",
+		Name:  tr(lm, "weather.forecast.gustMax", "Max Gust"),
+		Value: val,
+	}
+}
+
+// ForecastSummaryDisplay returns brief condition summary.
+func ForecastSummaryDisplay(summary string, lm *i18n.LocaleManager) MetricDisplay {
+	val := "--"
+	if summary != "" {
+		val = summary
+	}
+	return MetricDisplay{
+		Emoji: "📋",
+		Name:  tr(lm, "weather.forecast.summary", "Forecast"),
+		Value: val,
 	}
 }
 
