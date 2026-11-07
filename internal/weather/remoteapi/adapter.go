@@ -613,16 +613,62 @@ func mapWUConditionToIcon(code int) string {
 
 // ewwWeather represents the nested weather object from the EasyWeatherWidget weather-news API.
 type ewwWeather struct {
-	Temp      float64 `json:"Temp"`
-	FeelsLike float64 `json:"FeelsLike"`
-	FreeText  string  `json:"FreeText"`
-	Humidity  int     `json:"Humidity"`
-	WindSpeed float64 `json:"WindSpeed"`
-	WindDir   int     `json:"WindDir"`
-	WindGust  float64 `json:"WindGust"`
-	DewPt     float64 `json:"DewPt"`
-	Pressure  float64 `json:"Pressure"`
-	UV        float64 `json:"UV"`
+	Temp           float64  `json:"Temp"`
+	FeelsLike      float64  `json:"FeelsLike"`
+	FreeText       string   `json:"FreeText"`
+	Humidity       int      `json:"Humidity"`
+	WindSpeed      float64  `json:"WindSpeed"`
+	WindDir        int      `json:"WindDir"`
+	WindGust       float64  `json:"WindGust"`
+	DewPt          float64  `json:"DewPt"`
+	Pressure       float64  `json:"Pressure"`
+	UV             float64  `json:"UV"`
+	Clouds         int      `json:"Clouds"`
+	Visibility     float64  `json:"Visibility"`
+	Sunrise        int64    `json:"Sunrise"`
+	Sunset         int64    `json:"Sunset"`
+	PrecipRate     *float64 `json:"PrecipRate"`
+	PrecipTotal    *float64 `json:"PrecipTotal"`
+	SolarRadiation *float64 `json:"SolarRadiation"`
+	HeatIndex      *float64 `json:"HeatIndex"`
+	WindChill      *float64 `json:"WindChill"`
+}
+
+type ewwForecast struct {
+	TodayTempMax       *float64 `json:"today_temp_max"`
+	TodayTempMin       *float64 `json:"today_temp_min"`
+	TodayWeatherCode   int      `json:"today_weather_code"`
+	TodayPrecipProbMax int      `json:"today_precip_prob_max"`
+	TodayPrecipSumMM   *float64 `json:"today_precip_sum_mm"`
+	TodayUVMax         *float64 `json:"today_uv_max"`
+	TodayGustMax       *float64 `json:"today_gust_max"`
+	TodaySummary       string   `json:"today_summary"`
+
+	TomorrowTempMax       *float64 `json:"tomorrow_temp_max"`
+	TomorrowTempMin       *float64 `json:"tomorrow_temp_min"`
+	TomorrowWeatherCode   int      `json:"tomorrow_weather_code"`
+	TomorrowPrecipProbMax int      `json:"tomorrow_precip_prob_max"`
+	TomorrowPrecipSumMM   *float64 `json:"tomorrow_precip_sum_mm"`
+	TomorrowUVMax         *float64 `json:"tomorrow_uv_max"`
+	TomorrowGustMax       *float64 `json:"tomorrow_gust_max"`
+	TomorrowSummary       string   `json:"tomorrow_summary"`
+}
+
+type ewwAlert struct {
+	Sender      string `json:"sender"`
+	Event       string `json:"event"`
+	Description string `json:"description"`
+	Start       int64  `json:"start"`
+	End         int64  `json:"end"`
+}
+
+type ewwNewsItem struct {
+	Category    string `json:"category"`
+	Symbol      string `json:"symbol"`
+	FullName    string `json:"full_name"`
+	StatusText  string `json:"status_text"`
+	StatusLevel int    `json:"status_level"`
+	SourcesText string `json:"sources_text"`
 }
 
 // ewwResponse represents the relevant fields from the EasyWeatherWidget weather-news API.
@@ -635,6 +681,9 @@ type ewwResponse struct {
 	ObsTimeLocal string                `json:"obstimelocal"`
 	Weather      ewwWeather            `json:"weather"`
 	Pollution    *ewwPollutionResponse `json:"pollution"`
+	Forecast     *ewwForecast          `json:"forecast"`
+	Alert        *ewwAlert             `json:"alert"`
+	NewsItems    []ewwNewsItem         `json:"news_items"`
 }
 
 // ewwPollutionResponse represents the pollution object returned by the
@@ -740,8 +789,63 @@ func (r *RemoteAPIAdapter) fetchEWW(ctx context.Context, city config.CityConfig)
 		WindGust:      eww.Weather.WindGust,
 		DewPoint:      eww.Weather.DewPt,
 		Pressure:      eww.Weather.Pressure,
-		UVIndex:       eww.Weather.UV,
-		FeelsLike:     floatPtr(eww.Weather.FeelsLike),
+		UVIndex:        eww.Weather.UV,
+		FeelsLike:      floatPtr(eww.Weather.FeelsLike),
+		Clouds:         eww.Weather.Clouds,
+		Visibility:     eww.Weather.Visibility,
+		Sunrise:        eww.Weather.Sunrise,
+		Sunset:         eww.Weather.Sunset,
+		PrecipRate:     eww.Weather.PrecipRate,
+		PrecipTotal:    eww.Weather.PrecipTotal,
+		SolarRadiation: eww.Weather.SolarRadiation,
+		HeatIndex:      eww.Weather.HeatIndex,
+		WindChill:      eww.Weather.WindChill,
+	}
+
+	if fc := eww.Forecast; fc != nil {
+		data.Forecast = &weather.ForecastData{
+			TodayTempMax:          fc.TodayTempMax,
+			TodayTempMin:          fc.TodayTempMin,
+			TodayWeatherCode:      fc.TodayWeatherCode,
+			TodayPrecipProbMax:    fc.TodayPrecipProbMax,
+			TodayPrecipSumMM:      fc.TodayPrecipSumMM,
+			TodayUVMax:            fc.TodayUVMax,
+			TodayGustMax:          fc.TodayGustMax,
+			TodaySummary:          fc.TodaySummary,
+			TomorrowTempMax:       fc.TomorrowTempMax,
+			TomorrowTempMin:       fc.TomorrowTempMin,
+			TomorrowWeatherCode:   fc.TomorrowWeatherCode,
+			TomorrowPrecipProbMax: fc.TomorrowPrecipProbMax,
+			TomorrowPrecipSumMM:   fc.TomorrowPrecipSumMM,
+			TomorrowUVMax:         fc.TomorrowUVMax,
+			TomorrowGustMax:       fc.TomorrowGustMax,
+			TomorrowSummary:       fc.TomorrowSummary,
+		}
+	}
+
+	if al := eww.Alert; al != nil {
+		data.Alert = &weather.AlertData{
+			Sender:      al.Sender,
+			Event:       al.Event,
+			Description: al.Description,
+			Start:       al.Start,
+			End:         al.End,
+		}
+	}
+
+	if len(eww.NewsItems) > 0 {
+		items := make([]weather.NewsItem, len(eww.NewsItems))
+		for i, ni := range eww.NewsItems {
+			items[i] = weather.NewsItem{
+				Category:    ni.Category,
+				Symbol:      ni.Symbol,
+				FullName:    ni.FullName,
+				StatusText:  ni.StatusText,
+				StatusLevel: ni.StatusLevel,
+				SourcesText: ni.SourcesText,
+			}
+		}
+		data.NewsItems = items
 	}
 
 	if pol := eww.Pollution; pol != nil {

@@ -51,6 +51,46 @@ var AllIconCodes = []string{
 	IconWind,
 }
 
+// ForecastData holds daily forecast extremes and probabilities.
+type ForecastData struct {
+	TodayTempMax       *float64 `json:"todayTempMax,omitempty"`
+	TodayTempMin       *float64 `json:"todayTempMin,omitempty"`
+	TodayWeatherCode   int      `json:"todayWeatherCode"`
+	TodayPrecipProbMax int      `json:"todayPrecipProbMax"`
+	TodayPrecipSumMM   *float64 `json:"todayPrecipSumMM,omitempty"`
+	TodayUVMax         *float64 `json:"todayUVMax,omitempty"`
+	TodayGustMax       *float64 `json:"todayGustMax,omitempty"`
+	TodaySummary       string   `json:"todaySummary,omitempty"`
+
+	TomorrowTempMax       *float64 `json:"tomorrowTempMax,omitempty"`
+	TomorrowTempMin       *float64 `json:"tomorrowTempMin,omitempty"`
+	TomorrowWeatherCode   int      `json:"tomorrowWeatherCode"`
+	TomorrowPrecipProbMax int      `json:"tomorrowPrecipProbMax"`
+	TomorrowPrecipSumMM   *float64 `json:"tomorrowPrecipSumMM,omitempty"`
+	TomorrowUVMax         *float64 `json:"tomorrowUVMax,omitempty"`
+	TomorrowGustMax       *float64 `json:"tomorrowGustMax,omitempty"`
+	TomorrowSummary       string   `json:"tomorrowSummary,omitempty"`
+}
+
+// AlertData represents an official meteorological warning from an issuing agency.
+type AlertData struct {
+	Sender      string `json:"sender,omitempty"`
+	Event       string `json:"event,omitempty"`
+	Description string `json:"description,omitempty"`
+	Start       int64  `json:"start,omitempty"`
+	End         int64  `json:"end,omitempty"`
+}
+
+// NewsItem represents a structured feed item for the scrolling ticker or notifications.
+type NewsItem struct {
+	Category    string `json:"category,omitempty"`
+	Symbol      string `json:"symbol,omitempty"`
+	FullName    string `json:"fullName,omitempty"`
+	StatusText  string `json:"statusText,omitempty"`
+	StatusLevel int    `json:"statusLevel,omitempty"`
+	SourcesText string `json:"sourcesText,omitempty"`
+}
+
 // WeatherData holds the current weather information for a single city.
 type WeatherData struct {
 	CityName      string    `json:"cityName"`
@@ -68,6 +108,22 @@ type WeatherData struct {
 	Pressure      float64   `json:"pressure"`            // hPa; 0 if not available
 	UVIndex       float64   `json:"uvIndex"`             // 0–11+; 0 if not available
 	FeelsLike     *float64  `json:"feelsLike,omitempty"` // Celsius apparent temperature; nil if not available
+
+	// Extended real-time conditions (populated when provided by remote API).
+	Clouds         int      `json:"clouds,omitempty"`         // Cloud cover percentage (0-100)
+	Visibility     float64  `json:"visibility,omitempty"`     // Visibility in meters
+	Sunrise        int64    `json:"sunrise,omitempty"`        // Unix timestamp
+	Sunset         int64    `json:"sunset,omitempty"`         // Unix timestamp
+	PrecipRate     *float64 `json:"precipRate,omitempty"`     // mm/h
+	PrecipTotal    *float64 `json:"precipTotal,omitempty"`    // mm
+	SolarRadiation *float64 `json:"solarRadiation,omitempty"` // W/m²
+	HeatIndex      *float64 `json:"heatIndex,omitempty"`      // Celsius
+	WindChill      *float64 `json:"windChill,omitempty"`      // Celsius
+
+	// Forecast, official alerts, and curated news items.
+	Forecast  *ForecastData `json:"forecast,omitempty"`
+	Alert     *AlertData    `json:"alert,omitempty"`
+	NewsItems []NewsItem    `json:"newsItems,omitempty"`
 
 	// Air-quality / pollution values. nil = not available (row omitted).
 	// Populated by fetchEWW when the EWW pollution call succeeds; nil when

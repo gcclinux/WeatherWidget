@@ -393,7 +393,9 @@ input:checked + .slider:before {
 }
 
 #pollution-get-pro,
-#ticker-get-pro {
+#ticker-get-pro,
+#forecast-today-get-pro,
+#forecast-tomorrow-get-pro {
   padding: 4px 12px;
 }
 

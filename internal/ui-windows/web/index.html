@@ -210,7 +210,19 @@
         <p class="pane-desc">Toggle the weather and pollution metrics visible on cards.</p>
 
         <div class="card">
-          <h3 class="card-subtitle">Weather Metrics</h3>
+          <div class="setting-row">
+            <div class="setting-info">
+              <label for="sel-grid-mode" class="setting-label">Grid Content</label>
+              <span id="grid-mode-hint" class="setting-hint">Choose what to display in the 6-tile grid</span>
+            </div>
+            <select id="sel-grid-mode" class="input-select">
+              <option value="live">Live Weather (Real-Time)</option>
+              <option value="today">Today's Forecast</option>
+              <option value="tomorrow">Tomorrow's Forecast</option>
+            </select>
+          </div>
+
+          <h3 class="card-subtitle" style="margin-top: 16px;">Weather Metrics</h3>
           <div class="toggle-grid">
             <label class="checkbox-pill"><input type="checkbox" id="df-city"> City</label>
             <label class="checkbox-pill"><input type="checkbox" id="df-icon"> Weather icon</label>
@@ -224,6 +236,11 @@
             <label class="checkbox-pill"><input type="checkbox" id="df-dew"> Dew Point</label>
             <label class="checkbox-pill"><input type="checkbox" id="df-pressure"> Pressure</label>
             <label class="checkbox-pill"><input type="checkbox" id="df-uv"> UV Index</label>
+            <label class="checkbox-pill"><input type="checkbox" id="df-sunrise"> Sunrise</label>
+            <label class="checkbox-pill"><input type="checkbox" id="df-sunset"> Sunset</label>
+            <label class="checkbox-pill"><input type="checkbox" id="df-clouds"> Cloud Cover</label>
+            <label class="checkbox-pill"><input type="checkbox" id="df-visibility"> Visibility</label>
+            <label class="checkbox-pill"><input type="checkbox" id="df-precip-rate"> Rainfall Rate</label>
           </div>
 
           <div class="pollution-heading">
@@ -250,10 +267,11 @@
         </div>
       </section>
 
-      <!-- Tab 4: Ticker Settings -->
+
+      <!-- Tab 6: Ticker Settings -->
       <section id="tab-ticker" class="tab-pane">
         <h2 class="pane-title">Ticker Settings</h2>
-        <p class="pane-desc">Choose which profile and air quality metrics appear in the scrolling ticker.</p>
+        <p class="pane-desc">Choose which profile, alerts, and air quality metrics appear in the scrolling ticker.</p>
 
         <div class="card">
           <div class="pollution-heading" style="margin-top: 0;">
@@ -265,20 +283,27 @@
           </div>
           <fieldset id="ticker-controls" class="pollution-controls" aria-labelledby="ticker-section-title" aria-describedby="ticker-locked-message" disabled>
             <div class="toggle-grid">
-              <label class="checkbox-pill"><input type="checkbox" id="pf-ticker"> Pollution Info Ticker</label>
+              <label class="checkbox-pill"><input type="checkbox" id="pf-ticker"> Enable Ticker</label>
             </div>
-            <div class="setting-row">
-              <div class="setting-info">
-                <label for="sel-ticker-profile" class="setting-label">Ticker Profile</label>
-                <span id="ticker-profile-hint" class="setting-hint">Choose how the Pro ticker turns air-quality data into guidance.</span>
-              </div>
-              <select id="sel-ticker-profile" class="input-select">
-                <option value="everyday">Everyday Outdoors</option>
-                <option value="active">Runner &amp; Cyclist</option>
-                <option value="family">Family &amp; School Run</option>
-                <option value="sensitive">Sensitive Airways</option>
-                <option value="ventilation">Open Windows</option>
-              </select>
+            <div class="pollution-heading">
+              <h3 id="ticker-profile-title" class="card-subtitle">Health Profiles</h3>
+            </div>
+            <div class="toggle-grid">
+              <label class="checkbox-pill"><input type="checkbox" id="prof-everyday"> Everyday Outdoors</label>
+              <label class="checkbox-pill"><input type="checkbox" id="prof-active"> Runner &amp; Cyclist</label>
+              <label class="checkbox-pill"><input type="checkbox" id="prof-family"> Family &amp; School Run</label>
+              <label class="checkbox-pill"><input type="checkbox" id="prof-sensitive"> Sensitive Airways</label>
+              <label class="checkbox-pill"><input type="checkbox" id="prof-ventilation"> Open Windows</label>
+            </div>
+            <div class="pollution-heading">
+              <h3 id="ticker-feed-title" class="card-subtitle">Alerts &amp; News Feed</h3>
+            </div>
+            <div class="toggle-grid">
+              <label class="checkbox-pill"><input type="checkbox" id="tf-feed-alert"> Severe Weather Alerts</label>
+              <label class="checkbox-pill"><input type="checkbox" id="tf-feed-today"> Today's Outlook Digest</label>
+              <label class="checkbox-pill"><input type="checkbox" id="tf-feed-precip"> Precipitation Watch</label>
+              <label class="checkbox-pill"><input type="checkbox" id="tf-feed-tomorrow"> Tomorrow's Forecast Preview</label>
+              <label class="checkbox-pill"><input type="checkbox" id="tf-feed-tips"> Day / Night &amp; Weather Tips</label>
             </div>
             <div class="pollution-heading">
               <h3 id="ticker-pollutants-title" class="card-subtitle">Air Quality &amp; Pollution</h3>
@@ -295,7 +320,7 @@
               <label class="checkbox-pill"><input type="checkbox" id="tf-nh3"> Ammonia (NH3)</label>
             </div>
           </fieldset>
-          <p class="setting-hint" style="margin-top: 16px;">Pollution data is available with EasyWeatherWidget Pro.</p>
+          <p class="setting-hint" style="margin-top: 16px;">Pollution and ticker feeds are available with EasyWeatherWidget Pro.</p>
         </div>
       </section>
 

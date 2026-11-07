@@ -703,7 +703,78 @@ func planPollutionTicker(fields *config.PollutionFields, d PollutionData, w *Wea
 			}
 		}
 	}
+	var result []PollutionTickerItem
+
+	// 1. Official Emergency Alerts (Priority 1)
+	if fields.TickerAlert && w != nil && w.Alert != nil && w.Alert.Event != "" {
+		result = append(result, PollutionTickerItem{
+			Kind:        TickerItemAlert,
+			Symbol:      "⚠ " + tr(localeMgr, "pollution.ticker.alert", "Alert"),
+			StatusText:  w.Alert.Event,
+			StatusLevel: 5,
+			SourcesText: w.Alert.Description,
+		})
+	}
+
+	// 2. Curated News Items (Priority 2 / 3)
+	if w != nil && len(w.NewsItems) > 0 {
+		for _, ni := range w.NewsItems {
+			switch ni.Category {
+			case "alert":
+				if fields.TickerAlert && (w.Alert == nil || w.Alert.Event == "") {
+					result = append(result, PollutionTickerItem{
+						Kind:        TickerItemAlert,
+						Symbol:      ni.Symbol,
+						FullName:    ni.FullName,
+						StatusText:  ni.StatusText,
+						StatusLevel: ni.StatusLevel,
+						SourcesText: ni.SourcesText,
+					})
+				}
+			case "today_outlook":
+				if fields.TickerNewsToday {
+					result = append(result, PollutionTickerItem{
+						Kind:        TickerItemOpportunity,
+						Symbol:      ni.Symbol,
+						FullName:    ni.FullName,
+						StatusText:  ni.StatusText,
+						StatusLevel: ni.StatusLevel,
+						SourcesText: ni.SourcesText,
+					})
+				}
+			case "precipitation":
+				if fields.TickerNewsPrecip {
+					result = append(result, PollutionTickerItem{
+						Kind:        TickerItemContext,
+						Symbol:      ni.Symbol,
+						FullName:    ni.FullName,
+						StatusText:  ni.StatusText,
+						StatusLevel: ni.StatusLevel,
+						SourcesText: ni.SourcesText,
+					})
+				}
+			case "tomorrow_outlook":
+				if fields.TickerNewsTomorrow {
+					result = append(result, PollutionTickerItem{
+						Kind:        TickerItemContext,
+						Symbol:      ni.Symbol,
+						FullName:    ni.FullName,
+						StatusText:  ni.StatusText,
+						StatusLevel: ni.StatusLevel,
+						SourcesText: ni.SourcesText,
+					})
+				}
+			}
+		}
+	}
+
 	if len(presentContexts) == 0 {
+		if len(result) > 6 {
+			return result[:6]
+		}
+		if len(result) > 0 {
+			return result
+		}
 		return nil
 	}
 
@@ -721,19 +792,9 @@ func planPollutionTicker(fields *config.PollutionFields, d PollutionData, w *Wea
 		}
 	}
 
-	_, _, alertLevel := tickerProfileDetails(fields.TickerProfile, localeMgr)
 	alertLabel := tr(localeMgr, "pollution.ticker.alert", "Alert")
 	opportunityLabel := tr(localeMgr, "pollution.ticker.opportunity", "Opportunity")
 	contextLabel := tr(localeMgr, "pollution.ticker.context", "Context")
-
-	// Profile- and level-specific guidance, optionally followed by a tip about
-	// the dominant pollutant. The profile name itself is not repeated: the user
-	// already chose it in settings.
-	guidance := tickerGuidance(fields.TickerProfile, dominant.StatusLevel, localeMgr)
-	advise := guidance
-	if tip := pollutantTipText(dominant.Metric, localeMgr); tip != "" {
-		advise = guidance + " • " + tip
-	}
 
 	// Turn the dominant raw pollutant item into a compact explanatory fallback.
 	context := dominant
@@ -742,53 +803,75 @@ func planPollutionTicker(fields *config.PollutionFields, d PollutionData, w *Wea
 	context.FullName = ""
 	context.StatusText = fmt.Sprintf("%s: %s", dominant.Symbol, dominant.StatusText)
 
-	if dominant.StatusLevel >= alertLevel {
-		items := []PollutionTickerItem{
-			{
+	profiles := fields.SelectedProfiles()
+	var profileItems []PollutionTickerItem
+
+	for _, prof := range profiles {
+		label, _, alertLevel := tickerProfileDetails(prof, localeMgr)
+		guidance := tickerGuidance(prof, dominant.StatusLevel, localeMgr)
+		advise := guidance
+		if tip := pollutantTipText(dominant.Metric, localeMgr); tip != "" {
+			advise = guidance + " • " + tip
+		}
+
+		oppSymbol := "✓ " + opportunityLabel
+		altSymbol := "⚠ " + alertLabel
+		if len(profiles) > 1 {
+			oppSymbol = "✓ " + label
+			altSymbol = "⚠ " + label
+		}
+
+		if dominant.StatusLevel >= alertLevel {
+			profileItems = append(profileItems, PollutionTickerItem{
 				Kind:        TickerItemAlert,
 				Metric:      dominant.Metric,
-				Symbol:      "⚠ " + alertLabel,
+				Symbol:      altSymbol,
 				StatusText:  fmt.Sprintf("%s: %s", dominant.Symbol, dominant.StatusText),
 				StatusLevel: dominant.StatusLevel,
 				SourcesText: advise,
-			},
-			context,
+			})
+		} else if dominant.StatusLevel > 2 {
+			ctxItem := context
+			ctxItem.SourcesText = advise
+			profileItems = append(profileItems, ctxItem)
+		} else {
+			v := tickerVariant(w)
+			var status string
+			if dominant.StatusLevel <= 1 {
+				status = trVariant(localeMgr, "pollution.ticker.opportunity.message",
+					"Fresh, clean air 🌿", "Lovely air out there 🌿", v)
+			} else {
+				status = trVariant(localeMgr, "pollution.ticker.opportunity.fair",
+					"Air quality is decent 🙂", "Pretty good air today 🙂", v)
+			}
+			tail := ""
+			if fields != nil && fields.TickerWeatherTips {
+				tail = weatherAdvice(w, tempUnit, localeMgr)
+			}
+			if tail == "" {
+				tail = guidance
+			}
+
+			opp := PollutionTickerItem{
+				Kind:        TickerItemOpportunity,
+				Metric:      dominant.Metric,
+				Symbol:      oppSymbol,
+				StatusText:  status,
+				StatusLevel: 1,
+				SourcesText: tail,
+			}
+			profileItems = append(profileItems, opp)
 		}
-		return append(items, selectedContexts...)
 	}
 
-	// Do not present moderate conditions as a positive opportunity merely
-	// because they remain below a less-sensitive profile's alert threshold.
-	// Show the profile's moderate-level guidance instead of the generic sources.
-	if dominant.StatusLevel > 2 {
-		context.SourcesText = advise
-		return append([]PollutionTickerItem{context}, selectedContexts...)
+	if len(profiles) == 1 {
+		profileItems = append(profileItems, context)
 	}
 
-	// Friendly headline plus either weather-aware advice or the profile's
-	// own "good to go" message.
-	v := tickerVariant(w)
-	var status string
-	if dominant.StatusLevel <= 1 {
-		status = trVariant(localeMgr, "pollution.ticker.opportunity.message",
-			"Fresh, clean air 🌿", "Lovely air out there 🌿", v)
-	} else {
-		status = trVariant(localeMgr, "pollution.ticker.opportunity.fair",
-			"Air quality is decent 🙂", "Pretty good air today 🙂", v)
+	result = append(result, profileItems...)
+	result = append(result, selectedContexts...)
+	if len(result) > 6 {
+		result = result[:6]
 	}
-	tail := weatherAdvice(w, tempUnit, localeMgr)
-	if tail == "" {
-		tail = guidance
-	}
-
-	opp := PollutionTickerItem{
-		Kind:        TickerItemOpportunity,
-		Metric:      dominant.Metric,
-		Symbol:      "✓ " + opportunityLabel,
-		StatusText:  status,
-		StatusLevel: 1,
-		SourcesText: tail,
-	}
-
-	return append([]PollutionTickerItem{opp, context}, selectedContexts...)
+	return result
 }
