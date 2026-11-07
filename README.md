@@ -174,6 +174,11 @@ There are two ways to fix this:
 *Note: A `-software` flag is also available (`.\weatherwidget.exe -software`) which instructs the Fyne framework to prefer software rendering, but this still requires basic OpenGL driver availability at the OS level.*
 
 ## Changelog
+### v2.3.0 — 2026-11-XX
+- **ENHANCEMENTS**
+  - Centralized City Search in RemoteAPIAdapter.SearchCity for ui-windows, ui-darwin, ui-gtk.
+  - Brand-New Native Windows UI: Rebuilt from the ground up to integrate cleanly with modern Windows aesthetics, typography, and window management. 
+
 ### v2.2.0 — 2026-11-04
 - **BUG - Fix** 
   - Linux Snap package autostart permanant fix

@@ -372,11 +372,13 @@ func newEWWServer(t *testing.T, statusCode int, resp ewwResponse) *httptest.Serv
 
 func TestFetchWeather_EWW_Success(t *testing.T) {
 	resp := ewwResponse{
-		Temp:         23.7,
-		Neighborhood: "Centro",
-		Country:      "BR",
-		FreeText:     "clear sky",
+		CityName:     "Holambra",
+		CountryCode:  "BR",
 		ObsTimeLocal: "2025-01-15 14:30:00",
+		Weather: ewwWeather{
+			Temp:     23.7,
+			FreeText: "clear sky",
+		},
 	}
 
 	srv := newEWWServer(t, http.StatusOK, resp)
@@ -415,11 +417,13 @@ func TestFetchWeather_EWW_Success(t *testing.T) {
 
 func TestFetchWeather_EWW_RFC3339ObsTimeLocal(t *testing.T) {
 	resp := ewwResponse{
-		Temp:         31.0,
-		Neighborhood: "California",
-		Country:      "US",
-		FreeText:     "Clear Sky",
+		CityName:     "California",
+		CountryCode:  "US",
 		ObsTimeLocal: "2026-08-21T20:37:57Z", // Live UTC RFC3339 timestamp from gateway
+		Weather: ewwWeather{
+			Temp:     31.0,
+			FreeText: "Clear Sky",
+		},
 	}
 
 	srv := newEWWServer(t, http.StatusOK, resp)
@@ -453,15 +457,15 @@ func TestFetchWeather_EWW_RFC3339ObsTimeLocal(t *testing.T) {
 func TestFetchWeather_EWW_URLConstruction(t *testing.T) {
 	var receivedPath string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// The weather fetch now also triggers a pollution request; only
-		// capture the weather path so this assertion stays about the weather URL.
-		if strings.HasPrefix(r.URL.Path, "/api/v1/weather/") {
+		if strings.HasPrefix(r.URL.Path, "/api/v1/weather-news/") {
 			receivedPath = r.URL.Path
 		}
 		w.WriteHeader(http.StatusOK)
 		json.NewEncoder(w).Encode(ewwResponse{
-			Temp:     20.0,
-			FreeText: "clear",
+			Weather: ewwWeather{
+				Temp:     20.0,
+				FreeText: "clear",
+			},
 		})
 	}))
 	defer srv.Close()
@@ -480,7 +484,7 @@ func TestFetchWeather_EWW_URLConstruction(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	expectedPath := "/api/v1/weather/key=my-api-key/London,GB"
+	expectedPath := "/api/v1/weather-news/key=my-api-key/London,GB"
 	if receivedPath != expectedPath {
 		t.Errorf("request path = %q, want %q", receivedPath, expectedPath)
 	}
@@ -523,7 +527,7 @@ func TestFetchWeather_EWW_MalformedJSON(t *testing.T) {
 func TestTestConnection_EWW_Success(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(ewwResponse{Temp: 15.0, FreeText: "clear"})
+		json.NewEncoder(w).Encode(ewwResponse{Weather: ewwWeather{Temp: 15.0, FreeText: "clear"}})
 	}))
 	defer srv.Close()
 
@@ -609,32 +613,9 @@ func TestMapEWWFreeTextToIcon(t *testing.T) {
 	}
 }
 
-// --- EWW pollution fetch tests ---
-
-// newEWWPollutionServer routes requests by path: weather requests
-// (/api/v1/weather/...) get the weather body, pollution requests
-// (/api/v1/pollution/...) are handled by the provided pollutionHandler so each
-// test can control the pollution response independently.
-func newEWWPollutionServer(t *testing.T, weatherResp ewwResponse, pollutionHandler http.HandlerFunc) *httptest.Server {
-	t.Helper()
-	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		switch {
-		case strings.HasPrefix(r.URL.Path, "/api/v1/pollution/"):
-			pollutionHandler(w, r)
-		case strings.HasPrefix(r.URL.Path, "/api/v1/weather/"):
-			w.WriteHeader(http.StatusOK)
-			json.NewEncoder(w).Encode(weatherResp)
-		default:
-			w.WriteHeader(http.StatusNotFound)
-		}
-	}))
-}
+// --- EWW pollution fetch tests (from single weather-news endpoint) ---
 
 func TestFetchWeather_EWW_PollutionSuccess(t *testing.T) {
-	weatherResp := ewwResponse{
-		Temp:     21.4,
-		FreeText: "clear sky",
-	}
 	// Distinct values per metric; PM25 and NH3 use distinct values to
 	// verify the JSON-tag mapping (pm2_5 -> PM25, nh3 -> NH3).
 	pol := ewwPollutionResponse{
@@ -648,11 +629,17 @@ func TestFetchWeather_EWW_PollutionSuccess(t *testing.T) {
 		PM10: 7.92,
 		NH3:  0.66,
 	}
+	resp := ewwResponse{
+		CityName:    "Holambra",
+		CountryCode: "BR",
+		Weather: ewwWeather{
+			Temp:     21.4,
+			FreeText: "clear sky",
+		},
+		Pollution: &pol,
+	}
 
-	srv := newEWWPollutionServer(t, weatherResp, func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(pol)
-	})
+	srv := newEWWServer(t, http.StatusOK, resp)
 	defer srv.Close()
 
 	adapter := NewRemoteAPIAdapter("easyweatherwidget", "test-key")
@@ -710,13 +697,12 @@ func TestFetchWeather_EWW_PollutionSuccess(t *testing.T) {
 	}
 }
 
-func TestFetchWeather_EWW_PollutionNon200(t *testing.T) {
-	weatherResp := ewwResponse{Temp: 23.7, FreeText: "clear sky"}
+func TestFetchWeather_EWW_MissingPollution(t *testing.T) {
+	resp := ewwResponse{
+		Weather: ewwWeather{Temp: 23.7, FreeText: "clear sky"},
+	}
 
-	srv := newEWWPollutionServer(t, weatherResp, func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte(`{"error":"internal"}`))
-	})
+	srv := newEWWServer(t, http.StatusOK, resp)
 	defer srv.Close()
 
 	adapter := NewRemoteAPIAdapter("easyweatherwidget", "test-key")
@@ -726,7 +712,7 @@ func TestFetchWeather_EWW_PollutionNon200(t *testing.T) {
 
 	data, err := adapter.FetchWeather(context.Background(), city)
 	if err != nil {
-		t.Fatalf("expected nil error (best-effort), got: %v", err)
+		t.Fatalf("expected nil error when pollution is absent, got: %v", err)
 	}
 	if data == nil {
 		t.Fatal("expected non-nil data")
@@ -738,99 +724,30 @@ func TestFetchWeather_EWW_PollutionNon200(t *testing.T) {
 	assertNoPollution(t, data)
 }
 
-func TestFetchWeather_EWW_PollutionMalformedJSON(t *testing.T) {
-	weatherResp := ewwResponse{Temp: 23.7, FreeText: "clear sky"}
-
-	srv := newEWWPollutionServer(t, weatherResp, func(w http.ResponseWriter, r *http.Request) {
+func TestFetchWeather_EWW_FreeKeyDefaultCityURLConstruction(t *testing.T) {
+	var receivedPath string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		receivedPath = r.URL.Path
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{not valid json`))
-	})
-	defer srv.Close()
-
-	adapter := NewRemoteAPIAdapter("easyweatherwidget", "test-key")
-	adapter.BaseURL = srv.URL
-
-	city := config.CityConfig{Name: "Holambra", Region: "SP", Timezone: "America/Sao_Paulo"}
-
-	data, err := adapter.FetchWeather(context.Background(), city)
-	if err != nil {
-		t.Fatalf("expected nil error (best-effort), got: %v", err)
-	}
-	if data == nil {
-		t.Fatal("expected non-nil data")
-	}
-	assertNoPollution(t, data)
-}
-
-func TestFetchWeather_EWW_PollutionNetworkError(t *testing.T) {
-	weatherResp := ewwResponse{Temp: 23.7, FreeText: "clear sky"}
-
-	// The pollution handler aborts the connection, forcing a client-side
-	// network error for the pollution request while weather still succeeds.
-	srv := newEWWPollutionServer(t, weatherResp, func(w http.ResponseWriter, r *http.Request) {
-		panic(http.ErrAbortHandler)
-	})
-	defer srv.Close()
-
-	adapter := NewRemoteAPIAdapter("easyweatherwidget", "test-key")
-	adapter.BaseURL = srv.URL
-
-	city := config.CityConfig{Name: "Holambra", Region: "SP", Timezone: "America/Sao_Paulo"}
-
-	data, err := adapter.FetchWeather(context.Background(), city)
-	if err != nil {
-		t.Fatalf("expected nil error (best-effort), got: %v", err)
-	}
-	if data == nil {
-		t.Fatal("expected non-nil data")
-	}
-	assertNoPollution(t, data)
-}
-
-func TestFetchWeather_EWW_PollutionURLConstruction(t *testing.T) {
-	weatherResp := ewwResponse{Temp: 20.0, FreeText: "clear"}
-
-	var pollutionPath string
-	makeSrv := func() *httptest.Server {
-		return newEWWPollutionServer(t, weatherResp, func(w http.ResponseWriter, r *http.Request) {
-			pollutionPath = r.URL.Path
-			w.WriteHeader(http.StatusOK)
-			json.NewEncoder(w).Encode(ewwPollutionResponse{})
+		json.NewEncoder(w).Encode(ewwResponse{
+			Weather: ewwWeather{Temp: 20.0, FreeText: "clear"},
 		})
-	}
-
-	// Configured (non-empty) key.
-	srv := makeSrv()
-	adapter := NewRemoteAPIAdapter("easyweatherwidget", "my-api-key")
-	adapter.BaseURL = srv.URL
-
-	city := config.CityConfig{Name: "London", Region: "GB", Timezone: "Europe/London"}
-	if _, err := adapter.FetchWeather(context.Background(), city); err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	srv.Close()
-
-	wantPath := "/api/v1/pollution/key=my-api-key/London,GB"
-	if pollutionPath != wantPath {
-		t.Errorf("pollution path = %q, want %q", pollutionPath, wantPath)
-	}
+	}))
+	defer srv.Close()
 
 	// Empty key => "free" segment. Use a default city so the weather call
 	// proceeds (config.IsDefaultCity allows only default cities without a key).
-	pollutionPath = ""
-	srv2 := makeSrv()
 	adapterFree := NewRemoteAPIAdapter("easyweatherwidget", "")
-	adapterFree.BaseURL = srv2.URL
+	adapterFree.BaseURL = srv.URL
 
 	defaultCity := config.CityConfig{Name: "London", Region: "GB", Timezone: "Europe/London"}
 	if _, err := adapterFree.FetchWeather(context.Background(), defaultCity); err != nil {
 		t.Fatalf("unexpected error (free/default city): %v", err)
 	}
-	srv2.Close()
 
-	wantFreePath := "/api/v1/pollution/key=free/London,GB"
-	if pollutionPath != wantFreePath {
-		t.Errorf("free pollution path = %q, want %q", pollutionPath, wantFreePath)
+	wantFreePath := "/api/v1/weather-news/key=free/London,GB"
+	if receivedPath != wantFreePath {
+		t.Errorf("free weather-news path = %q, want %q", receivedPath, wantFreePath)
 	}
 }
 

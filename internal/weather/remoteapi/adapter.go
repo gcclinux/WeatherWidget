@@ -13,9 +13,52 @@ import (
 	"strings"
 	"time"
 
+	"github.com/bradfitz/latlong"
 	"weatherwidget/internal/config"
 	"weatherwidget/internal/weather"
 )
+
+// CitySearchErrorKind classifies the failure stage of a city search request
+// so UI layers can format localized messages appropriately.
+type CitySearchErrorKind int
+
+const (
+	SearchErrInvalidProvider CitySearchErrorKind = iota + 1
+	SearchErrRequest
+	SearchErrAPIStatus
+	SearchErrDecode
+	SearchErrNotFound
+)
+
+// CitySearchError represents a structured error from SearchCity.
+type CitySearchError struct {
+	Kind       CitySearchErrorKind
+	StatusCode int
+	Query      string
+	Err        error
+}
+
+func (e *CitySearchError) Error() string {
+	switch e.Kind {
+	case SearchErrInvalidProvider:
+		return "unsupported provider for city search"
+	case SearchErrRequest:
+		if e.Err != nil {
+			return e.Err.Error()
+		}
+		return "city search request failed"
+	case SearchErrAPIStatus:
+		return fmt.Sprintf("city search API error (status %d)", e.StatusCode)
+	case SearchErrDecode:
+		return fmt.Sprintf("invalid city search response: %v", e.Err)
+	case SearchErrNotFound:
+		return fmt.Sprintf("no city found matching %q", e.Query)
+	default:
+		return "city search failed"
+	}
+}
+
+func (e *CitySearchError) Unwrap() error { return e.Err }
 
 const (
 	defaultOWMBaseURL       = "https://api.openweathermap.org"
@@ -45,14 +88,121 @@ func NewRemoteAPIAdapter(provider, apiKey string) *RemoteAPIAdapter {
 	case "openmeteo":
 		baseURL = defaultOpenMeteoBaseURL
 	}
+	var transport http.RoundTripper
+	if http.DefaultClient != nil {
+		transport = http.DefaultClient.Transport
+	}
 	return &RemoteAPIAdapter{
 		client: &http.Client{
-			Timeout: 10 * time.Second,
+			Timeout:   10 * time.Second,
+			Transport: transport,
 		},
 		provider: provider,
 		apiKey:   apiKey,
 		BaseURL:  baseURL,
 	}
+}
+
+// SearchCity looks up city metadata (canonical name, region/country, coordinates,
+// and offline IANA timezone) using the configured remote provider.
+func (r *RemoteAPIAdapter) SearchCity(ctx context.Context, name, region string) (config.CityConfig, error) {
+	name, region = strings.TrimSpace(name), strings.TrimSpace(region)
+	key := strings.TrimSpace(r.apiKey)
+
+	var endpoint string
+	switch r.provider {
+	case "easyweatherwidget":
+		if key == "" {
+			key = "free"
+		}
+		query := name
+		if region != "" {
+			query = name + "," + region
+		}
+		endpoint = fmt.Sprintf("%s/api/v1/weather-news/key=%s/%s",
+			strings.TrimRight(r.BaseURL, "/"), url.PathEscape(key), url.PathEscape(query))
+	case "openweathermap":
+		q := name
+		if region != "" {
+			q = name + "," + region
+		}
+		params := url.Values{"q": {q}, "limit": {"1"}, "appid": {key}}
+		endpoint = strings.TrimRight(r.BaseURL, "/") + "/geo/1.0/direct?" + params.Encode()
+	default:
+		return config.CityConfig{}, &CitySearchError{Kind: SearchErrInvalidProvider, Query: name}
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return config.CityConfig{}, &CitySearchError{Kind: SearchErrRequest, Query: name, Err: err}
+	}
+	resp, err := r.client.Do(req)
+	if err != nil {
+		return config.CityConfig{}, &CitySearchError{Kind: SearchErrRequest, Query: name, Err: err}
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return config.CityConfig{}, &CitySearchError{Kind: SearchErrAPIStatus, StatusCode: resp.StatusCode, Query: name}
+	}
+
+	var city config.CityConfig
+	if r.provider == "easyweatherwidget" {
+		var result struct {
+			CityName     string  `json:"city_name"`
+			CountryCode  string  `json:"country_code"`
+			Neighborhood string  `json:"Neighborhood"`
+			Country      string  `json:"Country"`
+			Lat          float64 `json:"lat"`
+			Lon          float64 `json:"lon"`
+		}
+		if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+			return city, &CitySearchError{Kind: SearchErrDecode, Query: name, Err: err}
+		}
+		cityName := result.CityName
+		if cityName == "" {
+			cityName = result.Neighborhood
+		}
+		countryCode := result.CountryCode
+		if countryCode == "" {
+			countryCode = result.Country
+		}
+		city = config.CityConfig{
+			Name:      cityName,
+			Region:    countryCode,
+			Latitude:  result.Lat,
+			Longitude: result.Lon,
+		}
+	} else {
+		var results []struct {
+			Name    string  `json:"name"`
+			Country string  `json:"country"`
+			State   string  `json:"state"`
+			Lat     float64 `json:"lat"`
+			Lon     float64 `json:"lon"`
+		}
+		if err := json.NewDecoder(resp.Body).Decode(&results); err != nil {
+			return city, &CitySearchError{Kind: SearchErrDecode, Query: name, Err: err}
+		}
+		if len(results) > 0 {
+			res := results[0]
+			city = config.CityConfig{
+				Name:      res.Name,
+				Region:    res.Country,
+				Latitude:  res.Lat,
+				Longitude: res.Lon,
+			}
+			if res.State != "" {
+				city.Region = res.State + ", " + city.Region
+			}
+		}
+	}
+
+	if city.Name == "" {
+		return city, &CitySearchError{Kind: SearchErrNotFound, Query: name}
+	}
+	city.Timezone = latlong.LookupZoneName(city.Latitude, city.Longitude)
+	return city, nil
 }
 
 // FetchWeather retrieves current weather data for the given city from the configured provider.
@@ -461,22 +611,51 @@ func mapWUConditionToIcon(code int) string {
 
 // --- EasyWeatherWidget implementation ---
 
-// ewwResponse represents the relevant fields from the EasyWeatherWidget API.
-type ewwResponse struct {
-	Temp         float64 `json:"Temp"`
-	FeelsLike    float64 `json:"FeelsLike"`
-	Neighborhood string  `json:"Neighborhood"`
-	Country      string  `json:"Country"`
-	FreeText     string  `json:"FreeText"`
-	ObsTimeLocal string  `json:"ObsTimeLocal"`
-	Humidity     int     `json:"Humidity"`
-	WindSpeed    float64 `json:"WindSpeed"`
-	WindDir      int     `json:"WindDir"`
-	WindGust     float64 `json:"WindGust"`
-	DewPt        float64 `json:"DewPt"`
-	Pressure     float64 `json:"Pressure"`
-	UV           float64 `json:"UV"`
+// ewwWeather represents the nested weather object from the EasyWeatherWidget weather-news API.
+type ewwWeather struct {
+	Temp      float64 `json:"Temp"`
+	FeelsLike float64 `json:"FeelsLike"`
+	FreeText  string  `json:"FreeText"`
+	Humidity  int     `json:"Humidity"`
+	WindSpeed float64 `json:"WindSpeed"`
+	WindDir   int     `json:"WindDir"`
+	WindGust  float64 `json:"WindGust"`
+	DewPt     float64 `json:"DewPt"`
+	Pressure  float64 `json:"Pressure"`
+	UV        float64 `json:"UV"`
 }
+
+// ewwResponse represents the relevant fields from the EasyWeatherWidget weather-news API.
+type ewwResponse struct {
+	CityName     string                `json:"city_name"`
+	CountryCode  string                `json:"country_code"`
+	Lat          float64               `json:"lat"`
+	Lon          float64               `json:"lon"`
+	ObsTimeUTC   string                `json:"obstimeutc"`
+	ObsTimeLocal string                `json:"obstimelocal"`
+	Weather      ewwWeather            `json:"weather"`
+	Pollution    *ewwPollutionResponse `json:"pollution"`
+}
+
+// ewwPollutionResponse represents the pollution object returned by the
+// EWW weather-news endpoint. AQI is an integer index 1-5; the rest are float64
+// concentrations in µg/m³.
+type ewwPollutionResponse struct {
+	AQI  int     `json:"aqi"`
+	CO   float64 `json:"co"`
+	NO   float64 `json:"no"`
+	NO2  float64 `json:"no2"`
+	O3   float64 `json:"o3"`
+	SO2  float64 `json:"so2"`
+	PM25 float64 `json:"pm2_5"`
+	PM10 float64 `json:"pm10"`
+	NH3  float64 `json:"nh3"`
+}
+
+// intPtr and floatPtr return pointers to copies of their arguments, used to
+// mark a pollution reading as present (Requirement 1.3).
+func intPtr(v int) *int           { return &v }
+func floatPtr(v float64) *float64 { return &v }
 
 func (r *RemoteAPIAdapter) fetchEWW(ctx context.Context, city config.CityConfig) (*weather.WeatherData, error) {
 	// When no API key is set, only default cities are allowed.
@@ -490,14 +669,14 @@ func (r *RemoteAPIAdapter) fetchEWW(ctx context.Context, city config.CityConfig)
 	if key == "" {
 		key = "free"
 	}
-	reqURL := fmt.Sprintf("%s/api/v1/weather/key=%s/%s,%s", r.BaseURL, key, city.Name, city.Region)
+	reqURL := fmt.Sprintf("%s/api/v1/weather-news/key=%s/%s,%s", r.BaseURL, key, city.Name, city.Region)
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, reqURL, nil)
 	if err != nil {
 		return nil, fmt.Errorf("create request: %w", err)
 	}
 
-	log.Printf("fetching weather from EWW for %s,%s...", city.Name, city.Region)
+	log.Printf("fetching weather-news from EWW for %s,%s...", city.Name, city.Region)
 	resp, err := r.client.Do(req)
 	if err != nil {
 		log.Printf("EWW network error for %s: %v", city.Name, err)
@@ -544,33 +723,28 @@ func (r *RemoteAPIAdapter) fetchEWW(ctx context.Context, city config.CityConfig)
 		}
 	}
 
-	temp := int(math.Round(eww.Temp))
-	log.Printf("successfully fetched weather for %s from EWW: %d°C, %s", city.Name, temp, eww.FreeText)
+	temp := int(math.Round(eww.Weather.Temp))
+	log.Printf("successfully fetched weather for %s from EWW: %d°C, %s", city.Name, temp, eww.Weather.FreeText)
 
 	data := &weather.WeatherData{
 		CityName:      city.Name,
 		Region:        city.Region,
 		Temperature:   temp,
-		Description:   eww.FreeText,
-		IconCode:      mapEWWFreeTextToIcon(eww.FreeText),
+		Description:   eww.Weather.FreeText,
+		IconCode:      mapEWWFreeTextToIcon(eww.Weather.FreeText),
 		LocalTime:     localTime,
 		FetchedAt:     now.UTC(),
-		Humidity:      eww.Humidity,
-		WindSpeed:     eww.WindSpeed,
-		WindDirection: eww.WindDir,
-		WindGust:      eww.WindGust,
-		DewPoint:      eww.DewPt,
-		Pressure:      eww.Pressure,
-		UVIndex:       eww.UV,
-		FeelsLike:     floatPtr(eww.FeelsLike),
+		Humidity:      eww.Weather.Humidity,
+		WindSpeed:     eww.Weather.WindSpeed,
+		WindDirection: eww.Weather.WindDir,
+		WindGust:      eww.Weather.WindGust,
+		DewPoint:      eww.Weather.DewPt,
+		Pressure:      eww.Weather.Pressure,
+		UVIndex:       eww.Weather.UV,
+		FeelsLike:     floatPtr(eww.Weather.FeelsLike),
 	}
 
-	// Best-effort pollution fetch for the same city. A pollution failure never
-	// fails the weather fetch (Requirement 2); on any error the pollution
-	// fields are left nil.
-	if pol, err := r.fetchEWWPollution(ctx, city); err != nil {
-		log.Printf("EWW pollution fetch failed for %s,%s (weather still returned): %v", city.Name, city.Region, err)
-	} else {
+	if pol := eww.Pollution; pol != nil {
 		data.AQI = intPtr(pol.AQI)
 		data.CO = floatPtr(pol.CO)
 		data.NO = floatPtr(pol.NO)
@@ -585,73 +759,16 @@ func (r *RemoteAPIAdapter) fetchEWW(ctx context.Context, city config.CityConfig)
 	return data, nil
 }
 
-// ewwPollutionResponse represents the flat pollution JSON body returned by the
-// EWW pollution endpoint. AQI is an integer index 1-5; the rest are float64
-// concentrations in µg/m³.
-type ewwPollutionResponse struct {
-	AQI  int     `json:"aqi"`
-	CO   float64 `json:"co"`
-	NO   float64 `json:"no"`
-	NO2  float64 `json:"no2"`
-	O3   float64 `json:"o3"`
-	SO2  float64 `json:"so2"`
-	PM25 float64 `json:"pm2_5"`
-	PM10 float64 `json:"pm10"`
-	NH3  float64 `json:"nh3"`
-}
-
-// intPtr and floatPtr return pointers to copies of their arguments, used to
-// mark a pollution reading as present (Requirement 1.3).
-func intPtr(v int) *int           { return &v }
-func floatPtr(v float64) *float64 { return &v }
-
-// fetchEWWPollution requests current pollution for the same city, mirroring
-// fetchEWW's URL/key/client/logging patterns. Best-effort: the caller treats
-// any error as "no pollution" (Requirement 2).
-func (r *RemoteAPIAdapter) fetchEWWPollution(ctx context.Context, city config.CityConfig) (*ewwPollutionResponse, error) {
-	key := r.apiKey
-	if key == "" {
-		key = "free" // matches fetchEWW (Requirements 3.1, 3.2)
-	}
-	// Same city as the weather request; no additional restriction (Requirement 3.3).
-	reqURL := fmt.Sprintf("%s/api/v1/pollution/key=%s/%s,%s", r.BaseURL, key, city.Name, city.Region)
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, reqURL, nil)
-	if err != nil {
-		return nil, fmt.Errorf("create pollution request: %w", err)
-	}
-
-	log.Printf("fetching pollution from EWW for %s,%s...", city.Name, city.Region)
-	resp, err := r.client.Do(req)
-	if err != nil {
-		log.Printf("EWW pollution network error for %s: %v", city.Name, err)
-		return nil, fmt.Errorf("execute pollution request: %w", err)
-	}
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("read pollution response: %w", err)
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		log.Printf("EWW pollution API error for %s: status %d, body: %s", city.Name, resp.StatusCode, string(body))
-		return nil, fmt.Errorf("EWW pollution API error (status %d): %s", resp.StatusCode, string(body))
-	}
-
-	var pol ewwPollutionResponse
-	if err := json.Unmarshal(body, &pol); err != nil {
-		return nil, fmt.Errorf("parse EWW pollution response: %w", err)
-	}
-	return &pol, nil
-}
-
 func (r *RemoteAPIAdapter) testEWW(ctx context.Context) error {
 	key := strings.TrimSpace(r.apiKey)
 	if key == "" {
 		return fmt.Errorf("API key is required")
 	}
-	reqURL := fmt.Sprintf("%s/api/v1/weather/key=%s/London,GB", r.BaseURL, key)
+	testCity := "London,GB"
+	if key == "free" {
+		testCity = "Holambra,BR"
+	}
+	reqURL := fmt.Sprintf("%s/api/v1/weather-news/key=%s/%s", r.BaseURL, key, testCity)
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, reqURL, nil)
 	if err != nil {

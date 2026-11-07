@@ -1,5 +1,7 @@
 package config
 
+import "strings"
+
 // TemperatureUnit represents the display unit for temperature values.
 type TemperatureUnit string
 
@@ -271,9 +273,19 @@ const (
 	MaxCitiesPro = 5
 )
 
+// APIKeyValue returns the configured API key with surrounding whitespace
+// removed, or "" when no API config is present. A whitespace-only key is
+// treated the same as a missing key.
+func (c *Config) APIKeyValue() string {
+	if c == nil || c.APIConfig == nil {
+		return ""
+	}
+	return strings.TrimSpace(c.APIConfig.APIKey)
+}
+
 // IsPro returns true if the config uses EasyWeatherWidget Pro with a valid API key.
 func (c *Config) IsPro() bool {
-	return c.APIConfig != nil && c.APIConfig.Provider == "easyweatherwidget" && c.APIConfig.APIKey != ""
+	return c.APIConfig != nil && c.APIConfig.Provider == "easyweatherwidget" && c.APIKeyValue() != ""
 }
 
 // MaxCities returns the maximum number of cities allowed based on the active tier.
@@ -287,9 +299,25 @@ func (c *Config) MaxCities() int {
 // HasLicense returns true if the config has a valid API key or database config.
 // When false, only the default cities will work.
 func (c *Config) HasLicense() bool {
-	hasAPIKey := c.APIConfig != nil && c.APIConfig.APIKey != ""
-	hasDBConfig := c.DatabaseConfig != nil && c.DatabaseConfig.Host != ""
+	hasAPIKey := c.APIKeyValue() != ""
+	hasDBConfig := c.DatabaseConfig != nil && strings.TrimSpace(c.DatabaseConfig.Host) != ""
 	return hasAPIKey || hasDBConfig
+}
+
+// ApplyDemoMode puts an unlicensed config (no API key and no database) into
+// demo mode: the city list is reset to the built-in DefaultCities, which can
+// be fetched without any API key. It returns true when the config is in demo
+// mode. Configs with a license are left untouched.
+func (c *Config) ApplyDemoMode() bool {
+	if c == nil || c.HasLicense() {
+		return false
+	}
+	c.Cities = DefaultCities()
+	if c.APIConfig != nil {
+		// Drop whitespace-only keys so every consumer sees an empty key.
+		c.APIConfig.APIKey = ""
+	}
+	return true
 }
 
 // ValidationError represents a single validation failure for a config field.
