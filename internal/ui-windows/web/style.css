@@ -392,7 +392,8 @@ input:checked + .slider:before {
   font-size: 12px;
 }
 
-#pollution-get-pro {
+#pollution-get-pro,
+#ticker-get-pro {
   padding: 4px 12px;
 }
 

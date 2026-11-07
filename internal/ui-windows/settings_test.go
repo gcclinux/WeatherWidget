@@ -87,7 +87,14 @@ func TestSaveSettingsPersistsFieldsAndRejectsZeroInterval(t *testing.T) {
 	}
 	next.DisplayFields = config.DefaultDisplayFields()
 	next.DisplayFields.ShowWind = false
-	next.PollutionFields = &config.PollutionFields{ShowNO: true, ShowNH3: true, ShowTicker: true, TickerProfile: config.TickerProfileSensitive}
+	next.PollutionFields = &config.PollutionFields{
+		ShowNO:        true,
+		ShowNH3:       true,
+		ShowTicker:    true,
+		TickerProfile: config.TickerProfileSensitive,
+		TickerAQI:     true,
+		TickerO3:      true,
+	}
 	next.NoBackground = true
 	next.Locale = "de-DE"
 	m.preview = &config.Config{NoBackground: true}
