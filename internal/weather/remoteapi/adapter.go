@@ -13,9 +13,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/bradfitz/latlong"
 	"weatherwidget/internal/config"
 	"weatherwidget/internal/weather"
+
+	"github.com/bradfitz/latlong"
 )
 
 // CitySearchErrorKind classifies the failure stage of a city search request
@@ -776,19 +777,19 @@ func (r *RemoteAPIAdapter) fetchEWW(ctx context.Context, city config.CityConfig)
 	log.Printf("successfully fetched weather for %s from EWW: %d°C, %s", city.Name, temp, eww.Weather.FreeText)
 
 	data := &weather.WeatherData{
-		CityName:      city.Name,
-		Region:        city.Region,
-		Temperature:   temp,
-		Description:   eww.Weather.FreeText,
-		IconCode:      mapEWWFreeTextToIcon(eww.Weather.FreeText),
-		LocalTime:     localTime,
-		FetchedAt:     now.UTC(),
-		Humidity:      eww.Weather.Humidity,
-		WindSpeed:     eww.Weather.WindSpeed,
-		WindDirection: eww.Weather.WindDir,
-		WindGust:      eww.Weather.WindGust,
-		DewPoint:      eww.Weather.DewPt,
-		Pressure:      eww.Weather.Pressure,
+		CityName:       city.Name,
+		Region:         city.Region,
+		Temperature:    temp,
+		Description:    eww.Weather.FreeText,
+		IconCode:       mapEWWFreeTextToIcon(eww.Weather.FreeText),
+		LocalTime:      localTime,
+		FetchedAt:      now.UTC(),
+		Humidity:       eww.Weather.Humidity,
+		WindSpeed:      eww.Weather.WindSpeed,
+		WindDirection:  eww.Weather.WindDir,
+		WindGust:       eww.Weather.WindGust,
+		DewPoint:       eww.Weather.DewPt,
+		Pressure:       eww.Weather.Pressure,
 		UVIndex:        eww.Weather.UV,
 		FeelsLike:      floatPtr(eww.Weather.FeelsLike),
 		Clouds:         eww.Weather.Clouds,
@@ -869,9 +870,6 @@ func (r *RemoteAPIAdapter) testEWW(ctx context.Context) error {
 		return fmt.Errorf("API key is required")
 	}
 	testCity := "London,GB"
-	if key == "free" {
-		testCity = "Holambra,BR"
-	}
 	reqURL := fmt.Sprintf("%s/api/v1/weather-news/key=%s/%s", r.BaseURL, key, testCity)
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, reqURL, nil)
@@ -1051,28 +1049,5 @@ func (r *RemoteAPIAdapter) testOpenMeteo(ctx context.Context) error {
 // mapWMOCodeToWeather maps WMO Weather interpretation codes (WW) from Open-Meteo
 // to internal icon codes and standard descriptions that match i18n weather.condition.* keys.
 func mapWMOCodeToWeather(code int) (icon, description string) {
-	switch code {
-	case 0:
-		return weather.IconClear, "clear sky"
-	case 1:
-		return weather.IconPartlyCloudy, "few clouds"
-	case 2:
-		return weather.IconPartlyCloudy, "scattered clouds"
-	case 3:
-		return weather.IconCloudy, "overcast clouds"
-	case 45, 48:
-		return weather.IconFog, "fog"
-	case 51, 53, 55, 56, 57, 61, 80:
-		return weather.IconRain, "light rain"
-	case 63, 66, 81:
-		return weather.IconRain, "moderate rain"
-	case 65, 67, 82:
-		return weather.IconHeavyRain, "heavy intensity rain"
-	case 71, 73, 75, 77, 85, 86:
-		return weather.IconSnow, "snow"
-	case 95, 96, 99:
-		return weather.IconStorm, "thunderstorm"
-	default:
-		return weather.IconPartlyCloudy, "scattered clouds"
-	}
+	return weather.MapWMOCodeToWeather(code)
 }

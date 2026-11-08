@@ -22,6 +22,7 @@ import (
 	"weatherwidget/internal/config"
 	"weatherwidget/internal/i18n"
 	"weatherwidget/internal/weather"
+	"weatherwidget/winres"
 )
 
 // ewwAPIKeyLen is the expected length of an EasyWeatherWidget API key (UUID v4).
@@ -116,8 +117,8 @@ type settingsLocale struct {
 // High-DPI windows are scaled, clamped, and centered in that work area.
 func computeSettingsWindowBounds(dpi, monLeft, monTop, monWidth, monHeight int) (width, height uint, center bool, posX, posY int) {
 	const (
-		defaultWidth  = 1150
-		defaultHeight = 880
+		defaultWidth  = 1180
+		defaultHeight = 900
 	)
 
 	clampHeight := func(h int) int {
@@ -135,7 +136,7 @@ func computeSettingsWindowBounds(dpi, monLeft, monTop, monWidth, monHeight int) 
 	}
 
 	scale := float64(dpi) / 96.0
-	w := int(float64(1080)*scale + 0.5)
+	w := int(float64(1110)*scale + 0.5)
 	h := int(float64(defaultHeight)*scale + 0.5)
 
 	if w < defaultWidth {
@@ -386,6 +387,10 @@ func (m *Manager) OpenSettings() {
 		bind("goSetAutoStart", func(enable bool) error {
 			return setAutoStartEnabled(enable)
 		})
+
+		bind("goGetAppVersion", func() string {
+			return winres.Version()
+		})
 		if bindErr != nil {
 			log.Printf("uiwindows: settings bridge initialization failed: %v", bindErr)
 			return
@@ -507,6 +512,13 @@ func buildBundledHTML() string {
 	appJS, _ := webFS.ReadFile("web/app.js")
 
 	html := string(indexHTML)
+	// Inject the dynamic app version from winres.json / release
+	html = strings.Replace(
+		html,
+		`<div class="about-version" id="about-version">Win32 &amp; WebView2</div>`,
+		fmt.Sprintf(`<div class="about-version" id="about-version">Version %s &bull; Win32 &amp; WebView2</div>`, winres.Version()),
+		1,
+	)
 	// Replace external stylesheet link with inline <style>
 	html = strings.Replace(
 		html,

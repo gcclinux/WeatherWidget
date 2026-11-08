@@ -56,6 +56,7 @@ func (wd *WidgetDrawer) renderEnhancedView(cities []config.CityConfig, results [
 	const spacing = 6
 	width, height, infoWidth := enhancedWidth, 0, enhancedInfoMinWidth
 	heights := make([]int, len(cities))
+	maxCol1Needed := 0
 	for i := range cities {
 		var data *weather.WeatherData
 		var result *weather.WeatherResult
@@ -64,6 +65,8 @@ func (wd *WidgetDrawer) renderEnhancedView(cities []config.CityConfig, results [
 			data = result.Data
 		}
 		infoWidth = max(infoWidth, wd.enhancedInfoWidth(cities[i], result, cfg, lm, now))
+		visible := enhancedVisibleMetrics(cfg.GetDisplayFields(), data, cfg, lm)
+		maxCol1Needed = max(maxCol1Needed, wd.enhancedMiddleColumnNeededWidth(visible, data))
 		rows := weather.PlanPollutionRows(cfg.GetPollutionFields(), weather.PollutionOf(data), lm)
 		w, h := enhancedCardSize(rows)
 		if w > width {
@@ -75,6 +78,8 @@ func (wd *WidgetDrawer) renderEnhancedView(cities []config.CityConfig, results [
 	gridLeft := enhancedInfoLeft + infoWidth + enhancedInfoGap
 	width = max(width, gridLeft+enhancedMetricsWidth)
 	height += (len(cities) - 1) * spacing
+	metricsDx := (width - 5) - gridLeft
+	edges := computeEnhancedMetricEdges(maxCol1Needed, metricsDx)
 	dst := image.NewRGBA(image.Rect(0, 0, width, height))
 	y := 0
 	for i, city := range cities {
@@ -82,7 +87,7 @@ func (wd *WidgetDrawer) renderEnhancedView(cities []config.CityConfig, results [
 		if i < len(results) {
 			result = &results[i]
 		}
-		wd.drawEnhancedCard(dst, image.Rect(0, y, width, y+heights[i]), city, result, cfg, lm, now, i, infoWidth)
+		wd.drawEnhancedCard(dst, image.Rect(0, y, width, y+heights[i]), city, result, cfg, lm, now, i, infoWidth, edges)
 		y += heights[i] + spacing
 	}
 	return dst
@@ -210,7 +215,7 @@ func drawSmoke(dst *image.RGBA, rect image.Rectangle, opacity int) {
 	}
 }
 
-func (wd *WidgetDrawer) drawEnhancedCard(dst *image.RGBA, rect image.Rectangle, city config.CityConfig, result *weather.WeatherResult, cfg *config.Config, lm *i18n.LocaleManager, now time.Time, index, infoWidth int) {
+func (wd *WidgetDrawer) drawEnhancedCard(dst *image.RGBA, rect image.Rectangle, city config.CityConfig, result *weather.WeatherResult, cfg *config.Config, lm *i18n.LocaleManager, now time.Time, index, infoWidth int, edges [4]int) {
 	x, y, w, h := rect.Min.X, rect.Min.Y, rect.Dx(), rect.Dy()
 	local := now.UTC()
 	if loc, err := time.LoadLocation(city.Timezone); err == nil {
@@ -275,7 +280,7 @@ func (wd *WidgetDrawer) drawEnhancedCard(dst *image.RGBA, rect image.Rectangle, 
 	if fields.ShowDesc {
 		drawCentered(dst, enhancedDescription(result, lm), infoCenter, y+158, descFace, enhancedWhite)
 	}
-	wd.drawEnhancedMetrics(dst, image.Rect(x+enhancedInfoLeft+infoWidth+enhancedInfoGap, y+30, x+w-5, y+165), fields, data, cfg, lm)
+	wd.drawEnhancedMetrics(dst, image.Rect(x+enhancedInfoLeft+infoWidth+enhancedInfoGap, y+30, x+w-5, y+165), fields, data, cfg, lm, edges)
 	wd.drawEnhancedPollution(dst, image.Rect(x+6, y+enhancedPollutionTop, x+w-6, y+h-4), cfg, data, lm)
 }
 
@@ -292,7 +297,75 @@ func drawCentered(dst *image.RGBA, text string, center, baseline int, face font.
 	drawText(dst, text, center-measureText(text, face)/2, baseline, face, c)
 }
 
-func (wd *WidgetDrawer) drawEnhancedMetrics(dst *image.RGBA, rect image.Rectangle, fields *config.DisplayFields, data *weather.WeatherData, cfg *config.Config, lm *i18n.LocaleManager) {
+func computeEnhancedMetricEdges(neededPx int, rectDx int) [4]int {
+	const (
+		baseTotal  = 316
+		currentMid = 140
+		minMid     = 112 // 140 - 20%
+	)
+	if rectDx <= 0 {
+		rectDx = baseTotal
+	}
+	neededIn316 := int(math.Ceil(float64(neededPx) * float64(baseTotal) / float64(rectDx)))
+	midW := currentMid
+	if neededIn316 < currentMid {
+		if neededIn316 < minMid {
+			midW = minMid
+		} else {
+			midW = neededIn316
+		}
+	}
+	rem := baseTotal - midW
+	col0W := rem / 2
+	return [4]int{0, col0W, col0W + midW, baseTotal}
+}
+
+func (wd *WidgetDrawer) enhancedMiddleColumnNeededWidth(visible []weather.MetricDisplay, data *weather.WeatherData) int {
+	if len(visible) < 2 {
+		return 112
+	}
+	nameFace := wd.getFace(false, 12)
+	valueFace := wd.getFace(true, 15)
+	maxContentWidth := 0
+
+	var direction int
+	if data != nil {
+		direction = data.WindDirection
+	}
+
+	for _, idx := range []int{1, 4} {
+		if idx >= len(visible) {
+			continue
+		}
+		m := visible[idx]
+		nw := measureText(m.Name, nameFace)
+		if m.Emoji == "💧" {
+			nw += 18
+		}
+		if nw > maxContentWidth {
+			maxContentWidth = nw
+		}
+
+		vw := 0
+		if m.Emoji == "💨" && data != nil && direction != 0 {
+			parts := strings.SplitN(m.Value, " "+weather.DegreesToArrow(direction)+" ", 2)
+			if len(parts) == 2 {
+				vw = measureText(parts[0], valueFace) + 17 + measureText(parts[1], valueFace)
+			} else {
+				vw = measureText(m.Value, valueFace)
+			}
+		} else {
+			vw = measureText(m.Value, valueFace)
+		}
+		if vw > maxContentWidth {
+			maxContentWidth = vw
+		}
+	}
+
+	return maxContentWidth + 20
+}
+
+func enhancedVisibleMetrics(fields *config.DisplayFields, data *weather.WeatherData, cfg *config.Config, lm *i18n.LocaleManager) []weather.MetricDisplay {
 	var timezone string
 	var direction int
 	if data != nil {
@@ -394,6 +467,11 @@ func (wd *WidgetDrawer) drawEnhancedMetrics(dst *image.RGBA, rect image.Rectangl
 			}
 		}
 	}
+	return visible
+}
+
+func (wd *WidgetDrawer) drawEnhancedMetrics(dst *image.RGBA, rect image.Rectangle, fields *config.DisplayFields, data *weather.WeatherData, cfg *config.Config, lm *i18n.LocaleManager, edges [4]int) {
+	visible := enhancedVisibleMetrics(fields, data, cfg, lm)
 	if len(visible) == 0 {
 		return
 	}
@@ -404,9 +482,12 @@ func (wd *WidgetDrawer) drawEnhancedMetrics(dst *image.RGBA, rect image.Rectangl
 		col, row := i%cols, i/cols
 		left, right := rect.Min.X+col*rect.Dx()/cols, rect.Min.X+(col+1)*rect.Dx()/cols-2
 		if cols == 3 {
-			edges := [4]int{0, 88, 228, 316}
-			left = rect.Min.X + edges[col]*rect.Dx()/316
-			right = rect.Min.X + edges[col+1]*rect.Dx()/316 - 2
+			gridEdges := edges
+			if gridEdges == [4]int{} {
+				gridEdges = [4]int{0, 88, 228, 316}
+			}
+			left = rect.Min.X + gridEdges[col]*rect.Dx()/316
+			right = rect.Min.X + gridEdges[col+1]*rect.Dx()/316 - 2
 		}
 		top := rect.Min.Y + row*rect.Dy()/rows
 		bottom := rect.Min.Y + (row+1)*rect.Dy()/rows - 2
@@ -422,6 +503,10 @@ func (wd *WidgetDrawer) drawEnhancedMetrics(dst *image.RGBA, rect image.Rectangl
 			drawCentered(clipped, metric.Name, center, nameY, nameFace, enhancedMuted)
 		}
 		value := metric.Value
+		var direction int
+		if data != nil {
+			direction = data.WindDirection
+		}
 		if metric.Emoji == "💨" && data != nil && direction != 0 {
 			parts := strings.SplitN(value, " "+weather.DegreesToArrow(direction)+" ", 2)
 			if len(parts) == 2 {

@@ -174,10 +174,15 @@ There are two ways to fix this:
 *Note: A `-software` flag is also available (`.\weatherwidget.exe -software`) which instructs the Fyne framework to prefer software rendering, but this still requires basic OpenGL driver availability at the OS level.*
 
 ## Changelog
-### v2.3.0 — 2026-11-XX
+### v2.3.0 — 2026-12-XX
 - **ENHANCEMENTS**
-  - Centralized City Search in RemoteAPIAdapter.SearchCity for ui-windows, ui-darwin, ui-gtk.
-  - Brand-New Native Windows UI: Rebuilt from the ground up to integrate cleanly with modern Windows aesthetics, typography, and window management. 
+  - Centralized City Search in RemoteAPIAdapter.SearchCity for ui-windows, ui-darwin, ui-gtk. (Windows, Linux & Mac)
+  - Brand-New Native Windows UI: Rebuilt from the ground up to integrate cleanly with modern Windows aesthetics, typography, and window management. (Windows)
+  - Created 3 Weather profiles to be selected in Data Settings - Real-Time Weather, Today's Forecast, Tomorrow's Forecast (Windows, Linux & Mac)
+  - Created Ticker Settings Health Profiles, Alerts & News Feed, Air Quality & Pollution definitions for Ticker messages (Windows, Linux & Mac)
+  - Added Free 3 selected cities (London, New York & Amsterdam) with full access to all features in new design (Windows, Linux & Mac)
+  - About TAB now contains links to website, user manual, environmental policy and support page aswell as Github repo page (Windows, Linux & Mac)
+  
 
 ### v2.2.0 — 2026-11-04
 - **BUG - Fix** 
