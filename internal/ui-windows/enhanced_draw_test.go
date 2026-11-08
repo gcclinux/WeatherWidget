@@ -310,3 +310,99 @@ func TestSimpleCardRespectsFieldAndPollutionSelection(t *testing.T) {
 		t.Fatalf("simple card height = %d, want %d", visible.Bounds().Dy(), empty.Bounds().Dy()+22+23)
 	}
 }
+
+func TestComputeEnhancedMetricEdges(t *testing.T) {
+	// 1. Forecast mode: small text width -> should shrink to minMid (112, which is 140 - 20%)
+	// and outer columns expand equally from 88 to 102.
+	forecastEdges := computeEnhancedMetricEdges(60, 316)
+	expectedForecast := [4]int{0, 102, 214, 316}
+	if forecastEdges != expectedForecast {
+		t.Errorf("forecast edges = %v, want %v", forecastEdges, expectedForecast)
+	}
+	midW := forecastEdges[2] - forecastEdges[1]
+	if midW != 112 {
+		t.Errorf("forecast middle column width = %d, want 112 (-20%% of 140)", midW)
+	}
+
+	// 2. Real-time mode with long wind string (e.g. 150px) -> should cap at currentMid (140)
+	liveEdges := computeEnhancedMetricEdges(150, 316)
+	expectedLive := [4]int{0, 88, 228, 316}
+	if liveEdges != expectedLive {
+		t.Errorf("live edges = %v, want %v", liveEdges, expectedLive)
+	}
+	midWLive := liveEdges[2] - liveEdges[1]
+	if midWLive != 140 {
+		t.Errorf("live middle column width = %d, want 140", midWLive)
+	}
+
+	// 3. Intermediate width (e.g. needed 126 in 316-scale) -> should adjust smoothly
+	intermediateEdges := computeEnhancedMetricEdges(126, 316)
+	midWInter := intermediateEdges[2] - intermediateEdges[1]
+	if midWInter != 126 {
+		t.Errorf("intermediate middle column width = %d, want 126", midWInter)
+	}
+}
+
+func TestEnhancedMiddleGridAutoResizeForecastVsLive(t *testing.T) {
+	drawer := NewWidgetDrawer()
+	cfg := config.DefaultConfig()
+	cfg.ViewMode = config.ViewModeEnhanced
+	cfg.DisplayFields = config.DefaultDisplayFields()
+
+	city := config.CityConfig{Name: "London", Region: "GB", Timezone: "UTC"}
+	todayMax, todayMin, uvMax, gustMax := 11.0, 5.0, 1.1, 7.0
+	precipProb, precipSum := 0, 0.0
+	now := time.Date(2026, 11, 8, 11, 2, 22, 0, time.UTC)
+
+	data := &weather.WeatherData{
+		CityName:    "London",
+		Temperature: 9,
+		Forecast: &weather.ForecastData{
+			TodayTempMax:       &todayMax,
+			TodayTempMin:       &todayMin,
+			TodayUVMax:         &uvMax,
+			TodayGustMax:       &gustMax,
+			TodayPrecipProbMax: precipProb,
+			TodayPrecipSumMM:   &precipSum,
+		},
+	}
+	results := []weather.WeatherResult{{Data: data}}
+
+	// Today's forecast: short strings in col 1 ("Low Temp 5°C", "Peak UV 1.1")
+	cfg.DisplayFields.GridMode = "today"
+	visibleForecast := enhancedVisibleMetrics(cfg.DisplayFields, data, cfg, nil)
+	neededForecast := drawer.enhancedMiddleColumnNeededWidth(visibleForecast, data)
+	edgesForecast := computeEnhancedMetricEdges(neededForecast, 325)
+	if edgesForecast[2]-edgesForecast[1] != 112 {
+		t.Errorf("expected forecast middle column width 112 (-20%%), got %d", edgesForecast[2]-edgesForecast[1])
+	}
+
+	// Render succeeds and produces non-nil image
+	imgForecast := drawer.Render([]config.CityConfig{city}, results, cfg, nil, now)
+	if imgForecast == nil {
+		t.Fatal("Render returned nil in today forecast mode")
+	}
+
+	// Real-time mode: long wind with direction arrow in col 1 ("15.2 km/h ↗ WNW")
+	cfg.DisplayFields.GridMode = "live"
+	dataLive := &weather.WeatherData{
+		CityName:      "London",
+		Temperature:   9,
+		WindSpeed:     15.2,
+		WindDirection: 290, // WNW
+		Pressure:      1013.2,
+	}
+	resultsLive := []weather.WeatherResult{{Data: dataLive}}
+	visibleLive := enhancedVisibleMetrics(cfg.DisplayFields, dataLive, cfg, nil)
+	neededLive := drawer.enhancedMiddleColumnNeededWidth(visibleLive, dataLive)
+	edgesLive := computeEnhancedMetricEdges(neededLive, 325)
+	if edgesLive[2]-edgesLive[1] != 140 {
+		t.Errorf("expected live middle column width 140, got %d", edgesLive[2]-edgesLive[1])
+	}
+
+	imgLive := drawer.Render([]config.CityConfig{city}, resultsLive, cfg, nil, now)
+	if imgLive == nil {
+		t.Fatal("Render returned nil in live mode")
+	}
+}
+

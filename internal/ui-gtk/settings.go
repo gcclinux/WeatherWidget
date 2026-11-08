@@ -489,6 +489,24 @@ func buildProviderTab(m *manager, parent *gtk.Dialog, getCities func() []config.
 	providerProBox.PackStart(providerProNote, true, true, 0)
 	vbox.PackStart(providerProBox, false, false, 0)
 
+	// Testing notice banner.
+	providerTestBox, _ := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 4)
+	if providerTestBoxSc, err := providerTestBox.GetStyleContext(); err == nil {
+		providerTestBoxSc.AddProvider(providerProNoteCSS, gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
+		providerTestBoxSc.AddClass("pro-note-box")
+	}
+	providerTestTitle, _ := gtk.LabelNew("")
+	providerTestTitle.SetMarkup(fmt.Sprintf("<span foreground='#38bdf8' weight='bold' font_size='9500'>🧪 %s</span>", glib.MarkupEscapeText(m.t("settings.provider.testingNotice.title"))))
+	providerTestTitle.SetHAlign(gtk.ALIGN_START)
+	providerTestBox.PackStart(providerTestTitle, false, false, 0)
+
+	providerTestMsg, _ := gtk.LabelNew("")
+	providerTestMsg.SetMarkup(fmt.Sprintf("<span foreground='#e2e8f0' font_size='9000'>%s</span>", glib.MarkupEscapeText(m.t("settings.provider.testingNotice.message"))))
+	providerTestMsg.SetHAlign(gtk.ALIGN_START)
+	providerTestMsg.SetLineWrap(true)
+	providerTestBox.PackStart(providerTestMsg, true, true, 0)
+	vbox.PackStart(providerTestBox, false, false, 0)
+
 	// Save button (provider tab).
 	saveAPIBtn, _ := gtk.ButtonNewWithLabel(m.t("settings.save"))
 	saveAPIBtn.Connect("clicked", func() {

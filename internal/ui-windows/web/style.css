@@ -399,17 +399,27 @@ input:checked + .slider:before {
   padding: 4px 12px;
 }
 
-.pollution-controls {
+.pollution-controls,
+.weather-metrics-controls {
   border: 0;
   min-width: 0;
+  padding: 0;
+  margin: 0;
 }
 
-.pollution-controls:disabled {
+.pollution-controls:disabled,
+.weather-metrics-controls:disabled {
   opacity: 0.5;
 }
 
-.pollution-controls:disabled .checkbox-pill {
+.pollution-controls:disabled .checkbox-pill,
+.weather-metrics-controls:disabled .checkbox-pill {
   cursor: not-allowed;
+}
+
+.pollution-controls:disabled .checkbox-pill:hover,
+.weather-metrics-controls:disabled .checkbox-pill:hover {
+  background-color: rgba(255, 255, 255, 0.04);
 }
 
 /* City Management List */
@@ -576,6 +586,39 @@ input, textarea { user-select: text; }
   border-color: var(--accent);
   color: var(--accent);
   background-color: rgba(96, 205, 255, 0.14);
+}
+
+.provider-test-banner {
+  margin-bottom: 16px;
+  padding: 12px 14px;
+  border-radius: var(--radius-md);
+  background-color: rgba(96, 205, 255, 0.08);
+  border: 1px solid rgba(96, 205, 255, 0.35);
+  box-shadow: 0 0 12px rgba(96, 205, 255, 0.05);
+}
+
+.provider-test-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.provider-test-icon {
+  font-size: 15px;
+  line-height: 1;
+}
+
+.provider-test-title {
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--accent);
+}
+
+.provider-test-message {
+  font-size: 12px;
+  color: var(--text-main);
+  line-height: 1.5;
 }
 
 .activation-card {

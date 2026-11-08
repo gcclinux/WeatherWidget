@@ -3,6 +3,7 @@
 let currentConfig = null;
 let selectedLocale = 'en-GB';
 let translations = {};
+let appVersion = '';
 let autoFilled = false;
 let citySearchGeneration = 0;
 const t = key => translations[key] || key;
@@ -60,7 +61,7 @@ const translationTargets = {
   'label[for="new-city-lon"] span': 'settings.locations.lonLabel',
   '#tab-display .pane-title': 'settings.display.title',
   '#tab-display .pane-desc': 'settings.display.subtitle',
-  '#tab-display .card-subtitle:first-child': 'settings.display.title',
+  '#weather-metrics-title': 'settings.display.weatherMetrics',
   'label[for="sel-grid-mode"]': 'settings.gridMode.title',
   '#grid-mode-hint': 'settings.gridMode.subtitle',
   '#sel-grid-mode option[value="live"]': 'settings.gridMode.live',
@@ -150,6 +151,8 @@ const translationTargets = {
   '#remote-settings .setting-row:first-child .setting-hint': 'settings.provider.subtitle',
   '#row-api-key .setting-label': 'settings.provider.apiKeyLabel',
   '#row-api-key .setting-hint': 'settings.provider.note',
+  '#provider-test-title': 'settings.provider.testingNotice.title',
+  '#provider-test-message': 'settings.provider.testingNotice.message',
   '#activation-title': 'settings.provider.apiKeyActivation.title',
   '#activation-message': 'settings.provider.apiKeyActivation.message',
   '#link-get-free-api': 'settings.provider.getFreeApi',
@@ -160,8 +163,10 @@ const translationTargets = {
   '#tab-about .pane-desc': 'settings.about.description',
   '#tab-about .setting-label': 'settings.startup.autostart',
   '#tab-about .setting-hint': 'settings.startup.subtitle',
-  '#tab-about .about-links a:first-child': 'settings.about.websiteLabel',
-  '#tab-about .about-links a:nth-of-type(2)': 'settings.windows.support'
+  '#link-about-website': 'settings.windows.website',
+  '#link-about-manual': 'settings.windows.manual',
+  '#link-about-environmental': 'settings.windows.environmental',
+  '#link-about-support': 'settings.windows.support'
 };
 
 async function applyLanguage(locale) {
@@ -171,7 +176,8 @@ async function applyLanguage(locale) {
     'settings.dialog.savedMsg', 'settings.provider.checkingConnection', 'settings.provider.connectionSuccessTitle',
     'error.settings.cityNameRequiredSearch', 'error.settings.regionRequiredEww', 'error.settings.apiKeyRequired',
     'error.settings.searchFailed', 'error.settings.saveFailed', 'error.settings.connectionFailed',
-    'error.settings.autoStartFailed', 'settings.windows.autofillRequired', 'settings.windows.error', 'settings.windows.apply'];
+    'error.settings.autoStartFailed', 'settings.windows.autofillRequired', 'settings.windows.error', 'settings.windows.apply',
+    'settings.about.version'];
   const values = await window.goGetTranslations(locale, keys);
   translations = values;
   document.documentElement.lang = locale;
@@ -185,6 +191,24 @@ async function applyLanguage(locale) {
       target.textContent = values[key];
     }
   });
+  if (values['settings.about.version']) {
+    let label = values['settings.about.version'].replace(/\*\*/g, '').trim();
+    const colonIdx = label.indexOf(':');
+    if (colonIdx !== -1) {
+      label = label.substring(0, colonIdx).trim();
+    } else {
+      label = label.replace(/\s*[0-9.]+.*$/, '').trim() || 'Version';
+    }
+    const verEl = el('about-version');
+    if (verEl) {
+      if (!appVersion && window.goGetAppVersion) {
+        try { appVersion = await window.goGetAppVersion(); } catch (_) {}
+      }
+      if (appVersion) {
+        verEl.textContent = `${label} ${appVersion} \u2022 Win32 & WebView2`;
+      }
+    }
+  }
   Object.entries(placeholderTargets).forEach(([selector, key]) => {
     document.querySelector(selector).placeholder = t(key);
   });
@@ -226,6 +250,15 @@ function updatePollutionControls() {
   if (isPro) el('ticker-controls').removeAttribute('aria-describedby');
   else el('ticker-controls').setAttribute('aria-describedby', 'ticker-locked-message');
 }
+
+function updateWeatherMetricsControls() {
+  const isLive = (el('sel-grid-mode')?.value || 'live') === 'live';
+  const controls = el('weather-metrics-controls');
+  if (controls) {
+    controls.disabled = !isLive;
+  }
+}
+el('sel-grid-mode').addEventListener('change', updateWeatherMetricsControls);
 
 el('demo-banner-pro').addEventListener('click', () => {
   selectTab(document.querySelector('[data-tab="tab-api"]'));
@@ -277,7 +310,7 @@ function populateUI(cfg) {
     el(id).checked = !!cfg.pollutionFields?.[key];
   });
   const hasAnyProfile = !!(cfg.pollutionFields?.profileEveryday || cfg.pollutionFields?.profileActive || cfg.pollutionFields?.profileFamily || cfg.pollutionFields?.profileSensitive || cfg.pollutionFields?.profileVentilation);
-  if (!hasAnyProfile && cfg.pollutionFields?.tickerProfile) {
+  if (!hasAnyProfile && cfg.pollutionFields?.tickerProfile && cfg.pollutionFields.tickerProfile !== 'none') {
     const legacyMap = {
       everyday: 'prof-everyday',
       active: 'prof-active',
@@ -294,6 +327,7 @@ function populateUI(cfg) {
   updateActivationCard();
   updateDemoBanner();
   updatePollutionControls();
+  updateWeatherMetricsControls();
 }
 
 function renderCityList() {
@@ -547,7 +581,8 @@ function collectConfigFromUI() {
   cfg.apiConfig = {...cfg.apiConfig, provider: el('sel-provider').value, apiKey: el('input-api-key').value.trim()};
   cfg.displayFields = {...cfg.displayFields, gridMode: el('sel-grid-mode').value};
   Object.entries(displayFields).forEach(([id, key]) => { cfg.displayFields[key] = el(id).checked; });
-  cfg.pollutionFields = {...cfg.pollutionFields};
+  const anyProfile = el('prof-everyday').checked || el('prof-active').checked || el('prof-family').checked || el('prof-sensitive').checked || el('prof-ventilation').checked;
+  cfg.pollutionFields = {...cfg.pollutionFields, tickerProfile: anyProfile ? 'custom' : 'none'};
   Object.entries(pollutionFields).forEach(([id, key]) => { cfg.pollutionFields[key] = el(id).checked; });
   Object.entries(tickerFields).forEach(([id, key]) => { cfg.pollutionFields[key] = el(id).checked; });
   return cfg;
@@ -620,9 +655,11 @@ el('chk-autostart').addEventListener('change', async e => {
 });
 window.addEventListener('DOMContentLoaded', async () => {
   try {
-    const [json, locales, monitors, autostart] = await Promise.all([
-      window.goGetConfig(), window.goGetLocales(), window.goGetMonitors(), window.goGetAutoStart()
+    const [json, locales, monitors, autostart, ver] = await Promise.all([
+      window.goGetConfig(), window.goGetLocales(), window.goGetMonitors(), window.goGetAutoStart(),
+      window.goGetAppVersion ? window.goGetAppVersion() : Promise.resolve('')
     ]);
+    if (ver) appVersion = ver;
     renderLanguages(locales);
     for (let i = 0; i < monitors; i++) el('sel-monitor').add(new Option(String(i + 1), String(i)));
     populateUI(JSON.parse(json));

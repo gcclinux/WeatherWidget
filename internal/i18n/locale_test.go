@@ -418,6 +418,8 @@ func TestEnGBCompleteness(t *testing.T) {
 		"settings.provider.getProApi",
 		"settings.provider.note",
 		"settings.provider.proFeaturesNote",
+		"settings.provider.testingNotice.title",
+		"settings.provider.testingNotice.message",
 		"settings.provider.checkConnection",
 		"settings.provider.checkingConnection",
 		"settings.provider.connectionSuccessTitle",

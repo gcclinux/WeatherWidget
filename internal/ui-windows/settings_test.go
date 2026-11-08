@@ -15,6 +15,7 @@ import (
 	"weatherwidget/internal/i18n"
 	"weatherwidget/internal/scheduler"
 	"weatherwidget/internal/weather"
+	"weatherwidget/winres"
 )
 
 func TestBuildBundledHTML(t *testing.T) {
@@ -27,6 +28,14 @@ func TestBuildBundledHTML(t *testing.T) {
 	}
 	if !strings.Contains(html, "WeatherWidget Settings") {
 		t.Error("expected title in bundled HTML")
+	}
+	ver := winres.Version()
+	if ver == "" {
+		t.Error("expected non-empty version from winres.Version()")
+	}
+	expectedVerSnippet := "Version " + ver
+	if !strings.Contains(html, expectedVerSnippet) {
+		t.Errorf("expected bundled HTML to contain %q, but got:\n%s", expectedVerSnippet, html)
 	}
 }
 
@@ -167,26 +176,26 @@ func TestSettingsSwitchRemoteProviderAndRejectDatabase(t *testing.T) {
 func TestComputeSettingsWindowBounds(t *testing.T) {
 	// Standard DPI keeps the existing width and default OS placement.
 	w, h, center, _, _ := computeSettingsWindowBounds(96, 0, 0, 1920, 1040)
-	if w != 1150 || h != 880 || center {
-		t.Fatalf("expected (1150, 880, false) at 96 DPI, got (%d, %d, %v)", w, h, center)
+	if w != 1180 || h != 900 || center {
+		t.Fatalf("expected (1180, 900, false) at 96 DPI, got (%d, %d, %v)", w, h, center)
 	}
 
 	// The larger initial height still fits a short standard-DPI work area.
 	w, h, center, _, _ = computeSettingsWindowBounds(96, 0, 0, 1366, 728)
-	if w != 1150 || h != 648 || center {
-		t.Fatalf("expected (1150, 648, false) on a short work area, got (%d, %d, %v)", w, h, center)
+	if w != 1180 || h != 648 || center {
+		t.Fatalf("expected (1180, 648, false) on a short work area, got (%d, %d, %v)", w, h, center)
 	}
 
 	// High DPI scales the height when the work area is large enough.
 	w, h, center, x, y := computeSettingsWindowBounds(192, 0, 0, 2880, 2000)
-	if w != 2160 || h != 1760 || !center || x != 360 || y != 120 {
-		t.Fatalf("expected (2160, 1760, true, 360, 120), got (%d, %d, %v, %d, %d)", w, h, center, x, y)
+	if w != 2220 || h != 1800 || !center || x != 330 || y != 100 {
+		t.Fatalf("expected (2220, 1800, true, 330, 100), got (%d, %d, %v, %d, %d)", w, h, center, x, y)
 	}
 
 	// High-DPI windows are clamped and centered when the work area is shorter.
 	w, h, center, x, y = computeSettingsWindowBounds(192, 0, 0, 2880, 1704)
-	if w != 2160 || h != 1624 || !center || x != 360 || y != 40 {
-		t.Fatalf("expected (2160, 1624, true, 360, 40) at 192 DPI, got (%d, %d, %v, %d, %d)", w, h, center, x, y)
+	if w != 2220 || h != 1624 || !center || x != 330 || y != 40 {
+		t.Fatalf("expected (2220, 1624, true, 330, 40) at 192 DPI, got (%d, %d, %v, %d, %d)", w, h, center, x, y)
 	}
 
 	// High DPI on a smaller screen remains inside the work area.

@@ -3,6 +3,7 @@ package weather
 import (
 	"fmt"
 	"hash/fnv"
+	"math"
 	"strings"
 
 	"weatherwidget/internal/config"
@@ -709,7 +710,7 @@ func planPollutionTicker(fields *config.PollutionFields, d PollutionData, w *Wea
 	if fields.TickerAlert && w != nil && w.Alert != nil && w.Alert.Event != "" {
 		result = append(result, PollutionTickerItem{
 			Kind:        TickerItemAlert,
-			Symbol:      "⚠ " + tr(localeMgr, "pollution.ticker.alert", "Alert"),
+			Symbol:      "⚠ " + tr(localeMgr, "pollution.ticker.title.alert", tr(localeMgr, "pollution.ticker.alert", "Alert")),
 			StatusText:  w.Alert.Event,
 			StatusLevel: 5,
 			SourcesText: w.Alert.Description,
@@ -724,8 +725,8 @@ func planPollutionTicker(fields *config.PollutionFields, d PollutionData, w *Wea
 				if fields.TickerAlert && (w.Alert == nil || w.Alert.Event == "") {
 					result = append(result, PollutionTickerItem{
 						Kind:        TickerItemAlert,
-						Symbol:      ni.Symbol,
-						FullName:    ni.FullName,
+						Symbol:      "⚠ " + tr(localeMgr, "pollution.ticker.title.alert", tr(localeMgr, "pollution.ticker.alert", "Alert")),
+						FullName:    "",
 						StatusText:  ni.StatusText,
 						StatusLevel: ni.StatusLevel,
 						SourcesText: ni.SourcesText,
@@ -733,38 +734,123 @@ func planPollutionTicker(fields *config.PollutionFields, d PollutionData, w *Wea
 				}
 			case "today_outlook":
 				if fields.TickerNewsToday {
+					statusText := ni.StatusText
+					if w.Forecast != nil && w.Forecast.TodayTempMax != nil && w.Forecast.TodayTempMin != nil {
+						highStr := FormatTemperature(int(math.Round(*w.Forecast.TodayTempMax)), tempUnit)
+						lowStr := FormatTemperature(int(math.Round(*w.Forecast.TodayTempMin)), tempUnit)
+						highLbl := tr(localeMgr, "weather.forecast.tempMax", "High")
+						lowLbl := tr(localeMgr, "weather.forecast.tempMin", "Low")
+						statusText = fmt.Sprintf("%s %s / %s %s", highLbl, highStr, lowLbl, lowStr)
+					} else {
+						statusText = strings.Replace(statusText, "High ", tr(localeMgr, "weather.forecast.tempMax", "High")+" ", 1)
+						statusText = strings.Replace(statusText, "Low ", tr(localeMgr, "weather.forecast.tempMin", "Low")+" ", 1)
+					}
 					result = append(result, PollutionTickerItem{
 						Kind:        TickerItemOpportunity,
-						Symbol:      ni.Symbol,
-						FullName:    ni.FullName,
-						StatusText:  ni.StatusText,
+						Symbol:      tr(localeMgr, "pollution.ticker.title.today", "Today's Outlook"),
+						FullName:    "",
+						StatusText:  statusText,
 						StatusLevel: ni.StatusLevel,
 						SourcesText: ni.SourcesText,
 					})
 				}
 			case "precipitation":
 				if fields.TickerNewsPrecip {
+					statusText := ni.StatusText
+					if w.Forecast != nil && w.Forecast.TodayPrecipProbMax > 0 {
+						probLbl := tr(localeMgr, "weather.forecast.precipProb", "Rain Chance")
+						statusText = fmt.Sprintf("%d%% %s", w.Forecast.TodayPrecipProbMax, probLbl)
+						if w.Forecast.TodayPrecipSumMM != nil && *w.Forecast.TodayPrecipSumMM > 0 {
+							statusText += fmt.Sprintf(" • %.1f mm", *w.Forecast.TodayPrecipSumMM)
+						}
+					} else {
+						statusText = strings.Replace(statusText, "Chance of Rain", tr(localeMgr, "weather.forecast.precipProb", "Chance of Rain"), 1)
+						statusText = strings.Replace(statusText, "Chance of Snow", tr(localeMgr, "weather.forecast.precipProb", "Chance of Snow"), 1)
+					}
 					result = append(result, PollutionTickerItem{
 						Kind:        TickerItemContext,
-						Symbol:      ni.Symbol,
-						FullName:    ni.FullName,
-						StatusText:  ni.StatusText,
+						Symbol:      tr(localeMgr, "pollution.ticker.title.precipitation", "Precipitation Watch"),
+						FullName:    "",
+						StatusText:  statusText,
 						StatusLevel: ni.StatusLevel,
 						SourcesText: ni.SourcesText,
 					})
 				}
 			case "tomorrow_outlook":
 				if fields.TickerNewsTomorrow {
+					statusText := ni.StatusText
+					if w.Forecast != nil && w.Forecast.TomorrowTempMax != nil && w.Forecast.TomorrowTempMin != nil {
+						highStr := FormatTemperature(int(math.Round(*w.Forecast.TomorrowTempMax)), tempUnit)
+						lowStr := FormatTemperature(int(math.Round(*w.Forecast.TomorrowTempMin)), tempUnit)
+						highLbl := tr(localeMgr, "weather.forecast.tempMax", "High")
+						lowLbl := tr(localeMgr, "weather.forecast.tempMin", "Low")
+						statusText = fmt.Sprintf("%s %s / %s %s", highLbl, highStr, lowLbl, lowStr)
+					} else {
+						statusText = strings.Replace(statusText, "High ", tr(localeMgr, "weather.forecast.tempMax", "High")+" ", 1)
+						statusText = strings.Replace(statusText, "Low ", tr(localeMgr, "weather.forecast.tempMin", "Low")+" ", 1)
+					}
 					result = append(result, PollutionTickerItem{
 						Kind:        TickerItemContext,
-						Symbol:      ni.Symbol,
-						FullName:    ni.FullName,
-						StatusText:  ni.StatusText,
+						Symbol:      tr(localeMgr, "pollution.ticker.title.tomorrow", "Tomorrow's Forecast"),
+						FullName:    "",
+						StatusText:  statusText,
 						StatusLevel: ni.StatusLevel,
 						SourcesText: ni.SourcesText,
 					})
 				}
 			}
+		}
+	} else if w != nil && w.Forecast != nil {
+		if fields.TickerNewsToday && (w.Forecast.TodayTempMax != nil || w.Forecast.TodaySummary != "") {
+			statusText := ""
+			if w.Forecast.TodayTempMax != nil && w.Forecast.TodayTempMin != nil {
+				highStr := FormatTemperature(int(math.Round(*w.Forecast.TodayTempMax)), tempUnit)
+				lowStr := FormatTemperature(int(math.Round(*w.Forecast.TodayTempMin)), tempUnit)
+				highLbl := tr(localeMgr, "weather.forecast.tempMax", "High")
+				lowLbl := tr(localeMgr, "weather.forecast.tempMin", "Low")
+				statusText = fmt.Sprintf("%s %s / %s %s", highLbl, highStr, lowLbl, lowStr)
+			}
+			result = append(result, PollutionTickerItem{
+				Kind:        TickerItemOpportunity,
+				Symbol:      tr(localeMgr, "pollution.ticker.title.today", "Today's Outlook"),
+				FullName:    "",
+				StatusText:  statusText,
+				StatusLevel: 1,
+				SourcesText: w.Forecast.TodaySummary,
+			})
+		}
+		if fields.TickerNewsPrecip && w.Forecast.TodayPrecipProbMax > 0 {
+			probLbl := tr(localeMgr, "weather.forecast.precipProb", "Rain Chance")
+			statusText := fmt.Sprintf("%d%% %s", w.Forecast.TodayPrecipProbMax, probLbl)
+			if w.Forecast.TodayPrecipSumMM != nil && *w.Forecast.TodayPrecipSumMM > 0 {
+				statusText += fmt.Sprintf(" • %.1f mm", *w.Forecast.TodayPrecipSumMM)
+			}
+			result = append(result, PollutionTickerItem{
+				Kind:        TickerItemContext,
+				Symbol:      tr(localeMgr, "pollution.ticker.title.precipitation", "Precipitation Watch"),
+				FullName:    "",
+				StatusText:  statusText,
+				StatusLevel: 1,
+				SourcesText: w.Forecast.TodaySummary,
+			})
+		}
+		if fields.TickerNewsTomorrow && (w.Forecast.TomorrowTempMax != nil || w.Forecast.TomorrowSummary != "") {
+			statusText := ""
+			if w.Forecast.TomorrowTempMax != nil && w.Forecast.TomorrowTempMin != nil {
+				highStr := FormatTemperature(int(math.Round(*w.Forecast.TomorrowTempMax)), tempUnit)
+				lowStr := FormatTemperature(int(math.Round(*w.Forecast.TomorrowTempMin)), tempUnit)
+				highLbl := tr(localeMgr, "weather.forecast.tempMax", "High")
+				lowLbl := tr(localeMgr, "weather.forecast.tempMin", "Low")
+				statusText = fmt.Sprintf("%s %s / %s %s", highLbl, highStr, lowLbl, lowStr)
+			}
+			result = append(result, PollutionTickerItem{
+				Kind:        TickerItemContext,
+				Symbol:      tr(localeMgr, "pollution.ticker.title.tomorrow", "Tomorrow's Forecast"),
+				FullName:    "",
+				StatusText:  statusText,
+				StatusLevel: 1,
+				SourcesText: w.Forecast.TomorrowSummary,
+			})
 		}
 	}
 

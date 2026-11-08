@@ -342,3 +342,33 @@ func FormatWindDir(windDirection int) string {
 	}
 	return fmt.Sprintf("%s %s", DegreesToArrow(windDirection), DegreesToCompass(windDirection))
 }
+
+// MapWMOCodeToWeather maps WMO Weather interpretation codes (WW)
+// to internal icon codes and standard descriptions that match i18n weather.condition.* keys.
+func MapWMOCodeToWeather(code int) (icon, description string) {
+	switch code {
+	case 0:
+		return IconClear, "clear sky"
+	case 1:
+		return IconPartlyCloudy, "few clouds"
+	case 2:
+		return IconPartlyCloudy, "scattered clouds"
+	case 3:
+		return IconCloudy, "overcast clouds"
+	case 45, 48:
+		return IconFog, "fog"
+	case 51, 53, 55, 56, 57, 61, 80:
+		return IconRain, "light rain"
+	case 63, 66, 81:
+		return IconRain, "moderate rain"
+	case 65, 67, 82:
+		return IconHeavyRain, "heavy intensity rain"
+	case 71, 73, 75, 77, 85, 86:
+		return IconSnow, "snow"
+	case 95, 96, 99:
+		return IconStorm, "thunderstorm"
+	default:
+		return IconPartlyCloudy, "scattered clouds"
+	}
+}
+

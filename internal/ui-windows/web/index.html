@@ -222,7 +222,8 @@
             </select>
           </div>
 
-          <h3 class="card-subtitle" style="margin-top: 16px;">Weather Metrics</h3>
+          <fieldset id="weather-metrics-controls" class="weather-metrics-controls" aria-labelledby="weather-metrics-title">
+          <h3 id="weather-metrics-title" class="card-subtitle" style="margin-top: 16px;">Weather Metrics</h3>
           <div class="toggle-grid">
             <label class="checkbox-pill"><input type="checkbox" id="df-city"> City</label>
             <label class="checkbox-pill"><input type="checkbox" id="df-icon"> Weather icon</label>
@@ -242,6 +243,7 @@
             <label class="checkbox-pill"><input type="checkbox" id="df-visibility"> Visibility</label>
             <label class="checkbox-pill"><input type="checkbox" id="df-precip-rate"> Rainfall Rate</label>
           </div>
+          </fieldset>
 
           <div class="pollution-heading">
             <h3 id="pollution-title" class="card-subtitle">Air Quality & Pollutants</h3>
@@ -330,6 +332,14 @@
         <p class="pane-desc">Configure where WeatherWidget retrieves weather data.</p>
 
         <div class="card">
+          <div id="provider-test-banner" class="provider-test-banner">
+            <div class="provider-test-header">
+              <span class="provider-test-icon">🧪</span>
+              <span id="provider-test-title" class="provider-test-title">Testing Access (Pro API Key)</span>
+            </div>
+            <p id="provider-test-message" class="provider-test-message">For testing purposes, we have added 3 cities (London (GB), New York (US) &amp; Amsterdam (NL)) with full access to all features using the Pro API key = free. The API key = free will have all the available features and data in the app for all those 3 selected cities.</p>
+          </div>
+
           <div id="remote-settings">
           <div class="setting-row">
             <div class="setting-info">
@@ -410,11 +420,15 @@
           </div>
 
           <div class="about-links" style="margin-top: 20px;">
-            <a href="https://easysmartapps.co.uk" target="_blank" class="about-link">Website</a>
+            <a href="https://easysmartapps.co.uk" id="link-about-website" target="_blank" class="about-link">Website</a>
             <span class="dot">•</span>
-            <a href="https://easysmartapps.co.uk/contact" target="_blank" class="about-link">Support</a>
+            <a href="https://easysmartapps.co.uk/weatherwidget-manual" id="link-about-manual" target="_blank" class="about-link">Manual</a>
             <span class="dot">•</span>
-            <a href="https://github.com/ricardowagemaker/WeatherWidget" target="_blank" class="about-link">GitHub</a>
+            <a href="https://easysmartapps.co.uk/weatherwidget-environmental" id="link-about-environmental" target="_blank" class="about-link">Environmental</a>
+            <span class="dot">•</span>
+            <a href="https://easysmartapps.co.uk/contact" id="link-about-support" target="_blank" class="about-link">Support</a>
+            <span class="dot">•</span>
+            <a href="https://github.com/ricardowagemaker/WeatherWidget" id="link-about-github" target="_blank" class="about-link">GitHub</a>
           </div>
         </div>
       </section>

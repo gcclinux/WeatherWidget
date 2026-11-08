@@ -282,10 +282,14 @@ type PollutionFields struct {
 }
 
 // SelectedProfiles returns all active health profiles chosen for the ticker.
-// If none are selected, it returns an empty slice (or fallback to legacy TickerProfile if set).
+// If none are selected (tickerProfile == "none"), it returns nil.
+// For legacy configs without explicit profile flags, it falls back to TickerProfile.
 func (f *PollutionFields) SelectedProfiles() []TickerProfile {
 	if f == nil {
 		return []TickerProfile{TickerProfileEveryday}
+	}
+	if f.TickerProfile == "none" {
+		return nil
 	}
 	var res []TickerProfile
 	if f.ProfileEveryday {
@@ -303,8 +307,7 @@ func (f *PollutionFields) SelectedProfiles() []TickerProfile {
 	if f.ProfileVentilation {
 		res = append(res, TickerProfileVentilation)
 	}
-	// Fallback for legacy configs that only have TickerProfile set and no new profile flags
-	if len(res) == 0 && f.TickerProfile != "" && !f.ProfileEveryday && !f.ProfileActive && !f.ProfileFamily && !f.ProfileSensitive && !f.ProfileVentilation && !f.TickerAlert && !f.TickerNewsToday && !f.TickerNewsTomorrow {
+	if len(res) == 0 {
 		res = append(res, NormalizeTickerProfile(f.TickerProfile))
 	}
 	return res

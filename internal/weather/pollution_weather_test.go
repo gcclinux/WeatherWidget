@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"weatherwidget/internal/config"
+	"weatherwidget/internal/i18n"
 )
 
 func TestPlanPollutionTickerWithWeather_Advice(t *testing.T) {
@@ -146,5 +147,87 @@ func TestPlanPollutionTicker_ProTickerWithoutSelectedPollutants(t *testing.T) {
 		t.Fatalf("PlanPollutionRows should only reflect Data Settings (ShowAQI), got %+v", rows)
 	}
 }
+
+func TestPlanPollutionTicker_LocalizedTitles(t *testing.T) {
+	lm, err := i18n.NewLocaleManager(i18n.LocaleFS)
+	if err != nil {
+		t.Fatalf("locale manager: %v", err)
+	}
+
+	fields := &config.PollutionFields{
+		ShowTicker:         true,
+		TickerNewsToday:    true,
+		TickerNewsPrecip:   true,
+		TickerNewsTomorrow: true,
+		TickerAlert:        true,
+	}
+
+	maxTemp, minTemp := 24.0, 16.0
+	precipSum := 1.5
+	w := &WeatherData{
+		CityName: "Holambra",
+		Forecast: &ForecastData{
+			TodayTempMax:       &maxTemp,
+			TodayTempMin:       &minTemp,
+			TodayPrecipProbMax: 80,
+			TodayPrecipSumMM:   &precipSum,
+			TomorrowTempMax:    &maxTemp,
+			TomorrowTempMin:    &minTemp,
+		},
+		NewsItems: []NewsItem{
+			{Category: "alert", Symbol: "Alert", StatusText: "Severe Storm"},
+			{Category: "today_outlook", Symbol: "Today's Outlook", StatusText: "High 24.0°C / Low 16.0°C"},
+			{Category: "precipitation", Symbol: "Precipitation Watch", StatusText: "80% Chance of Rain"},
+			{Category: "tomorrow_outlook", Symbol: "Tomorrow's Forecast", StatusText: "High 24.0°C / Low 16.0°C"},
+		},
+	}
+
+	// 1. Dutch (nl-NL) specific check matching the user's report
+	if err := lm.SetLocale("nl-NL"); err != nil {
+		t.Fatalf("set nl-NL: %v", err)
+	}
+	items := PlanPollutionTickerWithWeather(fields, w, config.TemperatureUnitCelsius, lm)
+	if len(items) < 4 {
+		t.Fatalf("expected at least 4 items, got %d", len(items))
+	}
+
+	symbols := make(map[string]string)
+	for _, item := range items {
+		symbols[string(item.Kind)+":"+item.Symbol] = item.Symbol
+	}
+
+	wantDutchToday := "Verwachting vandaag"
+	foundToday := false
+	for _, it := range items {
+		if it.Symbol == wantDutchToday {
+			foundToday = true
+			if !strings.Contains(it.StatusText, "Max temp.") || !strings.Contains(it.StatusText, "Min temp.") {
+				t.Errorf("Dutch today outlook statusText = %q, want localized Max/Min temp", it.StatusText)
+			}
+		}
+	}
+	if !foundToday {
+		t.Errorf("Dutch today outlook title not found, got items: %+v", items)
+	}
+
+	// 2. Test across all 12 locales that titles and headings exist and are not empty
+	for _, locale := range lm.AvailableLocales() {
+		if err := lm.SetLocale(locale.Code); err != nil {
+			t.Errorf("%s set locale: %v", locale.Code, err)
+			continue
+		}
+		locItems := PlanPollutionTickerWithWeather(fields, w, config.TemperatureUnitCelsius, lm)
+		for _, item := range locItems {
+			if item.Symbol == "" {
+				t.Errorf("%s: item symbol is empty", locale.Code)
+			}
+			// When locale is not en-GB, English fallback "Today's Outlook" should not appear as symbol
+			if locale.Code != "en-GB" && item.Symbol == "Today's Outlook" {
+				t.Errorf("%s: item symbol still has untranslated English 'Today\\'s Outlook'", locale.Code)
+			}
+		}
+	}
+}
+
 
 
