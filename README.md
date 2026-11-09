@@ -177,12 +177,13 @@ There are two ways to fix this:
 ## Changelog
 ### v2.3.0 — 2026-12-XX
 - **ENHANCEMENTS**
-  - Centralized City Search in RemoteAPIAdapter.SearchCity for ui-windows, ui-darwin, ui-gtk. (Windows, Linux & Mac)
-  - Brand-New Native Windows UI: Rebuilt from the ground up to integrate cleanly with modern Windows aesthetics, typography, and window management. (Windows)
-  - Created 3 Weather profiles to be selected in Data Settings - Real-Time Weather, Today's Forecast, Tomorrow's Forecast (Windows, Linux & Mac)
-  - Created Ticker Settings Health Profiles, Alerts & News Feed, Air Quality & Pollution definitions for Ticker messages (Windows, Linux & Mac)
-  - Added Free 3 selected cities (London, New York & Amsterdam) with full access to all features in new design (Windows, Linux & Mac)
-  - About TAB now contains links to website, user manual, environmental policy and support page aswell as Github repo page (Windows, Linux & Mac)
+  - Centralized City Search in RemoteAPIAdapter.SearchCity for ui-windows, ui-darwin, ui-gtk.
+  - Nearby-zone fallback: added internal/tzlookup. Lookup first tries the exact coordinates. If that returns nothing, it probes rings of 16 points at growing radii (0.02° up to 0.5°) and returns the most common zone from the first ring that finds one.
+  - Brand-New Native Windows UI: Rebuilt from the ground up to integrate cleanly with modern Windows aesthetics, typography, and window management.
+  - Created 3 Weather profiles to be selected in Data Settings - Real-Time Weather, Today's Forecast, Tomorrow's Forecast
+  - Created Ticker Settings Health Profiles, Alerts & News Feed, Air Quality & Pollution definitions for Ticker messages 
+  - Added Free 3 selected cities (London, New York & Amsterdam) with full access to all features in new design 
+  - About TAB now contains links to website, user manual, environmental policy and support page aswell as Github repo page
   
 
 ### v2.2.0 — 2026-11-04

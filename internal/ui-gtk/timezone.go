@@ -2,10 +2,10 @@
 
 package uitk
 
-import "github.com/bradfitz/latlong"
+import "weatherwidget/internal/tzlookup"
 
-// gtkLookupTimezone returns the IANA timezone name for the given lat/lon.
-// Uses the bradfitz/latlong package which is already a project dependency.
+// gtkLookupTimezone returns the IANA timezone name for the given lat/lon,
+// or "" if it cannot be determined.
 func gtkLookupTimezone(lat, lon float64) string {
-	return latlong.LookupZoneName(lat, lon)
+	return tzlookup.Lookup(lat, lon)
 }
