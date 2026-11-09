@@ -50,10 +50,6 @@ func isBugCondition(gdkBackend, waylandDisplay, xdgSessionType string, customX, 
 // It checks the two canonical environment variables:
 //   - WAYLAND_DISPLAY: set by the Wayland compositor (e.g. wayland-0)
 //   - XDG_SESSION_TYPE: set by the login manager to "wayland" on Wayland sessions
-//
-// This is the runtime guard that separates the Wayland and X11 positioning
-// paths in buildWindow(): when true, X11-only hints are suppressed and GTK's
-// native Wayland backend handles positioning via win.Move().
 func isWayland() bool {
 	return os.Getenv("WAYLAND_DISPLAY") != "" || os.Getenv("XDG_SESSION_TYPE") == "wayland"
 }
@@ -79,11 +75,6 @@ func (m *manager) tFmt(key string, args ...interface{}) string {
 // Run initialises GTK, sets up all application components, and starts the
 // GTK main loop. It does not return until the application exits.
 func Run(appDataDir string, openSettings bool) {
-	// Select the GDK backend before GTK reads the environment. On X11 sessions
-	// this forces GDK_BACKEND=x11 (reliable XWayland positioning); on Wayland
-	// sessions it leaves GDK to auto-select its native Wayland backend so the
-	// app still starts inside confined runtimes (Flatpak/Snap) where no X11
-	// display is exposed.
 	ensureGDKBackend()
 
 	gtk.Init(nil)
@@ -127,11 +118,8 @@ type manager struct {
 	fontSizeTempIcon   int
 	fontSizeConditions int
 
-	// positioned is set to true once the initial position has been applied.
-	// The drag auto-save is suppressed until this flag is set, preventing
-	// GNOME Mutter's WM-initiated configure-event (reporting 0,0) from
-	// overwriting the saved coordinates during startup.
-	positioned bool
+	positioned    bool
+	useLayerShell bool
 }
 
 func newManager(appDataDir string) *manager {
@@ -327,39 +315,13 @@ func (m *manager) buildWindow() error {
 		m.paintCards(cr)
 	})
 
-	// --- Window positioning ---
-	//
-	// Two paths, selected at runtime by the session type:
-	//
-	//   X11 sessions (GDK_BACKEND=x11, native deb/rpm/appimage): the app
-	//   connects directly to X11/XWayland, so we drive positioning with X11
-	//   hints and XMoveWindow, which the WM honours precisely.
-	//
-	//   Wayland sessions (native Wayland backend, incl. Flatpak/Snap): Xlib
-	//   calls are invalid — win.Native() is a Wayland surface, not an X11
-	//   window — so the X11 helpers are skipped. GTK3's native Wayland backend
-	//   honours win.Move() when called before ShowAll(), so we rely on
-	//   applyPosition()/win.Move() instead.
-	//
-	// The Settings position controls work for ALL environments.
-
-	// Use the native-Wayland positioning path only when the X11 backend is NOT
-	// in effect. ensureGDKBackend() has already run by now, so GDK_BACKEND=="x11"
-	// means the app is on X11/XWayland (native builds AND the Snap, which forces
-	// x11) and the X11 helpers are valid. When it is not x11 and the session is
-	// Wayland (the Flatpak-on-Wayland case), win.Native() is a Wayland surface
-	// and the Xlib helpers must be skipped.
-	wayland := isWayland() && os.Getenv("GDK_BACKEND") != "x11"
-
-	// On a native-Wayland backend, prefer the wlr-layer-shell path when the
-	// compositor supports it (KDE/KWin, sway, Hyprland, wayfire, river). That
-	// path anchors the window to a corner with margins, which the compositor
-	// honours — unlike win.Move(), which Mutter ignores. GNOME/Mutter reports
-	// no layer-shell support and is already routed to XWayland by
-	// ensureGDKBackend(), so it never reaches here. layerShellBuilt is false in
-	// the default build (library not linked), so this is skipped unless the app
-	// was built with -tags layershell.
+	wayland := !isX11Backend()
 	useLayerShell := wayland && layerShellBuilt && layerShellSupported()
+	m.useLayerShell = useLayerShell
+	log.Printf("GTK positioning: GDK_BACKEND=%q wayland=%t layer-shell=%t", os.Getenv("GDK_BACKEND"), wayland, useLayerShell)
+	if wayland && !useLayerShell {
+		log.Print("GTK positioning: native Wayland cannot place the widget; enable XWayland or use a layer-shell build")
+	}
 
 	// Compute target position once.
 	var posX, posY int
@@ -394,14 +356,14 @@ func (m *manager) buildWindow() error {
 		// margins (above). The compositor places the window on map; there is no
 		// win.Move() dance to perform. Mark positioned once mapped.
 		win.Connect("map-event", func(_ *gtk.Window, _ *gdk.Event) bool {
+			glib.TimeoutAdd(100, func() bool {
+				m.applyPosition()
+				return false
+			})
 			m.positioned = true
 			return false
 		})
 	case wayland:
-		// Native Wayland WITHOUT layer-shell (rare: a non-GNOME Wayland session
-		// whose compositor lacks the protocol). Best effort: set the initial
-		// position hint via win.Move() before show; the compositor may honour
-		// it on the first map.
 		win.Move(posX, posY)
 		win.Connect("map-event", func(_ *gtk.Window, _ *gdk.Event) bool {
 			m.win.Move(posX, posY)
@@ -413,16 +375,17 @@ func (m *manager) buildWindow() error {
 		win.Connect("map-event", func(_ *gtk.Window, _ *gdk.Event) bool {
 			x11MoveWindow(m.win, posX, posY)
 			glib.TimeoutAdd(100, func() bool {
-				x11MoveWindow(m.win, posX, posY)
+				m.applyPosition()
 				return false
 			})
 			glib.TimeoutAdd(400, func() bool {
-				x11MoveWindow(m.win, posX, posY)
-				x11NetMoveWindow(m.win, posX, posY)
+				x, y := m.targetPosition()
+				m.movePosition(x, y)
+				x11NetMoveWindow(m.win, x, y)
 				return false
 			})
 			glib.TimeoutAdd(1000, func() bool {
-				x11MoveWindow(m.win, posX, posY)
+				m.applyPosition()
 				m.positioned = true
 				return false
 			})
@@ -431,21 +394,46 @@ func (m *manager) buildWindow() error {
 	}
 
 	// Drag-to-reposition: left-click drag moves the window.
-	moveFunc := func(x, y int) {
-		if useLayerShell {
-			// Re-anchor with new margins so the compositor repositions the
-			// window; win.Move() has no effect under layer-shell.
-			anchorLeft, anchorTop, mX, mY := m.layerShellAnchorMargins(x, y)
-			layerShellPosition(win, anchorLeft, anchorTop, mX, mY)
-			return
-		}
-		win.Move(x, y)
-		if !wayland {
-			x11MoveWindow(win, x, y)
-		}
+	enableDrag(win, m.movePosition, func(x, y int) {
+		m.saveCustomPosition(x, y)
+	})
+	if isX11Backend() {
+		var configureGeneration uint64
+		var previousWidth, previousHeight int
+		var resized bool
+		win.Connect("configure-event", func(_ *gtk.Window, event *gdk.Event) bool {
+			configure := gdk.EventConfigureNewFromEvent(event)
+			width, height := configure.Width(), configure.Height()
+			if previousWidth > 0 && (width != previousWidth || height != previousHeight) {
+				resized = true
+			}
+			previousWidth, previousHeight = width, height
+			if !m.positioned {
+				resized = false
+				return false
+			}
+			configureGeneration++
+			generation := configureGeneration
+			glib.TimeoutAdd(250, func() bool {
+				if generation != configureGeneration || m.win != win || !m.positioned {
+					return false
+				}
+				if resized && m.cfg.CustomX == nil && m.cfg.CustomY == nil {
+					resized = false
+					m.applyPosition()
+					return false
+				}
+				resized = false
+				x, y := win.GetPosition()
+				targetX, targetY := m.targetPosition()
+				if x != targetX || y != targetY {
+					m.saveCustomPosition(x, y)
+				}
+				return false
+			})
+			return false
+		})
 	}
-
-	enableDrag(win, moveFunc, nil)
 
 	// Right-click context menu: provides access to Settings and Quit without
 	// requiring a system tray icon (which needs an SNI host / GNOME extension).
@@ -571,14 +559,41 @@ func (m *manager) applyCSS() {
 // applyPosition moves the widget window to the configured position.
 // On X11/XWayland, win.Move() works correctly after the window is mapped.
 func (m *manager) applyPosition() {
+	x, y := m.targetPosition()
+	m.movePosition(x, y)
+}
+
+func (m *manager) targetPosition() (int, int) {
 	var x, y int
 	if m.cfg.CustomX != nil && m.cfg.CustomY != nil {
 		x, y = *m.cfg.CustomX, *m.cfg.CustomY
 	} else {
-		pw, ph := m.panelSize()
+		pw, ph := m.win.GetSize()
+		if pw <= 1 || ph <= 1 {
+			pw, ph = m.panelSize()
+		}
 		x, y = cornerToXY(m.cfg.CornerPosition, m.cfg.MonitorIndex, pw, ph)
 	}
+	return x, y
+}
+
+func (m *manager) movePosition(x, y int) {
+	if m.useLayerShell {
+		anchorLeft, anchorTop, marginX, marginY := m.layerShellAnchorMargins(x, y)
+		layerShellPosition(m.win, anchorLeft, anchorTop, marginX, marginY)
+		return
+	}
 	m.win.Move(x, y)
+	if isX11Backend() {
+		x11MoveWindow(m.win, x, y)
+	}
+}
+
+func (m *manager) saveCustomPosition(x, y int) {
+	m.cfg.CustomX, m.cfg.CustomY = &x, &y
+	if err := m.cfgSvc.Save(m.cfg); err != nil {
+		log.Printf("position save failed (%d,%d): %v", x, y, err)
+	}
 }
 
 // layerShellAnchorMargins converts an absolute target position (posX, posY) on

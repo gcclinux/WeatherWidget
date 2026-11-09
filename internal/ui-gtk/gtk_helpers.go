@@ -390,7 +390,7 @@ func cornerToXY(corner string, monitorIndex int, winW, winH int) (int, int) {
 	if err != nil || mon == nil {
 		return 0, 0
 	}
-	geom := mon.GetGeometry()
+	geom := mon.GetWorkarea()
 	mx := geom.GetX()
 	my := geom.GetY()
 	mw := geom.GetWidth()
@@ -434,10 +434,11 @@ func restoreDecorations(win *gtk.Window) {
 // enableDrag wires button-press and motion events for manual drag-to-reposition.
 // moveFunc is called with the computed (x, y) to actually reposition the window;
 // on X11 this is typically win.Move(), on Wayland it updates layer-shell margins.
-// onMove is called with the new (x,y) after every position change so callers
-// can auto-save without user action.
+// onMove is called with the final (x,y) when the drag ends.
 func enableDrag(win *gtk.Window, moveFunc func(x, y int), onMove func(x, y int)) {
 	var dragging bool
+	var moved bool
+	var lastX, lastY int
 	var startRootX, startRootY int // pointer position at drag start
 	var startWinX, startWinY int   // window position at drag start
 
@@ -447,6 +448,7 @@ func enableDrag(win *gtk.Window, moveFunc func(x, y int), onMove func(x, y int))
 			return false
 		}
 		dragging = true
+		moved = false
 		startRootX = int(btn.XRoot())
 		startRootY = int(btn.YRoot())
 		startWinX, startWinY = win.GetPosition()
@@ -462,13 +464,14 @@ func enableDrag(win *gtk.Window, moveFunc func(x, y int), onMove func(x, y int))
 		newX := startWinX + int(rx) - startRootX
 		newY := startWinY + int(ry) - startRootY
 		moveFunc(newX, newY)
-		if onMove != nil {
-			onMove(newX, newY)
-		}
+		lastX, lastY, moved = newX, newY, true
 		return false
 	})
 
 	win.Connect("button-release-event", func(_ *gtk.Window, _ *gdk.Event) bool {
+		if dragging && moved && onMove != nil {
+			onMove(lastX, lastY)
+		}
 		dragging = false
 		return false
 	})

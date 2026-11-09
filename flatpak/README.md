@@ -287,10 +287,9 @@ builds do, where its X11 positioning path (`WM_NORMAL_HINTS` USPosition +
   XWayland instead of auto-selecting native Wayland. This mirrors the Snap,
   which also sets `GDK_BACKEND=x11`.
 
-The app's Go code honours a pre-set `GDK_BACKEND`: when it is `x11` it uses the
-X11 positioning path; when unset (e.g. a native Wayland desktop package without
-this env) it auto-selects Wayland and skips the X11-only calls. So this manifest
-env is what selects the XWayland path inside the sandbox.
+The app's Go code uses XWayland for default builds when an X display is
+accessible, including when the desktop sets `GDK_BACKEND=wayland`. The manifest
+explicitly provides the X11 socket and selects XWayland inside the sandbox.
 
 > Trade-off / Flathub review note: `flatpak-builder-lint manifest` accepts this
 > configuration, but a reviewer may still ask about raw `--socket=x11`. It is

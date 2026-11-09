@@ -77,6 +77,7 @@ You can download the latest pre-compiled binaries for Windows and Linux from the
 
 - **Corner Positioning & Dragging**: You can select a screen corner (Top-Left, Top-Right, Bottom-Left, Bottom-Right) in **Settings -> Display**, or drag the widget window directly on screen.
 - **Linux (Wayland & Snap)**: On Linux (including Wayland sessions and Snap packages), you can reposition the widget to any custom location by holding **`Super + Left Click Drag`**. WeatherWidget automatically detects the new coordinates and persists them for future app launches.
+- **GTK on Wayland**: Default builds use XWayland for positioning when an X display is available. If XWayland is unavailable, native Wayland cannot position the widget unless the build includes layer-shell support and the compositor supports it.
 
 ## Compilation
 
