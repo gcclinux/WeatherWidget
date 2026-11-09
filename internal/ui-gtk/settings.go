@@ -7,7 +7,6 @@ import (
 	"crypto/rand"
 	"errors"
 	"fmt"
-	"log"
 	"os/exec"
 	"strconv"
 	"strings"
@@ -137,7 +136,7 @@ func showSettingsDialog(m *manager) {
 	appendScrolledPage(locationsBox, locationsLabel)
 
 	// --- Appearance tab ---
-	appearanceBox, opacityScale, noBgCheck, iconThemeCombo, getViewMode, getFontSizes := buildAppearanceTab(m)
+	appearanceBox, opacityScale, noBgCheck, iconThemeCombo, getViewMode, getFontSizes, applyPlacement := buildAppearanceTab(m)
 	appearanceLabel, _ := gtk.LabelNew(m.t("settings.tab.appearance"))
 	appendScrolledPage(appearanceBox, appearanceLabel)
 
@@ -230,6 +229,7 @@ func showSettingsDialog(m *manager) {
 			newCfg.WindSpeedUnit = getWindUnit()                             // collect wind speed unit
 			newCfg.IconTheme = config.NormalizeIconTheme(config.IconTheme(iconThemeCombo.GetActiveID()))
 			newCfg.ViewMode = config.NormalizeViewMode(getViewMode()) // collect selected view mode
+			applyPlacement(&newCfg)
 
 			fs := getFontSizes()
 			newCfg.FontSizeCityTime = fs.cityTime
@@ -558,7 +558,7 @@ func buildProviderTab(m *manager, parent *gtk.Dialog, getCities func() []config.
 }
 
 // buildAppearanceTab creates the Appearance settings tab.
-func buildAppearanceTab(m *manager) (*gtk.Box, *gtk.Scale, *gtk.CheckButton, *gtk.ComboBoxText, func() config.ViewMode, func() fontSizes) {
+func buildAppearanceTab(m *manager) (*gtk.Box, *gtk.Scale, *gtk.CheckButton, *gtk.ComboBoxText, func() config.ViewMode, func() fontSizes, func(*config.Config)) {
 	vbox, _ := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 8)
 	vbox.SetMarginTop(8)
 	vbox.SetMarginStart(4)
@@ -645,10 +645,48 @@ func buildAppearanceTab(m *manager) (*gtk.Box, *gtk.Scale, *gtk.CheckButton, *gt
 	posSep, _ := gtk.SeparatorNew(gtk.ORIENTATION_HORIZONTAL)
 	vbox.PackStart(posSep, false, false, 4)
 
-	posSubtitle, _ := gtk.LabelNew("Move the widget on screen. Changes apply immediately.")
+	posTitle, _ := gtk.LabelNew(m.t("settings.position.title"))
+	posTitle.SetHAlign(gtk.ALIGN_START)
+	vbox.PackStart(posTitle, false, false, 0)
+
+	posSubtitle, _ := gtk.LabelNew(m.t("settings.position.subtitle"))
 	posSubtitle.SetHAlign(gtk.ALIGN_START)
 	posSubtitle.SetLineWrap(true)
 	vbox.PackStart(posSubtitle, false, false, 0)
+
+	cornerCombo, _ := gtk.ComboBoxTextNew()
+	cornerCombo.Append("top-left", m.t("settings.position.topLeft"))
+	cornerCombo.Append("top-right", m.t("settings.position.topRight"))
+	cornerCombo.Append("bottom-left", m.t("settings.position.bottomLeft"))
+	cornerCombo.Append("bottom-right", m.t("settings.position.bottomRight"))
+	cornerCombo.SetActiveID(m.cfg.CornerPosition)
+	vbox.PackStart(cornerCombo, false, false, 0)
+
+	monitorLabel, _ := gtk.LabelNew(m.t("settings.monitor.label"))
+	monitorLabel.SetHAlign(gtk.ALIGN_START)
+	vbox.PackStart(monitorLabel, false, false, 0)
+	monitorCombo, _ := gtk.ComboBoxTextNew()
+	if display, err := gdk.DisplayGetDefault(); err == nil && display != nil {
+		for index := 0; index < display.GetNMonitors(); index++ {
+			monitorCombo.Append(strconv.Itoa(index), m.tFmt("settings.monitor.format", index+1))
+		}
+	}
+	if !monitorCombo.SetActiveID(strconv.Itoa(m.cfg.MonitorIndex)) {
+		monitorCombo.SetActive(0)
+	}
+	vbox.PackStart(monitorCombo, false, false, 0)
+	placementChanged := false
+	cornerCombo.Connect("changed", func() { placementChanged = true })
+	monitorCombo.Connect("changed", func() { placementChanged = true })
+	applyPlacement := func(cfg *config.Config) {
+		if !placementChanged {
+			return
+		}
+		cfg.CornerPosition = cornerCombo.GetActiveID()
+		cfg.MonitorIndex, _ = strconv.Atoi(monitorCombo.GetActiveID())
+		cfg.CustomX, cfg.CustomY = nil, nil
+		placementChanged = false
+	}
 
 	// Current position from config or window.
 	var curX, curY int
@@ -697,21 +735,12 @@ func buildAppearanceTab(m *manager) (*gtk.Box, *gtk.Scale, *gtk.CheckButton, *gt
 
 	// moveAndSave repositions the widget, updates entries, and persists.
 	moveAndSave := func(x, y int) {
-		cx, cy := x, y
-		m.cfg.CustomX = &cx
-		m.cfg.CustomY = &cy
-		// Move the window immediately using both GTK and X11 calls.
-		m.win.Move(x, y)
-		x11MoveWindow(m.win, x, y)
+		placementChanged = false
+		m.movePosition(x, y)
+		m.saveCustomPosition(x, y)
 		// Update entry fields to reflect new position.
 		xEntry.SetText(strconv.Itoa(x))
 		yEntry.SetText(strconv.Itoa(y))
-		// Persist to config file.
-		go func() {
-			if err := m.cfgSvc.Save(m.cfg); err != nil {
-				log.Printf("position save failed (%d,%d): %v", cx, cy, err)
-			}
-		}()
 	}
 
 	applyPosBtn.Connect("clicked", func() {
@@ -861,7 +890,7 @@ func buildAppearanceTab(m *manager) (*gtk.Box, *gtk.Scale, *gtk.CheckButton, *gt
 		}
 	}
 
-	return vbox, opacityScale, noBgCheck, iconCombo, getViewMode, getFontSizes
+	return vbox, opacityScale, noBgCheck, iconCombo, getViewMode, getFontSizes, applyPlacement
 }
 
 // showErrorDialog shows a simple error message dialog.

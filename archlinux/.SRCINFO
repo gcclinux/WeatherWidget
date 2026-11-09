@@ -1,6 +1,6 @@
 pkgbase = weatherwidget
 	pkgdesc = Compact desktop weather widget with live weather and world clocks (native GTK3)
-	pkgver = 2.1.0
+	pkgver = 2.2.0
 	pkgrel = 2
 	url = https://github.com/gcclinux/WeatherWidget
 	arch = x86_64
@@ -14,7 +14,7 @@ pkgbase = weatherwidget
 	depends = hicolor-icon-theme
 	options = !debug
 	options = !lto
-	source = weatherwidget-2.1.0.tar.gz::https://github.com/gcclinux/WeatherWidget/archive/refs/tags/v2.1.0.tar.gz
-	sha256sums = 0b28cd24fa76c5ce5fbbb11bdfcc9c0d463bac49fd723d7bd2f8174a4310b355
+	source = weatherwidget-2.2.0.tar.gz::https://github.com/gcclinux/WeatherWidget/archive/refs/tags/v2.2.0.tar.gz
+	sha256sums = 77c45fe6abe9fa2c2d56cb3dd52ad09f343f9294e1985b2ec62a8b72de8ed692
 
 pkgname = weatherwidget

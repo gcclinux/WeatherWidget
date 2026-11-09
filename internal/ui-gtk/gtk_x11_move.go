@@ -11,6 +11,11 @@ package uitk
 // #include <X11/Xatom.h>
 // #include <X11/Xutil.h>
 //
+// static int x11_backend_active(void) {
+//     GdkDisplay *display = gdk_display_get_default();
+//     return display && GDK_IS_X11_DISPLAY(display);
+// }
+//
 // // x11_set_position_hint sets WM_NORMAL_HINTS with USPosition|PPosition before
 // // the window is mapped. The WM reads these during MapWindow and places the
 // // window at (x,y). USPosition is the highest-priority X11 position hint.
@@ -74,6 +79,10 @@ import (
 
 	"github.com/gotk3/gotk3/gtk"
 )
+
+func isX11Backend() bool {
+	return C.x11_backend_active() != 0
+}
 
 // x11SetPositionHint sets WM_NORMAL_HINTS with USPosition|PPosition so the WM
 // places the window at (x, y) during the initial MapWindow request.
