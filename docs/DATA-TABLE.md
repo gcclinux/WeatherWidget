@@ -59,16 +59,16 @@ These metrics represent current conditions at the weather station.
 | **Local Time & Date** | `obstimelocal` | `"07/11/2026 17:31:51"` | Left Hero Time/Date |
 | **Condition Icon** | `weather.FreeText` / WMO | `"heavy intensity rain"` | Left Hero Icon |
 | **Temperature** | `weather.Temp` | `31.72 °C` | Left Hero Main Temp |
-| **Feels Like** | `weather.FeelsLike` | `33.41 °C` | Left Hero Pill |
-| **Weather Description** | `weather.FreeText` | `"Heavy Intensity Rain"` | Left Hero Subtitle |
+| **Feels Like** | `weather.feels_like` | `33.41 °C` | Left Hero Pill |
+| **Weather Description** | `weather.description` | `"Heavy Intensity Rain"` | Left Hero Subtitle |
 | **Humidity** | `weather.Humidity` | `48 %` | **6-Tile Grid Candidate** |
-| **Wind Speed & Dir** | `weather.WindSpeed`, `weather.WindDir` | `3.12 m/s @ 58° (ENE)` | **6-Tile Grid Candidate** |
-| **Wind Gust** | `weather.WindGust` | `3.36 m/s` | **6-Tile Grid Candidate** |
+| **Wind Speed & Dir** | `weather.wind_speed`, `weather.wind_dir` | `3.12 m/s @ 58° (ENE)` | **6-Tile Grid Candidate** |
+| **Wind Gust** | `weather.wind_gust` | `3.36 m/s` | **6-Tile Grid Candidate** |
 | **Dew Point** | `weather.DewPt` | `19.36 °C` | **6-Tile Grid Candidate** |
 | **Barometric Pressure**| `weather.Pressure` | `1007 hPa` | **6-Tile Grid Candidate** |
 | **UV Index (Current)** | `weather.UV` | `0.54` | **6-Tile Grid Candidate** |
-| **Sunrise Time** | `weather.Sunrise` | `1794039608` (05:40) | **6-Tile Grid Candidate** |
-| **Sunset Time** | `weather.Sunset` | `1794086621` (18:43) | **6-Tile Grid Candidate** |
+| **Sunrise Time** | `weather.sunrise` | `1794039608` (Unix seconds; `null` if unavailable) | **6-Tile Grid Candidate** |
+| **Sunset Time** | `weather.sunset` | `1794086621` (Unix seconds; `null` if unavailable) | **6-Tile Grid Candidate** |
 | **Cloud Coverage** | `weather.Clouds` | `56 %` | **6-Tile Grid Candidate** |
 | **Visibility** | `weather.Visibility` | `10000 m` (10 km) | **6-Tile Grid Candidate** |
 | **Precipitation Rate** | `weather.PrecipRate` | `2.4 mm/h` | **6-Tile Grid Candidate** |
@@ -169,4 +169,3 @@ In the UI, provide 6 dropdown selectors:
 3. **Extend Config (`internal/config`)**: Add field definitions for the selected 6-tile layout and ticker items.
 4. **Build the Settings Tabs**: Add the `Today`, `Tomorrow`, and enhanced `Ticker` sections into `ui-windows`.
 5. **Render in Card & Ticker**: Update the Cairo/Windows graphics pipeline to draw the selected tiles and cycle the new ticker news items.
-
