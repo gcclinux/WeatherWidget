@@ -75,6 +75,7 @@ type pollutionRowWidgets struct {
 // value label is updated with fresh data; the emoji and name are set once.
 type metricTile struct {
 	box   *gtk.Box   // the tile container (bordered cell)
+	emoji *gtk.Label // metric emoji, set whenever the tile is (re)assigned a metric
 	name  *gtk.Label // metric name, e.g. "Humidity"
 	value *gtk.Label // formatted value, e.g. "84%"
 }
@@ -117,8 +118,9 @@ type cityPanel struct {
 
 	// Weather metric tiles (right-hand grid). Each tile shows an emoji, the
 	// metric name, and its value. The value labels are updated in update().
-	humidTile, windTile, windGustTile  *metricTile
-	dewPointTile, pressureTile, uvTile *metricTile
+	// The grid has a fixed pool of tiles; each is assigned a metric (live
+	// condition or forecast value) by refreshMetrics.
+	tiles [maxMetricTiles]*metricTile
 
 	errorLbl *gtk.Label
 
@@ -141,6 +143,7 @@ type cityPanel struct {
 
 	lastData     *weather.WeatherData
 	lastUnit     config.TemperatureUnit
+	lastWindUnit config.WindSpeedUnit
 	lastIconCode string // most recently loaded icon code, for resize without re-fetch
 	iconSize     int    // current icon pixel size; 0 means default (96px)
 
@@ -348,30 +351,13 @@ func newCityPanel(city, region, timezone string, lm *i18n.LocaleManager) (*cityP
 	p.metricsGrid = metricsGrid
 	topRegion.PackEnd(metricsGrid, false, false, 0)
 
-	// Build the six metric tiles (icon/emoji + name + value).
-	p.humidTile, err = p.newMetricTile("💧", weather.HumidityDisplay(0, p.lm).Name)
-	if err != nil {
-		return nil, err
-	}
-	p.windTile, err = p.newMetricTile("💨", weather.WindDisplay(0, 0, config.WindSpeedUnitKmh, p.lm).Name)
-	if err != nil {
-		return nil, err
-	}
-	p.windGustTile, err = p.newMetricTile("🌬", weather.WindGustDisplay(0, config.WindSpeedUnitKmh, p.lm).Name)
-	if err != nil {
-		return nil, err
-	}
-	p.dewPointTile, err = p.newMetricTile("💧", weather.DewPointDisplay(1, p.lm).Name)
-	if err != nil {
-		return nil, err
-	}
-	p.pressureTile, err = p.newMetricTile("🌡", weather.PressureDisplay(0, p.lm).Name)
-	if err != nil {
-		return nil, err
-	}
-	p.uvTile, err = p.newMetricTile("☀", weather.UVIndexDisplay(0, p.lm).Name)
-	if err != nil {
-		return nil, err
+	// Build the pool of metric tiles (emoji + name + value). Their content is
+	// assigned by refreshMetrics according to the Grid Content mode.
+	for i := range p.tiles {
+		p.tiles[i], err = p.newMetricTile("", "")
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	// ── Separator between the top region and the air-quality row ─────────────
@@ -477,7 +463,7 @@ func newCityPanel(city, region, timezone string, lm *i18n.LocaleManager) (*cityP
 	root.PackStart(errorLbl, false, false, 0)
 
 	// Populate the metrics grid with the default field selection.
-	p.layoutMetrics()
+	p.refreshMetrics()
 
 	// Start clock ticker.
 	p.startClock()
@@ -549,56 +535,42 @@ func (p *cityPanel) newMetricTile(emoji, name string) (*metricTile, error) {
 	sc.AddClass("metric-value")
 	box.PackStart(valueLbl, false, false, 0)
 
-	return &metricTile{box: outer, name: nameLbl, value: valueLbl}, nil
+	return &metricTile{box: outer, emoji: emojiLbl, name: nameLbl, value: valueLbl}, nil
 }
 
 // metricTileSizeGroup keeps every metric tile the same width across panels.
 var metricTileSizeGroup *gtk.SizeGroup
 
-// metricGridEntry pairs a metric tile with the display-field flag controlling
-// its visibility, for laying out the 3×2 metrics grid.
-type metricGridEntry struct {
-	tile *metricTile
-	show bool
-}
-
-// layoutMetrics rebuilds the right-hand metrics grid from the current
-// display-field selection. Visible tiles are placed left-to-right, top-to-
-// bottom in a three-column grid (so up to six tiles form 3×2). Tiles are
-// reused (never destroyed) so their values persist across re-layouts.
-func (p *cityPanel) layoutMetrics() {
+// refreshMetrics assigns the current Grid Content selection (live conditions
+// or Today's/Tomorrow's forecast) to the tile pool and lays the visible tiles
+// out left-to-right, top-to-bottom in a three-column grid (up to 3x2). Tiles
+// are reused (never destroyed). Without data yet, tiles show "--" placeholders.
+func (p *cityPanel) refreshMetrics() {
 	df := p.displayFields
 	if df == nil {
 		df = config.DefaultDisplayFields()
 	}
-
-	entries := []metricGridEntry{
-		{p.humidTile, df.ShowHumidity},
-		{p.windTile, df.ShowWind},
-		{p.windGustTile, df.ShowWindGust},
-		{p.dewPointTile, df.ShowDewPoint},
-		{p.pressureTile, df.ShowPressure},
-		{p.uvTile, df.ShowUVIndex},
+	tempUnit, windUnit := p.lastUnit, p.lastWindUnit
+	if windUnit == "" {
+		windUnit = config.WindSpeedUnitKmh
 	}
+	metrics := visibleMetrics(df, p.lastData, tempUnit, windUnit, p.lm)
 
-	// Detach any currently-attached tiles before re-adding the visible ones.
-	for _, e := range entries {
-		if parent, _ := e.tile.box.GetParent(); parent != nil {
-			p.metricsGrid.Remove(e.tile.box)
+	// Detach every tile before re-adding the visible ones.
+	for _, t := range p.tiles {
+		if parent, _ := t.box.GetParent(); parent != nil {
+			p.metricsGrid.Remove(t.box)
 		}
 	}
 
 	const cols = 3
-	idx := 0
-	for _, e := range entries {
-		if !e.show {
-			continue
-		}
-		col := idx % cols
-		row := idx / cols
-		p.metricsGrid.Attach(e.tile.box, col, row, 1, 1)
-		e.tile.box.Show()
-		idx++
+	for i, m := range metrics {
+		t := p.tiles[i]
+		t.emoji.SetText(m.Emoji)
+		t.name.SetText(m.Name)
+		t.value.SetText(m.Value)
+		p.metricsGrid.Attach(t.box, i%cols, i/cols, 1, 1)
+		t.box.Show()
 	}
 	p.metricsGrid.ShowAll()
 }
@@ -610,6 +582,7 @@ func (p *cityPanel) update(d *weather.WeatherData, tempUnit config.TemperatureUn
 	}
 	p.lastData = d
 	p.lastUnit = tempUnit
+	p.lastWindUnit = windUnit
 
 	p.errorLbl.Hide()
 
@@ -618,13 +591,8 @@ func (p *cityPanel) update(d *weather.WeatherData, tempUnit config.TemperatureUn
 	p.descLbl.SetText(weather.FormatDescription(d.Description, p.lm))
 	p.updateFeelsLike(d, tempUnit)
 
-	// Weather metric tiles — set the value labels (names are fixed).
-	p.humidTile.value.SetText(weather.HumidityDisplay(d.Humidity, p.lm).Value)
-	p.windTile.value.SetText(weather.WindDisplay(d.WindSpeed, d.WindDirection, windUnit, p.lm).Value)
-	p.windGustTile.value.SetText(weather.WindGustDisplay(d.WindGust, windUnit, p.lm).Value)
-	p.dewPointTile.value.SetText(weather.DewPointDisplay(d.DewPoint, p.lm).Value)
-	p.pressureTile.value.SetText(weather.PressureDisplay(d.Pressure, p.lm).Value)
-	p.uvTile.value.SetText(weather.UVIndexDisplay(d.UVIndex, p.lm).Value)
+	// Weather metric tiles (live conditions or forecast, per Grid Content).
+	p.refreshMetrics()
 
 	// Load weather icon at the current icon size.
 	theme := config.IconThemeNew
@@ -881,8 +849,8 @@ func (p *cityPanel) setTintAlpha(alpha float64) {
 
 // applyDisplayFields shows or hides individual elements based on the config.
 // Left-block elements (location, icon, time, date, temperature, condition) are
-// toggled directly. The right-hand metrics grid is rebuilt via layoutMetrics,
-// which attaches only the visible metric tiles.
+// toggled directly. The right-hand metrics grid is rebuilt via refreshMetrics,
+// which refreshes the visible metric tiles.
 func (p *cityPanel) applyDisplayFields(df *config.DisplayFields) {
 	if df == nil {
 		df = config.DefaultDisplayFields()
@@ -908,7 +876,7 @@ func (p *cityPanel) applyDisplayFields(df *config.DisplayFields) {
 	setVisible(p.descLbl, df.ShowDesc)
 
 	// Right metrics grid: attach only the visible tiles.
-	p.layoutMetrics()
+	p.refreshMetrics()
 }
 
 // loadIcon tries to load the weather icon from embedded assets at the given

@@ -109,7 +109,13 @@ func showSettingsDialog(m *manager) {
 		}
 	})
 	providerLabel, _ := gtk.LabelNew(m.t("settings.tab.provider"))
-	appendScrolledPage(providerBox, providerLabel)
+	// Tab order mirrors the Windows UI: Locations, Display, Data Settings,
+	// Ticker Settings, Data Provider, Language, About. The provider page is
+	// appended after the ticker tab below.
+	const (
+		pageLocations = 0
+		pageProvider  = 4
+	)
 
 	// --- Locations tab ---
 	cities := make([]config.CityConfig, len(m.cfg.Cities))
@@ -119,22 +125,38 @@ func showSettingsDialog(m *manager) {
 	}
 	var locationsBox *gtk.Box
 	locationsBox, getCities, unlockLocations = buildLocationsTab(m, dlg, cities, func() {
-		nb.SetCurrentPage(0)
+		nb.SetCurrentPage(pageProvider)
 	}, func() {
 		triggerProFromBanner()
-		nb.SetCurrentPage(0)
+		nb.SetCurrentPage(pageProvider)
 	}, func() {
 		selectFreeFromBanner()
-		nb.SetCurrentPage(0)
+		nb.SetCurrentPage(pageProvider)
 	})
 	locationsLabel, _ := gtk.LabelNew(m.t("settings.tab.locations"))
 	appendScrolledPage(locationsBox, locationsLabel)
 
-	// --- Widget tab ---
+	// --- Appearance tab ---
+	appearanceBox, opacityScale, noBgCheck, iconThemeCombo, getViewMode, getFontSizes := buildAppearanceTab(m)
+	appearanceLabel, _ := gtk.LabelNew(m.t("settings.tab.appearance"))
+	appendScrolledPage(appearanceBox, appearanceLabel)
+
+	// --- Data Settings tab ---
 	widgetBox, getDisplayFields, getPollutionFields, getTempUnit, getWindUnit, unlockPollutionFn := buildWidgetTab(m)
-	unlockPollution = unlockPollutionFn
 	widgetLabel, _ := gtk.LabelNew(m.t("settings.tab.widget"))
 	appendScrolledPage(widgetBox, widgetLabel)
+
+	// --- Ticker Settings tab ---
+	tickerBox, applyTickerFields, unlockTickerFn := buildTickerTab(m)
+	unlockPollution = func() {
+		unlockPollutionFn()
+		unlockTickerFn()
+	}
+	tickerLabel, _ := gtk.LabelNew(m.t("settings.tab.ticker"))
+	appendScrolledPage(tickerBox, tickerLabel)
+
+	// --- Data Provider tab ---
+	appendScrolledPage(providerBox, providerLabel)
 
 	// --- Language tab ---
 	selectedLocale := m.cfg.Locale
@@ -145,11 +167,6 @@ func showSettingsDialog(m *manager) {
 	langLabel, _ := gtk.LabelNew(m.t("settings.tab.language"))
 	appendScrolledPage(langBox, langLabel)
 
-	// --- Appearance tab ---
-	appearanceBox, opacityScale, noBgCheck, iconThemeCombo, getViewMode, getFontSizes := buildAppearanceTab(m)
-	appearanceLabel, _ := gtk.LabelNew(m.t("settings.tab.appearance"))
-	appendScrolledPage(appearanceBox, appearanceLabel)
-
 	// --- About tab ---
 	aboutBox := buildAboutTab(m)
 	aboutLabel, _ := gtk.LabelNew(m.t("settings.tab.about"))
@@ -157,11 +174,11 @@ func showSettingsDialog(m *manager) {
 
 	box.PackStart(nb, true, true, 0)
 
-	// If no API is configured, open on "Data Provider" (page 0); if configured, open on "Display/Appearance" (page 4).
+	// If no API is configured, open on "Data Provider"; otherwise on "Locations".
 	if m.cfg.HasLicense() {
-		nb.SetCurrentPage(4)
+		nb.SetCurrentPage(pageLocations)
 	} else {
-		nb.SetCurrentPage(0)
+		nb.SetCurrentPage(pageProvider)
 	}
 
 	// ── Action buttons ────────────────────────────────────────────────────
@@ -202,15 +219,15 @@ func showSettingsDialog(m *manager) {
 			newCfg.NoBackground = noBackground
 			// Window decorations are always hidden; persist the flag for consistency.
 			newCfg.NoBorder = true
-			newCfg.Cities = getCities()                   // collect current city list from the locations tab
+			newCfg.Cities = getCities() // collect current city list from the locations tab
 			if len(newCfg.Cities) == 0 {
 				newCfg.Cities = config.DefaultCities()
 			}
-			newCfg.Locale = getLocale()                   // collect selected language
-			newCfg.DisplayFields = getDisplayFields()     // collect panel visibility
-			newCfg.PollutionFields = getPollutionFields() // collect pollution metrics
-			newCfg.TemperatureUnit = getTempUnit()        // collect temperature unit
-			newCfg.WindSpeedUnit = getWindUnit()          // collect wind speed unit
+			newCfg.Locale = getLocale()                                      // collect selected language
+			newCfg.DisplayFields = getDisplayFields()                        // collect panel visibility
+			newCfg.PollutionFields = applyTickerFields(getPollutionFields()) // collect pollution + ticker settings
+			newCfg.TemperatureUnit = getTempUnit()                           // collect temperature unit
+			newCfg.WindSpeedUnit = getWindUnit()                             // collect wind speed unit
 			newCfg.IconTheme = config.NormalizeIconTheme(config.IconTheme(iconThemeCombo.GetActiveID()))
 			newCfg.ViewMode = config.NormalizeViewMode(getViewMode()) // collect selected view mode
 
@@ -288,20 +305,6 @@ func buildProviderTab(m *manager, parent *gtk.Dialog, getCities func() []config.
 	vbox.SetMarginStart(4)
 	vbox.SetMarginEnd(4)
 
-	// Autostart toggle — shown at the top of the Data Provider tab, above the
-	// Provider selector. (Moved here from the Appearance tab.)
-	autostartCheck, _ := gtk.CheckButtonNewWithLabel(m.t("settings.startup.autostart"))
-	autostartCheck.SetActive(isAutoStartEnabled())
-	autostartCheck.Connect("toggled", func() {
-		if err := setAutoStartEnabled(autostartCheck.GetActive()); err != nil {
-			autostartCheck.SetActive(isAutoStartEnabled())
-		}
-	})
-	vbox.PackStart(autostartCheck, false, false, 0)
-
-	autostartSep, _ := gtk.SeparatorNew(gtk.ORIENTATION_HORIZONTAL)
-	vbox.PackStart(autostartSep, false, false, 4)
-
 	// Provider selector.
 	providerLabel, _ := gtk.LabelNew(m.t("settings.provider.label") + ":")
 	providerLabel.SetHAlign(gtk.ALIGN_START)
@@ -343,8 +346,10 @@ func buildProviderTab(m *manager, parent *gtk.Dialog, getCities func() []config.
 	checkConnBtn.Connect("clicked", func() {
 		provIdx := providerCombo.GetActive()
 		providerValue := "easyweatherwidget"
+		providerName := "EasyWeatherWidget"
 		if provIdx == 1 {
 			providerValue = "openweathermap"
+			providerName = "OpenWeatherMap"
 		}
 		apiKey, _ := apiKeyEntry.GetText()
 		apiKey = strings.TrimSpace(apiKey)
@@ -366,9 +371,9 @@ func buildProviderTab(m *manager, parent *gtk.Dialog, getCities func() []config.
 				checkConnBtn.SetSensitive(true)
 				checkConnBtn.SetLabel(m.t("settings.provider.checkConnection"))
 				if err != nil {
-					showErrorDialog(parent, fmt.Sprintf("%s: %v", m.t("settings.provider.connectionFailedMsg"), err))
+					showErrorDialog(parent, fmt.Sprintf(m.t("settings.provider.connectionFailedMsg"), providerName, err))
 				} else {
-					showInfoDialog(parent, m.t("settings.provider.connectionSuccessMsg"))
+					showInfoDialog(parent, fmt.Sprintf(m.t("settings.provider.connectionSuccessMsg"), providerName))
 				}
 			})
 		}()
@@ -501,7 +506,7 @@ func buildProviderTab(m *manager, parent *gtk.Dialog, getCities func() []config.
 	providerTestBox.PackStart(providerTestTitle, false, false, 0)
 
 	providerTestMsg, _ := gtk.LabelNew("")
-	providerTestMsg.SetMarkup(fmt.Sprintf("<span foreground='#e2e8f0' font_size='9000'>%s</span>", glib.MarkupEscapeText(m.t("settings.provider.testingNotice.message"))))
+	providerTestMsg.SetMarkup(fmt.Sprintf("<span foreground='#38bdf8' font_size='9500'>%s</span>", glib.MarkupEscapeText(m.t("settings.provider.testingNotice.message"))))
 	providerTestMsg.SetHAlign(gtk.ALIGN_START)
 	providerTestMsg.SetLineWrap(true)
 	providerTestBox.PackStart(providerTestMsg, true, true, 0)
@@ -1073,6 +1078,31 @@ func buildWidgetTab(m *manager) (*gtk.Box, func() *config.DisplayFields, func() 
 
 	df := m.cfg.GetDisplayFields()
 
+	// Grid Content selector: what the 6-tile metrics grid shows.
+	gridModeTitle, _ := gtk.LabelNew("")
+	gridModeTitle.SetMarkup("<b>" + glib.MarkupEscapeText(m.t("settings.gridMode.title")) + "</b>")
+	gridModeTitle.SetHAlign(gtk.ALIGN_START)
+	vbox.PackStart(gridModeTitle, false, false, 0)
+
+	gridModeHint, _ := gtk.LabelNew(m.t("settings.gridMode.subtitle"))
+	gridModeHint.SetHAlign(gtk.ALIGN_START)
+	gridModeHint.SetLineWrap(true)
+	gridModeHint.SetXAlign(0)
+	vbox.PackStart(gridModeHint, false, false, 0)
+
+	gridModeCombo, _ := gtk.ComboBoxTextNew()
+	gridModeCombo.Append("live", m.t("settings.gridMode.live"))
+	gridModeCombo.Append("today", m.t("settings.gridMode.today"))
+	gridModeCombo.Append("tomorrow", m.t("settings.gridMode.tomorrow"))
+	gridModeCombo.SetActiveID(config.NormalizeGridMode(df.GridMode))
+	gridModeCombo.SetHAlign(gtk.ALIGN_START)
+	vbox.PackStart(gridModeCombo, false, false, 0)
+
+	weatherMetricsTitle, _ := gtk.LabelNew("")
+	weatherMetricsTitle.SetMarkup("<b>" + glib.MarkupEscapeText(m.t("settings.display.weatherMetrics")) + "</b>")
+	weatherMetricsTitle.SetHAlign(gtk.ALIGN_START)
+	vbox.PackStart(weatherMetricsTitle, false, false, 0)
+
 	// 4-column grid of checkboxes matching the screenshot layout.
 	grid, _ := gtk.GridNew()
 	grid.SetRowSpacing(8)
@@ -1126,6 +1156,41 @@ func buildWidgetTab(m *manager) (*gtk.Box, func() *config.DisplayFields, func() 
 	chkUVIndex, _ := gtk.CheckButtonNewWithLabel(m.t("settings.display.uvIndex"))
 	chkUVIndex.SetActive(df.ShowUVIndex)
 	grid.Attach(chkUVIndex, 3, 2, 1, 1)
+
+	chkSunrise, _ := gtk.CheckButtonNewWithLabel(m.t("settings.display.sunrise"))
+	chkSunrise.SetActive(df.ShowSunrise)
+	grid.Attach(chkSunrise, 0, 3, 1, 1)
+
+	chkSunset, _ := gtk.CheckButtonNewWithLabel(m.t("settings.display.sunset"))
+	chkSunset.SetActive(df.ShowSunset)
+	grid.Attach(chkSunset, 1, 3, 1, 1)
+
+	chkClouds, _ := gtk.CheckButtonNewWithLabel(m.t("settings.display.clouds"))
+	chkClouds.SetActive(df.ShowClouds)
+	grid.Attach(chkClouds, 2, 3, 1, 1)
+
+	chkVisibility, _ := gtk.CheckButtonNewWithLabel(m.t("settings.display.visibility"))
+	chkVisibility.SetActive(df.ShowVisibility)
+	grid.Attach(chkVisibility, 3, 3, 1, 1)
+
+	chkPrecipRate, _ := gtk.CheckButtonNewWithLabel(m.t("settings.display.precipRate"))
+	chkPrecipRate.SetActive(df.ShowPrecipRate)
+	grid.Attach(chkPrecipRate, 0, 4, 1, 1)
+
+	// The live-metric toggles only apply to the Real-Time grid; forecast modes
+	// show a fixed set of six forecast tiles.
+	liveMetricChecks := []*gtk.CheckButton{
+		chkHumidity, chkWind, chkWindGust, chkDewPoint, chkPressure, chkUVIndex,
+		chkSunrise, chkSunset, chkClouds, chkVisibility, chkPrecipRate,
+	}
+	updateLiveMetricSensitivity := func() {
+		live := gridModeCombo.GetActiveID() == "live"
+		for _, c := range liveMetricChecks {
+			c.SetSensitive(live)
+		}
+	}
+	gridModeCombo.Connect("changed", updateLiveMetricSensitivity)
+	updateLiveMetricSensitivity()
 
 	vbox.PackStart(grid, false, false, 0)
 
@@ -1198,48 +1263,7 @@ func buildWidgetTab(m *manager) (*gtk.Box, func() *config.DisplayFields, func() 
 	chkPM10.SetSensitive(isPro)
 	gridPollution.Attach(chkPM10, 0, 2, 1, 1)
 
-	chkTicker, _ := gtk.CheckButtonNewWithLabel(m.t("settings.pollution.ticker"))
-	chkTicker.SetActive(pf.ShowTicker)
-	chkTicker.SetSensitive(isPro)
-	gridPollution.Attach(chkTicker, 1, 2, 3, 1)
-
-	profileLabel, _ := gtk.LabelNew(m.t("settings.pollution.profile.title"))
-	profileLabel.SetHAlign(gtk.ALIGN_START)
-	profileLabel.SetSensitive(isPro)
-	gridPollution.Attach(profileLabel, 0, 3, 1, 1)
-	profileChoices := []config.TickerProfile{
-		config.TickerProfileEveryday,
-		config.TickerProfileActive,
-		config.TickerProfileFamily,
-		config.TickerProfileSensitive,
-		config.TickerProfileVentilation,
-	}
-	profileLabels := map[config.TickerProfile]string{
-		config.TickerProfileEveryday:    m.t("settings.pollution.profile.everyday"),
-		config.TickerProfileActive:      m.t("settings.pollution.profile.active"),
-		config.TickerProfileFamily:      m.t("settings.pollution.profile.family"),
-		config.TickerProfileSensitive:   m.t("settings.pollution.profile.sensitive"),
-		config.TickerProfileVentilation: m.t("settings.pollution.profile.ventilation"),
-	}
-	profileCombo, _ := gtk.ComboBoxTextNew()
-	activeProfile := config.NormalizeTickerProfile(pf.TickerProfile)
-	activeProfileIdx := 0
-	for i, profile := range profileChoices {
-		profileCombo.AppendText(profileLabels[profile])
-		if profile == activeProfile {
-			activeProfileIdx = i
-		}
-	}
-	profileCombo.SetActive(activeProfileIdx)
-	profileCombo.SetSensitive(isPro)
-	gridPollution.Attach(profileCombo, 1, 3, 3, 1)
-
 	vbox.PackStart(gridPollution, false, false, 0)
-	profileHint, _ := gtk.LabelNew(m.t("settings.pollution.profile.subtitle"))
-	profileHint.SetHAlign(gtk.ALIGN_START)
-	profileHint.SetLineWrap(true)
-	profileHint.SetSensitive(isPro)
-	vbox.PackStart(profileHint, false, false, 0)
 
 	pollutionProBox, _ := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 4)
 	pollutionProBoxSc, _ := pollutionProBox.GetStyleContext()
@@ -1262,21 +1286,29 @@ func buildWidgetTab(m *manager) (*gtk.Box, func() *config.DisplayFields, func() 
 	pollutionProBox.PackStart(pollutionProNote, true, true, 0)
 	vbox.PackStart(pollutionProBox, false, false, 0)
 
+	// getDisplayFields starts from the saved fields so settings not edited in
+	// this tab (e.g. the Today/Tomorrow forecast tile toggles) survive a Save.
 	getDisplayFields := func() *config.DisplayFields {
-		return &config.DisplayFields{
-			ShowCity:     chkCity.GetActive(),
-			ShowIcon:     chkIcon.GetActive(),
-			ShowTemp:     chkTemp.GetActive(),
-			ShowDesc:     chkDesc.GetActive(),
-			ShowHumidity: chkHumidity.GetActive(),
-			ShowWind:     chkWind.GetActive(),
-			ShowTime:     chkTime.GetActive(),
-			ShowDate:     chkDate.GetActive(),
-			ShowWindGust: chkWindGust.GetActive(),
-			ShowDewPoint: chkDewPoint.GetActive(),
-			ShowPressure: chkPressure.GetActive(),
-			ShowUVIndex:  chkUVIndex.GetActive(),
-		}
+		out := *m.cfg.GetDisplayFields()
+		out.ShowCity = chkCity.GetActive()
+		out.ShowIcon = chkIcon.GetActive()
+		out.ShowTemp = chkTemp.GetActive()
+		out.ShowDesc = chkDesc.GetActive()
+		out.ShowHumidity = chkHumidity.GetActive()
+		out.ShowWind = chkWind.GetActive()
+		out.ShowTime = chkTime.GetActive()
+		out.ShowDate = chkDate.GetActive()
+		out.ShowWindGust = chkWindGust.GetActive()
+		out.ShowDewPoint = chkDewPoint.GetActive()
+		out.ShowPressure = chkPressure.GetActive()
+		out.ShowUVIndex = chkUVIndex.GetActive()
+		out.ShowSunrise = chkSunrise.GetActive()
+		out.ShowSunset = chkSunset.GetActive()
+		out.ShowClouds = chkClouds.GetActive()
+		out.ShowVisibility = chkVisibility.GetActive()
+		out.ShowPrecipRate = chkPrecipRate.GetActive()
+		out.GridMode = config.NormalizeGridMode(gridModeCombo.GetActiveID())
+		return &out
 	}
 
 	// unlockPollution re-enables every Pro-only Air Quality & Pollution control.
@@ -1298,31 +1330,22 @@ func buildWidgetTab(m *manager) (*gtk.Box, func() *config.DisplayFields, func() 
 		chkNH3.SetSensitive(true)
 		chkPM25.SetSensitive(true)
 		chkPM10.SetSensitive(true)
-		chkTicker.SetSensitive(true)
-		profileLabel.SetSensitive(true)
-		profileCombo.SetSensitive(true)
-		profileHint.SetSensitive(true)
 	}
 
+	// getPollutionFields starts from the saved fields so the ticker settings
+	// (owned by the Ticker tab) are preserved.
 	getPollutionFields := func() *config.PollutionFields {
-		profileIdx := profileCombo.GetActive()
-		profile := config.TickerProfileEveryday
-		if profileIdx >= 0 && profileIdx < len(profileChoices) {
-			profile = profileChoices[profileIdx]
-		}
-		return &config.PollutionFields{
-			ShowAQI:       chkAQI.GetActive(),
-			ShowCO:        chkCO.GetActive(),
-			ShowNO:        chkNO.GetActive(),
-			ShowNO2:       chkNO2.GetActive(),
-			ShowO3:        chkO3.GetActive(),
-			ShowSO2:       chkSO2.GetActive(),
-			ShowNH3:       chkNH3.GetActive(),
-			ShowPM25:      chkPM25.GetActive(),
-			ShowPM10:      chkPM10.GetActive(),
-			ShowTicker:    chkTicker.GetActive(),
-			TickerProfile: profile,
-		}
+		out := *m.cfg.GetPollutionFields()
+		out.ShowAQI = chkAQI.GetActive()
+		out.ShowCO = chkCO.GetActive()
+		out.ShowNO = chkNO.GetActive()
+		out.ShowNO2 = chkNO2.GetActive()
+		out.ShowO3 = chkO3.GetActive()
+		out.ShowSO2 = chkSO2.GetActive()
+		out.ShowNH3 = chkNH3.GetActive()
+		out.ShowPM25 = chkPM25.GetActive()
+		out.ShowPM10 = chkPM10.GetActive()
+		return &out
 	}
 
 	// ── Temperature Unit ──────────────────────────────────────────────────
@@ -2178,55 +2201,211 @@ func buildAboutTab(m *manager) *gtk.Box {
 	sep2, _ := gtk.SeparatorNew(gtk.ORIENTATION_HORIZONTAL)
 	vbox.PackStart(sep2, false, false, 4)
 
-	// Links section in a styled frame with grid layout for alignment.
-	linksFrame, _ := gtk.FrameNew("")
-	linksFrame.SetShadowType(gtk.SHADOW_ETCHED_IN)
-	sc, _ := linksFrame.GetStyleContext()
-	sc.AddClass("links-frame")
+	// Start-with-system toggle (moved here from the Data Provider tab).
+	autostartCheck, _ := gtk.CheckButtonNewWithLabel(m.t("settings.startup.autostart"))
+	autostartCheck.SetActive(isAutoStartEnabled())
+	autostartCheck.Connect("toggled", func() {
+		if err := setAutoStartEnabled(autostartCheck.GetActive()); err != nil {
+			autostartCheck.SetActive(isAutoStartEnabled())
+		}
+	})
+	vbox.PackStart(autostartCheck, false, false, 0)
 
-	linksGrid, _ := gtk.GridNew()
-	linksGrid.SetRowSpacing(4)
-	linksGrid.SetColumnSpacing(12)
-	linksGrid.SetMarginTop(12)
-	linksGrid.SetMarginBottom(12)
-	linksGrid.SetMarginStart(16)
-	linksGrid.SetMarginEnd(16)
+	sep3, _ := gtk.SeparatorNew(gtk.ORIENTATION_HORIZONTAL)
+	vbox.PackStart(sep3, false, false, 4)
 
-	// Website link.
-	websiteLbl, _ := gtk.LabelNew(m.t("settings.about.websiteLabel"))
-	websiteLbl.SetHAlign(gtk.ALIGN_END)
-	websiteLink, _ := gtk.LinkButtonNewWithLabel(
-		"https://easysmartapps.co.uk/weatherwidget",
-		"easysmartapps.co.uk/weatherwidget",
-	)
-	websiteLink.SetHAlign(gtk.ALIGN_START)
-	linksGrid.Attach(websiteLbl, 0, 0, 1, 1)
-	linksGrid.Attach(websiteLink, 1, 0, 1, 1)
-
-	// Manual link.
-	manualLbl, _ := gtk.LabelNew(m.t("settings.about.manualLabel"))
-	manualLbl.SetHAlign(gtk.ALIGN_END)
-	manualLink, _ := gtk.LinkButtonNewWithLabel(
-		"https://easysmartapps.co.uk/weatherwidget-manual",
-		"easysmartapps.co.uk/weatherwidget-manual",
-	)
-	manualLink.SetHAlign(gtk.ALIGN_START)
-	linksGrid.Attach(manualLbl, 0, 1, 1, 1)
-	linksGrid.Attach(manualLink, 1, 1, 1, 1)
-
-	// Air Index link.
-	airIndexLbl, _ := gtk.LabelNew(m.t("settings.about.airIndexLabel"))
-	airIndexLbl.SetHAlign(gtk.ALIGN_END)
-	airIndexLink, _ := gtk.LinkButtonNewWithLabel(
-		"https://easysmartapps.co.uk/weatherwidget-environmental",
-		"easysmartapps.co.uk/weatherwidget-environmental",
-	)
-	airIndexLink.SetHAlign(gtk.ALIGN_START)
-	linksGrid.Attach(airIndexLbl, 0, 2, 1, 1)
-	linksGrid.Attach(airIndexLink, 1, 2, 1, 1)
-
-	linksFrame.Add(linksGrid)
-	vbox.PackStart(linksFrame, false, false, 0)
+	// Links on a single horizontal row, shown by name only (no raw URLs).
+	linksRow, _ := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 6)
+	linksRow.SetHAlign(gtk.ALIGN_START)
+	links := []struct{ label, url string }{
+		{m.t("settings.windows.website"), "https://easysmartapps.co.uk/weatherwidget"},
+		{m.t("settings.windows.manual"), "https://easysmartapps.co.uk/weatherwidget-manual"},
+		{m.t("settings.windows.environmental"), "https://easysmartapps.co.uk/weatherwidget-environmental"},
+		{m.t("settings.windows.support"), "https://easysmartapps.co.uk/contact"},
+		{"GitHub", "https://github.com/gcclinux/WeatherWidget"},
+	}
+	for i, l := range links {
+		if i > 0 {
+			dot, _ := gtk.LabelNew("•")
+			linksRow.PackStart(dot, false, false, 0)
+		}
+		btn, _ := gtk.LinkButtonNewWithLabel(l.url, l.label)
+		btn.SetTooltipText("")
+		linksRow.PackStart(btn, false, false, 0)
+	}
+	vbox.PackStart(linksRow, false, false, 0)
 
 	return vbox
+}
+
+// buildTickerTab builds the Ticker Settings tab: enable switch, multi-select
+// health profiles, alerts & news feed toggles and per-pollutant ticker toggles.
+// The whole tab is Pro-only. It returns the tab, an apply func that writes the
+// tab's state onto a PollutionFields value, and an unlock func that enables the
+// controls live once a Pro key has been saved.
+func buildTickerTab(m *manager) (*gtk.Box, func(*config.PollutionFields) *config.PollutionFields, func()) {
+	vbox, _ := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 10)
+	vbox.SetMarginTop(12)
+	vbox.SetMarginStart(8)
+	vbox.SetMarginEnd(8)
+
+	title, _ := gtk.LabelNew("")
+	title.SetMarkup("<b>" + glib.MarkupEscapeText(m.t("settings.ticker.title")) + "</b>")
+	title.SetHAlign(gtk.ALIGN_START)
+	vbox.PackStart(title, false, false, 0)
+
+	subtitle, _ := gtk.LabelNew(m.t("settings.ticker.subtitle"))
+	subtitle.SetHAlign(gtk.ALIGN_START)
+	subtitle.SetXAlign(0)
+	subtitle.SetLineWrap(true)
+	vbox.PackStart(subtitle, false, false, 0)
+
+	// Use the raw saved fields: GetPollutionFields normalises TickerProfile and
+	// would turn an explicit "none" (no profile) back into "everyday".
+	pf := m.cfg.PollutionFields
+	if pf == nil {
+		pf = config.DefaultPollutionFields()
+	}
+	isPro := m.cfg.IsPro()
+
+	var controls []gtk.IWidget
+	newCheck := func(key string, active bool) *gtk.CheckButton {
+		c, _ := gtk.CheckButtonNewWithLabel(m.t(key))
+		c.SetActive(active)
+		c.SetSensitive(isPro)
+		controls = append(controls, c)
+		return c
+	}
+	section := func(key string) {
+		sep, _ := gtk.SeparatorNew(gtk.ORIENTATION_HORIZONTAL)
+		vbox.PackStart(sep, false, false, 4)
+		lbl, _ := gtk.LabelNew("")
+		lbl.SetMarkup("<b>" + glib.MarkupEscapeText(m.t(key)) + "</b>")
+		lbl.SetHAlign(gtk.ALIGN_START)
+		vbox.PackStart(lbl, false, false, 0)
+	}
+	newGrid := func() *gtk.Grid {
+		g, _ := gtk.GridNew()
+		g.SetRowSpacing(8)
+		g.SetColumnSpacing(16)
+		g.SetMarginStart(4)
+		vbox.PackStart(g, false, false, 0)
+		return g
+	}
+
+	chkEnable := newCheck("settings.ticker.enable", pf.ShowTicker)
+	vbox.PackStart(chkEnable, false, false, 0)
+
+	// Health profiles (multi-select, any or none).
+	section("settings.ticker.profilesTitle")
+	selected := map[config.TickerProfile]bool{}
+	for _, p := range pf.SelectedProfiles() {
+		selected[p] = true
+	}
+	profileDefs := []struct {
+		profile config.TickerProfile
+		key     string
+	}{
+		{config.TickerProfileEveryday, "settings.pollution.profile.everyday"},
+		{config.TickerProfileActive, "settings.pollution.profile.active"},
+		{config.TickerProfileFamily, "settings.pollution.profile.family"},
+		{config.TickerProfileSensitive, "settings.pollution.profile.sensitive"},
+		{config.TickerProfileVentilation, "settings.pollution.profile.ventilation"},
+	}
+	profileChecks := make([]*gtk.CheckButton, len(profileDefs))
+	gProfiles := newGrid()
+	for i, d := range profileDefs {
+		profileChecks[i] = newCheck(d.key, selected[d.profile])
+		gProfiles.Attach(profileChecks[i], i%2, i/2, 1, 1)
+	}
+
+	// Alerts & news feed.
+	section("settings.ticker.feedTitle")
+	chkAlert := newCheck("settings.ticker.alert", pf.TickerAlert)
+	chkToday := newCheck("settings.ticker.newsToday", pf.TickerNewsToday)
+	chkPrecip := newCheck("settings.ticker.newsPrecip", pf.TickerNewsPrecip)
+	chkTomorrow := newCheck("settings.ticker.newsTomorrow", pf.TickerNewsTomorrow)
+	chkTips := newCheck("settings.ticker.weatherTips", pf.TickerWeatherTips)
+	gFeed := newGrid()
+	for i, c := range []*gtk.CheckButton{chkAlert, chkToday, chkPrecip, chkTomorrow, chkTips} {
+		gFeed.Attach(c, i%2, i/2, 1, 1)
+	}
+
+	// Air quality & pollution metrics.
+	section("settings.ticker.pollutantsTitle")
+	chkAQI := newCheck("settings.pollution.aqi", pf.TickerAQI)
+	chkPM25 := newCheck("settings.pollution.pm2_5", pf.TickerPM25)
+	chkPM10 := newCheck("settings.pollution.pm10", pf.TickerPM10)
+	chkO3 := newCheck("settings.pollution.o3", pf.TickerO3)
+	chkNO2 := newCheck("settings.pollution.no2", pf.TickerNO2)
+	chkSO2 := newCheck("settings.pollution.so2", pf.TickerSO2)
+	chkCO := newCheck("settings.pollution.co", pf.TickerCO)
+	chkNO := newCheck("settings.pollution.no", pf.TickerNO)
+	chkNH3 := newCheck("settings.pollution.nh3", pf.TickerNH3)
+	gPoll := newGrid()
+	for i, c := range []*gtk.CheckButton{chkAQI, chkPM25, chkPM10, chkO3, chkNO2, chkSO2, chkCO, chkNO, chkNH3} {
+		gPoll.Attach(c, i%2, i/2, 1, 1)
+	}
+
+	// Pro note.
+	noteBox, _ := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 4)
+	noteCSS, _ := gtk.CssProviderNew()
+	_ = noteCSS.LoadFromData(`
+.pro-note-box {
+    border-radius: 8px;
+    padding: 8px 12px;
+    background: rgba(14, 165, 233, 0.1);
+    border: 1px solid rgba(56, 189, 248, 0.35);
+}
+`)
+	if sc, err := noteBox.GetStyleContext(); err == nil {
+		sc.AddProvider(noteCSS, gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
+		sc.AddClass("pro-note-box")
+	}
+	note, _ := gtk.LabelNew("")
+	note.SetMarkup(fmt.Sprintf("<span foreground='#38bdf8' font_size='9500'>%s</span>", glib.MarkupEscapeText(m.t("settings.pollution.proRequired"))))
+	note.SetHAlign(gtk.ALIGN_START)
+	note.SetLineWrap(true)
+	noteBox.PackStart(note, true, true, 0)
+	vbox.PackStart(noteBox, false, false, 8)
+
+	unlock := func() {
+		if !m.cfg.IsPro() {
+			return
+		}
+		for _, c := range controls {
+			c.ToWidget().SetSensitive(true)
+		}
+	}
+
+	apply := func(out *config.PollutionFields) *config.PollutionFields {
+		res := *out
+		res.ShowTicker = chkEnable.GetActive()
+		res.ProfileEveryday = profileChecks[0].GetActive()
+		res.ProfileActive = profileChecks[1].GetActive()
+		res.ProfileFamily = profileChecks[2].GetActive()
+		res.ProfileSensitive = profileChecks[3].GetActive()
+		res.ProfileVentilation = profileChecks[4].GetActive()
+		if res.ProfileEveryday || res.ProfileActive || res.ProfileFamily || res.ProfileSensitive || res.ProfileVentilation {
+			res.TickerProfile = "custom"
+		} else {
+			res.TickerProfile = "none"
+		}
+		res.TickerAlert = chkAlert.GetActive()
+		res.TickerNewsToday = chkToday.GetActive()
+		res.TickerNewsPrecip = chkPrecip.GetActive()
+		res.TickerNewsTomorrow = chkTomorrow.GetActive()
+		res.TickerWeatherTips = chkTips.GetActive()
+		res.TickerAQI = chkAQI.GetActive()
+		res.TickerPM25 = chkPM25.GetActive()
+		res.TickerPM10 = chkPM10.GetActive()
+		res.TickerO3 = chkO3.GetActive()
+		res.TickerNO2 = chkNO2.GetActive()
+		res.TickerSO2 = chkSO2.GetActive()
+		res.TickerCO = chkCO.GetActive()
+		res.TickerNO = chkNO.GetActive()
+		res.TickerNH3 = chkNH3.GetActive()
+		return &res
+	}
+	return vbox, apply, unlock
 }
