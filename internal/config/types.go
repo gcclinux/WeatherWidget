@@ -174,6 +174,17 @@ type DisplayFields struct {
 	TomorrowShowGustMax      bool `json:"tomorrowShowGustMax,omitempty"`
 }
 
+// NormalizeGridMode returns mode if it is "live", "today" or "tomorrow",
+// otherwise "live".
+func NormalizeGridMode(mode string) string {
+	switch mode {
+	case "live", "today", "tomorrow":
+		return mode
+	default:
+		return "live"
+	}
+}
+
 // DefaultDisplayFields returns a DisplayFields with all elements visible.
 func DefaultDisplayFields() *DisplayFields {
 	return &DisplayFields{
@@ -344,7 +355,11 @@ func DefaultPollutionFields() *PollutionFields {
 func (c *Config) GetPollutionFields() *PollutionFields {
 	if c.PollutionFields != nil {
 		fields := *c.PollutionFields
-		fields.TickerProfile = NormalizeTickerProfile(fields.TickerProfile)
+		// "none" (no profile selected) and "custom" (explicit profile flags) are
+		// meaningful multi-select states; only legacy single values are normalised.
+		if fields.TickerProfile != "none" && fields.TickerProfile != "custom" {
+			fields.TickerProfile = NormalizeTickerProfile(fields.TickerProfile)
+		}
 		return &fields
 	}
 	return DefaultPollutionFields()
@@ -459,11 +474,11 @@ func DefaultCities() []CityConfig {
 			Timezone:  "America/New_York",
 		},
 		{
-			Name:      "Tokyo",
-			Region:    "JP",
-			Latitude:  35.6762,
-			Longitude: 139.6503,
-			Timezone:  "Asia/Tokyo",
+			Name:      "Amsterdam",
+			Region:    "NL",
+			Latitude:  52.3676,
+			Longitude: 4.9041,
+			Timezone:  "Europe/Amsterdam",
 		},
 	}
 }
@@ -479,7 +494,7 @@ func IsDefaultCity(city CityConfig) bool {
 }
 
 // DefaultConfig returns a Config with sensible defaults:
-// three default cities (London, New York, Tokyo), 120-minute refresh,
+// three default cities (London, New York, Amsterdam), 120 120-minute refresh,
 // top-right corner, remote_api data source, and EasyWeatherWidget as the
 // default provider (works without a key for the default cities).
 func DefaultConfig() *Config {

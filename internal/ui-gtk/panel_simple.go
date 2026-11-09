@@ -74,6 +74,10 @@ type simpleCityPanel struct {
 
 	lastData     *weather.WeatherData
 	lastUnit     config.TemperatureUnit
+	lastWindUnit config.WindSpeedUnit
+	// displayFields is the current display-field selection (drives which metric
+	// lines show and whether they show live or forecast values).
+	displayFields *config.DisplayFields
 	lastIconCode string // most recently loaded icon code, for resize without re-fetch
 	iconSize     int    // current icon pixel size; 0 means default (96px)
 
@@ -403,34 +407,18 @@ func (p *simpleCityPanel) update(d *weather.WeatherData, tempUnit config.Tempera
 	}
 	p.lastData = d
 	p.lastUnit = tempUnit
+	p.lastWindUnit = windUnit
 
 	p.errorLbl.Hide()
 
 	p.cityLbl.SetText(d.CityName + ", " + d.Region)
-	p.tempLbl.SetText(weather.FormatTemperature(d.Temperature, tempUnit))
-	p.descLbl.SetText(weather.FormatDescription(d.Description, p.lm))
+	// Header values: real-time, or the day's forecast in a forecast grid mode.
+	headIcon, temp, _, desc := headlineValues(p.displayFields, d, tempUnit, p.lm)
+	p.tempLbl.SetText(temp)
+	p.descLbl.SetText(desc)
 
-	// Build each metric line from the shared, fully-localized *Display structs
-	// (emoji + localized name + value) so labels follow the chosen UI language.
-	// This replaces the older Format* helpers, some of which (wind, pressure,
-	// UV index) did not localize their label at all.
-	humid := weather.HumidityDisplay(d.Humidity, p.lm)
-	wind := weather.WindDisplay(d.WindSpeed, d.WindDirection, windUnit, p.lm)
-	gust := weather.WindGustDisplay(d.WindGust, windUnit, p.lm)
-	dew := weather.DewPointDisplay(d.DewPoint, p.lm)
-	press := weather.PressureDisplay(d.Pressure, p.lm)
-	uv := weather.UVIndexDisplay(d.UVIndex, p.lm)
-
-	p.humidLbl.SetText(fmt.Sprintf("%s %s %s", humid.Emoji, humid.Name, humid.Value))
-	// Wind keeps its own label; the compass direction is already part of
-	// wind.Value, so the separate windDirLbl is cleared to avoid duplication.
-	p.windLbl.SetText(fmt.Sprintf("%s %s %s", wind.Emoji, wind.Name, wind.Value))
-	p.windGustLbl.SetText(fmt.Sprintf("%s %s %s", gust.Emoji, gust.Name, gust.Value))
-	p.dewPointLbl.SetText(fmt.Sprintf("%s %s %s", dew.Emoji, dew.Name, dew.Value))
-	p.pressureLbl.SetText(fmt.Sprintf("%s %s %s", press.Emoji, press.Name, press.Value))
-	p.uvIndexLbl.SetText(fmt.Sprintf("%s %s %s", uv.Emoji, uv.Name, uv.Value))
-	p.windDirLbl.SetText("")
-
+	// Metric lines (live conditions or forecast, per Grid Content).
+	p.refreshMetrics()
 	p.updateFeelsLike(d, tempUnit)
 
 	// Load weather icon at the current icon size.
@@ -438,7 +426,7 @@ func (p *simpleCityPanel) update(d *weather.WeatherData, tempUnit config.Tempera
 	if len(iconTheme) > 0 && iconTheme[0] != "" {
 		theme = iconTheme[0]
 	}
-	iconCode := weather.MapConditionToIconWithTheme(d.IconCode, d.LocalTime, theme)
+	iconCode := weather.MapConditionToIconWithTheme(headIcon, d.LocalTime, theme)
 	p.loadIcon(iconCode, p.iconSize)
 
 	// Refresh pollution rows using the panel's current metric selection and the
@@ -455,7 +443,8 @@ func (p *simpleCityPanel) updateFeelsLike(d *weather.WeatherData, tempUnit confi
 		}
 	}
 	p.feelsTextLbl.SetText(strings.ReplaceAll(label, " ", ""))
-	p.feelsValLbl.SetText(weather.FormatFeelsLike(d.FeelsLike, tempUnit))
+	_, _, feels, _ := headlineValues(p.displayFields, d, tempUnit, p.lm)
+	p.feelsValLbl.SetText(feels)
 	p.loadFeelsIcon(feelsThermHeight)
 }
 
@@ -581,6 +570,67 @@ func (p *simpleCityPanel) applyDisplayFields(df *config.DisplayFields) {
 	setVisible(p.feelsBox, df.ShowTemp)
 	setVisible(p.tempLbl, df.ShowTemp)
 	setVisible(p.descLbl, df.ShowDesc)
+	setVisible(p.timeLbl, df.ShowTime)
+	setVisible(p.dateLbl, df.ShowDate)
+
+	p.displayFields = df
+	p.refreshMetrics()
+	// Header values depend on the grid mode (forecast vs live).
+	if p.lastData != nil {
+		_, temp, _, desc := headlineValues(df, p.lastData, p.lastUnit, p.lm)
+		p.tempLbl.SetText(temp)
+		p.descLbl.SetText(desc)
+	}
+}
+
+// refreshMetrics fills the five-to-six metric lines. In the live grid mode they
+// show the classic six conditions, each gated by its Show* toggle. In a forecast
+// mode the same six lines show the forecast tiles for Today or Tomorrow.
+func (p *simpleCityPanel) refreshMetrics() {
+	df := p.displayFields
+	if df == nil {
+		df = config.DefaultDisplayFields()
+	}
+	setVisible := func(w gtk.IWidget, show bool) {
+		if show {
+			w.ToWidget().Show()
+		} else {
+			w.ToWidget().Hide()
+		}
+	}
+	lines := []*gtk.Label{p.humidLbl, p.windLbl, p.windGustLbl, p.dewPointLbl, p.pressureLbl, p.uvIndexLbl}
+	set := func(l *gtk.Label, m weather.MetricDisplay) {
+		l.SetText(fmt.Sprintf("%s %s %s", m.Emoji, m.Name, m.Value))
+	}
+	windUnit := p.lastWindUnit
+	if windUnit == "" {
+		windUnit = config.WindSpeedUnitKmh
+	}
+	// The compass direction is part of the wind value, so windDirLbl stays empty.
+	p.windDirLbl.SetText("")
+
+	if config.NormalizeGridMode(df.GridMode) != "live" {
+		for i, m := range visibleMetrics(df, p.lastData, p.lastUnit, windUnit, p.lm) {
+			if i < len(lines) {
+				set(lines[i], m)
+			}
+		}
+		for _, l := range lines {
+			setVisible(l, true)
+		}
+		setVisible(p.windRowBox, true)
+		setVisible(p.windDirLbl, false)
+		return
+	}
+
+	if d := p.lastData; d != nil {
+		set(p.humidLbl, weather.HumidityDisplay(d.Humidity, p.lm))
+		set(p.windLbl, weather.WindDisplay(d.WindSpeed, d.WindDirection, windUnit, p.lm))
+		set(p.windGustLbl, weather.WindGustDisplay(d.WindGust, windUnit, p.lm))
+		set(p.dewPointLbl, weather.DewPointDisplay(d.DewPoint, p.lm))
+		set(p.pressureLbl, weather.PressureDisplay(d.Pressure, p.lm))
+		set(p.uvIndexLbl, weather.UVIndexDisplay(d.UVIndex, p.lm))
+	}
 	setVisible(p.humidLbl, df.ShowHumidity)
 	setVisible(p.windLbl, df.ShowWind)
 	setVisible(p.windDirLbl, df.ShowWind)
@@ -589,8 +639,6 @@ func (p *simpleCityPanel) applyDisplayFields(df *config.DisplayFields) {
 	setVisible(p.dewPointLbl, df.ShowDewPoint)
 	setVisible(p.pressureLbl, df.ShowPressure)
 	setVisible(p.uvIndexLbl, df.ShowUVIndex)
-	setVisible(p.timeLbl, df.ShowTime)
-	setVisible(p.dateLbl, df.ShowDate)
 }
 
 // loadIcon tries to load the weather icon from embedded assets at the given
