@@ -1866,10 +1866,8 @@ func buildLocationsTab(m *manager, dlg *gtk.Dialog, initialCities []config.CityC
 			if foundTZ == "" {
 				foundTZ = lookupTimezone(city.Latitude, city.Longitude)
 			}
-			if foundTZ == "" {
-				foundTZ = "UTC"
-			}
-
+			// Do not silently default to UTC: a wrong timezone shows a wrong
+			// clock. Leave it empty so Add City stays disabled and the user is told.
 			fName, fRegion, fTZ := city.Name, city.Region, foundTZ
 			fLat, fLon := city.Latitude, city.Longitude
 			runOnUI(func() {
@@ -1882,6 +1880,10 @@ func buildLocationsTab(m *manager, dlg *gtk.Dialog, initialCities []config.CityC
 				suppressEntryChange = false
 				cityAutoFilled = true
 				updateAddBtnState()
+				if fTZ == "" {
+					statusLbl.SetText("⚠ " + fName + ", " + fRegion + ": could not determine timezone, city cannot be added")
+					return
+				}
 				statusLbl.SetText("✓ " + fName + ", " + fRegion)
 			})
 		}()
@@ -1958,18 +1960,9 @@ func buildLocationsTab(m *manager, dlg *gtk.Dialog, initialCities []config.CityC
 	}, unlockLocations
 }
 
-// lookupTimezone attempts to find the IANA timezone for the given coordinates
-// using the bradfitz/latlong package that is already a project dependency.
+// lookupTimezone finds the IANA timezone for the given coordinates, with a
+// nearby-ring fallback for small/coastal places. Returns "" if unknown.
 func lookupTimezone(lat, lon float64) string {
-	// Import at call time to avoid circular build issues — the package is
-	// already in go.mod as a direct dependency via the Fyne settings code.
-	// We just call the same latlong.LookupZoneName used in settings.go.
-	_ = lat
-	_ = lon
-	// Fallback: return empty string — user can fill in manually.
-	// A proper call would be: return latlong.LookupZoneName(lat, lon)
-	// but importing bradfitz/latlong here would require adding it to the
-	// ui-gtk package imports. We do it inline below.
 	return gtkLookupTimezone(lat, lon)
 }
 

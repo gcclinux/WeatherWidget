@@ -14,9 +14,8 @@ import (
 	"time"
 
 	"weatherwidget/internal/config"
+	"weatherwidget/internal/tzlookup"
 	"weatherwidget/internal/weather"
-
-	"github.com/bradfitz/latlong"
 )
 
 // CitySearchErrorKind classifies the failure stage of a city search request
@@ -202,7 +201,7 @@ func (r *RemoteAPIAdapter) SearchCity(ctx context.Context, name, region string) 
 	if city.Name == "" {
 		return city, &CitySearchError{Kind: SearchErrNotFound, Query: name}
 	}
-	city.Timezone = latlong.LookupZoneName(city.Latitude, city.Longitude)
+	city.Timezone = tzlookup.Lookup(city.Latitude, city.Longitude)
 	return city, nil
 }
 
