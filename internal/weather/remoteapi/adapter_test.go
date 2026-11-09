@@ -415,6 +415,79 @@ func TestFetchWeather_EWW_Success(t *testing.T) {
 	}
 }
 
+func TestFetchWeather_EWW_GatewayWeather(t *testing.T) {
+	tests := []struct {
+		name        string
+		body        string
+		wantSunrise string
+		wantSunset  string
+		wantError   bool
+	}{
+		{
+			name:        "gateway epoch timestamps",
+			body:        `{"weather":{"temp":7.5,"feels_like":5.81,"description":"overcast clouds","wind_speed":2.5,"wind_gust":4,"wind_dir":50,"sunrise":1704110400,"sunset":1704142800}}`,
+			wantSunrise: "07:00", wantSunset: "16:00",
+		},
+		{
+			name:        "legacy timestamp names and RFC3339",
+			body:        `{"weather":{"Temp":7.5,"FeelsLike":5.81,"FreeText":"overcast clouds","WindSpeed":2.5,"WindGust":4,"WindDir":50,"Sunrise":"2024-01-01T12:00:00Z","Sunset":"2024-01-01T21:00:00Z"}}`,
+			wantSunrise: "07:00", wantSunset: "16:00",
+		},
+		{
+			name:        "null times and feels like",
+			body:        `{"weather":{"temp":7.5,"description":"overcast clouds","wind_speed":2.5,"wind_gust":4,"wind_dir":50,"sunrise":null,"sunset":null,"feels_like":null}}`,
+			wantSunrise: "--:--", wantSunset: "--:--",
+		},
+		{
+			name:        "missing times and feels like",
+			body:        `{"weather":{"temp":7.5,"description":"overcast clouds","wind_speed":2.5,"wind_gust":4,"wind_dir":50}}`,
+			wantSunrise: "--:--", wantSunset: "--:--",
+		},
+		{
+			name:      "invalid timestamp",
+			body:      `{"weather":{"sunrise":"not-a-time"}}`,
+			wantError: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				_, _ = w.Write([]byte(tt.body))
+			}))
+			defer srv.Close()
+			adapter := NewRemoteAPIAdapter("easyweatherwidget", "test-key")
+			adapter.BaseURL = srv.URL
+			city := config.CityConfig{Name: "New York", Region: "US", Timezone: "America/New_York"}
+			data, err := adapter.FetchWeather(context.Background(), city)
+			if tt.wantError {
+				if err == nil || !strings.Contains(err.Error(), "sunrise") {
+					t.Fatalf("expected sunrise parsing error, got %v", err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := weather.SunriseDisplay(data.Sunrise, city.Timezone, nil).Value; got != tt.wantSunrise {
+				t.Errorf("sunrise = %q, want %q", got, tt.wantSunrise)
+			}
+			if got := weather.SunsetDisplay(data.Sunset, city.Timezone, nil).Value; got != tt.wantSunset {
+				t.Errorf("sunset = %q, want %q", got, tt.wantSunset)
+			}
+			if data.Description != "overcast clouds" || data.WindSpeed != 9 || data.WindGust != 14.4 || data.WindDirection != 50 {
+				t.Errorf("incorrect current weather: %+v", data)
+			}
+			if tt.wantSunrise == "--:--" {
+				if data.FeelsLike != nil {
+					t.Errorf("missing feels_like = %v, want nil", *data.FeelsLike)
+				}
+			} else if data.FeelsLike == nil || *data.FeelsLike != 5.81 {
+				t.Errorf("feels_like = %v, want 5.81", data.FeelsLike)
+			}
+		})
+	}
+}
+
 func TestFetchWeather_EWW_RFC3339ObsTimeLocal(t *testing.T) {
 	resp := ewwResponse{
 		CityName:     "California",

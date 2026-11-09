@@ -615,7 +615,7 @@ func mapWUConditionToIcon(code int) string {
 // ewwWeather represents the nested weather object from the EasyWeatherWidget weather-news API.
 type ewwWeather struct {
 	Temp           float64  `json:"Temp"`
-	FeelsLike      float64  `json:"FeelsLike"`
+	FeelsLike      *float64 `json:"FeelsLike"`
 	FreeText       string   `json:"FreeText"`
 	Humidity       int      `json:"Humidity"`
 	WindSpeed      float64  `json:"WindSpeed"`
@@ -626,13 +626,102 @@ type ewwWeather struct {
 	UV             float64  `json:"UV"`
 	Clouds         int      `json:"Clouds"`
 	Visibility     float64  `json:"Visibility"`
-	Sunrise        int64    `json:"Sunrise"`
-	Sunset         int64    `json:"Sunset"`
+	Sunrise        int64    `json:"-"`
+	Sunset         int64    `json:"-"`
 	PrecipRate     *float64 `json:"PrecipRate"`
 	PrecipTotal    *float64 `json:"PrecipTotal"`
 	SolarRadiation *float64 `json:"SolarRadiation"`
 	HeatIndex      *float64 `json:"HeatIndex"`
 	WindChill      *float64 `json:"WindChill"`
+}
+
+// ewwWeatherSnake mirrors the snake_case keys emitted by the gateway
+// (e.g. "wind_speed", "feels_like"), which the PascalCase tags cannot match.
+type ewwWeatherSnake struct {
+	Temp           *float64        `json:"temp"`
+	FeelsLike      *float64        `json:"feels_like"`
+	FreeText       *string         `json:"description"`
+	WindSpeed      *float64        `json:"wind_speed"`
+	WindDir        *int            `json:"wind_dir"`
+	WindGust       *float64        `json:"wind_gust"`
+	DewPt          *float64        `json:"dewpt"`
+	Sunrise        json.RawMessage `json:"sunrise"`
+	Sunset         json.RawMessage `json:"sunset"`
+	PrecipRate     *float64        `json:"precip_rate"`
+	PrecipTotal    *float64        `json:"precip_total"`
+	SolarRadiation *float64        `json:"solar_radiation"`
+	HeatIndex      *float64        `json:"heat_index"`
+	WindChill      *float64        `json:"wind_chill"`
+}
+
+// UnmarshalJSON accepts both PascalCase and snake_case keys. Sunrise/sunset may
+// be Unix timestamps or RFC3339 strings.
+func (w *ewwWeather) UnmarshalJSON(b []byte) error {
+	type plain ewwWeather
+	var p plain
+	if err := json.Unmarshal(b, &p); err != nil {
+		return err
+	}
+	var s ewwWeatherSnake
+	if err := json.Unmarshal(b, &s); err != nil {
+		return err
+	}
+	setF := func(dst *float64, src *float64) {
+		if src != nil {
+			*dst = *src
+		}
+	}
+	setP := func(dst **float64, src *float64) {
+		if src != nil && *dst == nil {
+			*dst = src
+		}
+	}
+	setF(&p.Temp, s.Temp)
+	setF(&p.WindSpeed, s.WindSpeed)
+	setF(&p.WindGust, s.WindGust)
+	setF(&p.DewPt, s.DewPt)
+	if s.FeelsLike != nil {
+		p.FeelsLike = s.FeelsLike
+	}
+	if s.FreeText != nil && p.FreeText == "" {
+		p.FreeText = *s.FreeText
+	}
+	if s.WindDir != nil {
+		p.WindDir = *s.WindDir
+	}
+	setP(&p.PrecipRate, s.PrecipRate)
+	setP(&p.PrecipTotal, s.PrecipTotal)
+	setP(&p.SolarRadiation, s.SolarRadiation)
+	setP(&p.HeatIndex, s.HeatIndex)
+	setP(&p.WindChill, s.WindChill)
+	var err error
+	if p.Sunrise, err = parseUnixOrTime(s.Sunrise); err != nil {
+		return fmt.Errorf("sunrise: %w", err)
+	}
+	if p.Sunset, err = parseUnixOrTime(s.Sunset); err != nil {
+		return fmt.Errorf("sunset: %w", err)
+	}
+	*w = ewwWeather(p)
+	return nil
+}
+
+func parseUnixOrTime(raw json.RawMessage) (int64, error) {
+	if len(raw) == 0 || string(raw) == "null" {
+		return 0, nil
+	}
+	var n int64
+	if err := json.Unmarshal(raw, &n); err == nil {
+		return n, nil
+	}
+	var str string
+	if err := json.Unmarshal(raw, &str); err != nil {
+		return 0, fmt.Errorf("expected Unix timestamp or RFC3339 string: %w", err)
+	}
+	t, err := time.Parse(time.RFC3339Nano, str)
+	if err != nil {
+		return 0, fmt.Errorf("invalid RFC3339 timestamp %q: %w", str, err)
+	}
+	return t.Unix(), nil
 }
 
 type ewwForecast struct {
@@ -785,13 +874,13 @@ func (r *RemoteAPIAdapter) fetchEWW(ctx context.Context, city config.CityConfig)
 		LocalTime:      localTime,
 		FetchedAt:      now.UTC(),
 		Humidity:       eww.Weather.Humidity,
-		WindSpeed:      eww.Weather.WindSpeed,
+		WindSpeed:      eww.Weather.WindSpeed * 3.6,
 		WindDirection:  eww.Weather.WindDir,
-		WindGust:       eww.Weather.WindGust,
+		WindGust:       eww.Weather.WindGust * 3.6,
 		DewPoint:       eww.Weather.DewPt,
 		Pressure:       eww.Weather.Pressure,
 		UVIndex:        eww.Weather.UV,
-		FeelsLike:      floatPtr(eww.Weather.FeelsLike),
+		FeelsLike:      eww.Weather.FeelsLike,
 		Clouds:         eww.Weather.Clouds,
 		Visibility:     eww.Weather.Visibility,
 		Sunrise:        eww.Weather.Sunrise,
