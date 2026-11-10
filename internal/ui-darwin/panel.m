@@ -440,25 +440,36 @@ static NSColor *wwStatusColorForLevel(int level) {
 
         NSMutableAttributedString *line = [[[NSMutableAttributedString alloc] init] autorelease];
 
-        NSString *headerStr = (fullName.length > 0 && ![fullName isEqualToString:symbol])
-            ? [NSString stringWithFormat:@"%@ (%@): ", symbol, fullName]
-            : [NSString stringWithFormat:@"%@: ", symbol];
-        [line appendAttributedString:[[[NSAttributedString alloc]
-            initWithString:headerStr
-                attributes:@{ NSFontAttributeName: boldFont,
-                              NSForegroundColorAttributeName: whiteColor }] autorelease]];
+        NSString *headerStr = @"";
+        if (symbol.length > 0 && fullName.length > 0 && ![fullName isEqualToString:symbol]) {
+            headerStr = [NSString stringWithFormat:@"%@ (%@): ", symbol, fullName];
+        } else if (symbol.length > 0) {
+            headerStr = [NSString stringWithFormat:@"%@: ", symbol];
+        } else if (fullName.length > 0) {
+            headerStr = [NSString stringWithFormat:@"%@: ", fullName];
+        }
+        if (headerStr.length > 0) {
+            [line appendAttributedString:[[[NSAttributedString alloc]
+                initWithString:headerStr
+                    attributes:@{ NSFontAttributeName: boldFont,
+                                  NSForegroundColorAttributeName: whiteColor }] autorelease]];
+        }
 
-        NSColor *statusColor = wwStatusColorForLevel(statusLevel);
-        [line appendAttributedString:[[[NSAttributedString alloc]
-            initWithString:statusText
-                attributes:@{ NSFontAttributeName: boldFont,
-                              NSForegroundColorAttributeName: statusColor }] autorelease]];
+        if (statusText.length > 0) {
+            NSColor *statusColor = wwStatusColorForLevel(statusLevel);
+            [line appendAttributedString:[[[NSAttributedString alloc]
+                initWithString:statusText
+                    attributes:@{ NSFontAttributeName: boldFont,
+                                  NSForegroundColorAttributeName: statusColor }] autorelease]];
+        }
 
-        NSString *tailStr = [NSString stringWithFormat:@" • %@", sourcesText];
-        [line appendAttributedString:[[[NSAttributedString alloc]
-            initWithString:tailStr
-                attributes:@{ NSFontAttributeName: regFont,
-                              NSForegroundColorAttributeName: cyanColor }] autorelease]];
+        if (sourcesText.length > 0) {
+            NSString *tailStr = [NSString stringWithFormat:@" • %@", sourcesText];
+            [line appendAttributedString:[[[NSAttributedString alloc]
+                initWithString:tailStr
+                    attributes:@{ NSFontAttributeName: regFont,
+                                  NSForegroundColorAttributeName: cyanColor }] autorelease]];
+        }
 
         [_attrItems addObject:line];
     }
@@ -632,6 +643,7 @@ static NSColor *wwStatusColorForLevel(int level) {
 
 // State
 @property (nonatomic) BOOL isNight;
+@property (nonatomic) BOOL noBackground;
 
 - (void)applyLayoutMode:(BOOL)simple;
 
@@ -656,6 +668,7 @@ static void wwSetStr(NSString **slot, NSString *s) {
     // Owned under MRC (copied in wwSetStr, released in -dealloc).
     NSString *_simpleNames[6];
     NSString *_simpleValues[6];
+    NSString *_simpleEmojis[6];
     NSString *_lastFeelsLabel;
     NSString *_lastFeelsValue;
 }
@@ -836,6 +849,7 @@ static void wwSetStr(NSString **slot, NSString *s) {
         // English fallback names until the localized words are pushed from Go.
         _simpleNames[i]  = [names[i] copy];
         _simpleValues[i] = nil;
+        _simpleEmojis[i] = [emojis[i] copy];
     }
     _simpleMetricLines = [sMetrics copy];   // -copy returns an owned +1 object
 
@@ -972,6 +986,9 @@ static void wwSetStr(NSString **slot, NSString *s) {
         [views addObject:_dateLbl];
         [views addObject:_tempLbl];
         [views addObject:_descLbl];
+        for (int i = 0; i < 6; i++) {
+            _simpleMetricLines[i].hidden = _metricTiles[i].hidden;
+        }
         [views addObjectsFromArray:_simpleMetricLines];
         [views addObject:_simpleAQILine];
         [views addObjectsFromArray:_simplePollLines];
@@ -1005,6 +1022,7 @@ static void wwSetStr(NSString **slot, NSString *s) {
     for (int i = 0; i < 6; i++) {
         [_simpleNames[i] release];
         [_simpleValues[i] release];
+        [_simpleEmojis[i] release];
     }
     [super dealloc];
 }
@@ -1064,15 +1082,68 @@ static void wwSetStr(NSString **slot, NSString *s) {
     NSString *v = _simpleValues[i];
     if (v.length == 0) return;
     NSString *n = _simpleNames[i];
+    NSString *e = _simpleEmojis[i] ?: kSimpleMetricEmojis[i];
     _simpleMetricLines[i].stringValue = n.length
-        ? [NSString stringWithFormat:@"%@ %@ %@", kSimpleMetricEmojis[i], n, v]
-        : [NSString stringWithFormat:@"%@ %@", kSimpleMetricEmojis[i], v];
+        ? [NSString stringWithFormat:@"%@ %@ %@", e, n, v]
+        : [NSString stringWithFormat:@"%@ %@", e, v];
+}
+
+- (void)setMetricTileAt:(int)index emoji:(NSString *)emoji name:(NSString *)name value:(NSString *)value visible:(BOOL)visible {
+    if (index < 0 || index >= 6) return;
+    WWMetricTile *tile = _metricTiles[index];
+    NSTextField *line = _simpleMetricLines[index];
+    if (!visible) {
+        tile.hidden = YES;
+        line.hidden = YES;
+        return;
+    }
+    if (emoji.length > 0) {
+        tile.emojiLbl.stringValue = emoji;
+        wwSetStr(&_simpleEmojis[index], emoji);
+    }
+    if (name.length > 0) {
+        tile.nameLbl.stringValue = name;
+        wwSetStr(&_simpleNames[index], name);
+    }
+    if (value.length > 0) {
+        tile.valueLbl.stringValue = value;
+        wwSetStr(&_simpleValues[index], value);
+    }
+    tile.hidden = NO;
+    [self refreshSimpleMetricLine:index];
+    if (_simpleMode) {
+        line.hidden = NO;
+    }
+    [self updateMetricTileWidths];
 }
 
 // ── Background image loading ──────────────────────────────────────────────────
 
+- (void)setNoBackground:(BOOL)noBg {
+    _noBackground = noBg;
+    _bgImageLayer.hidden = noBg;
+    _bgOverlayLayer.hidden = noBg;
+    if (noBg) {
+        // Thin rounded border to visually frame each city panel against desktop
+        // (matches ui-gtk / ui-windows 1px stroke, RGBA{255, 255, 255, 100}).
+        self.layer.borderWidth = 1.0;
+        self.layer.borderColor = [NSColor colorWithWhite:1.0 alpha:100.0 / 255.0].CGColor;
+    } else {
+        self.layer.borderWidth = 0.0;
+        self.layer.borderColor = nil;
+    }
+}
+
 - (void)loadBackground:(BOOL)night {
-    if (night == _isNight && _bgImageLayer.contents != nil) return;
+    if (night == _isNight && _bgImageLayer.contents != nil) {
+        if (_noBackground) {
+            _bgImageLayer.hidden = YES;
+            _bgOverlayLayer.hidden = YES;
+            self.layer.borderWidth = 1.0;
+            self.layer.borderColor = [NSColor colorWithWhite:1.0 alpha:100.0 / 255.0].CGColor;
+        }
+        return;
+    }
     _isNight = night;
     NSString *name = night ? @"night" : @"day";
 
@@ -1094,6 +1165,12 @@ static void wwSetStr(NSString **slot, NSString *s) {
             CGRect r = CGRectMake(0, 0, sz.width, sz.height);
             _bgImageLayer.contents = (__bridge id)[img CGImageForProposedRect:&r context:nil hints:nil];
         }
+    }
+    if (_noBackground) {
+        _bgImageLayer.hidden = YES;
+        _bgOverlayLayer.hidden = YES;
+        self.layer.borderWidth = 1.0;
+        self.layer.borderColor = [NSColor colorWithWhite:1.0 alpha:100.0 / 255.0].CGColor;
     }
 }
 
@@ -1119,6 +1196,12 @@ static void wwSetStr(NSString **slot, NSString *s) {
     CGFloat overlayAlpha = 0.45 + (1.0 - (CGFloat)opacity) * 0.25;
     _bgOverlayLayer.backgroundColor =
         [NSColor colorWithRed:0 green:0 blue:0 alpha:overlayAlpha].CGColor;
+    if (_noBackground) {
+        _bgImageLayer.hidden = YES;
+        _bgOverlayLayer.hidden = YES;
+        self.layer.borderWidth = 1.0;
+        self.layer.borderColor = [NSColor colorWithWhite:1.0 alpha:100.0 / 255.0].CGColor;
+    }
 
     // Set label only when the string is non-nil/non-empty (nil means "keep
     // current", so the live clock isn't wiped by a weather-only update).
@@ -1303,22 +1386,6 @@ static NSString *pollSlotName(int slot) {
     _descLbl.hidden            = !(mask & DFDesc);
     _timeLbl.hidden            = !(mask & DFTime);
     _dateLbl.hidden            = !(mask & DFDate);
-
-    // Enhanced boxed tiles.
-    _metricTiles[0].hidden     = !(mask & DFHumidity);
-    _metricTiles[1].hidden     = !(mask & DFWind);
-    _metricTiles[2].hidden     = !(mask & DFWindGust);
-    _metricTiles[3].hidden     = !(mask & DFDewPoint);
-    _metricTiles[4].hidden     = !(mask & DFPressure);
-    _metricTiles[5].hidden     = !(mask & DFUVIndex);
-
-    // Simple-mode plain-text metric lines (same visibility rules).
-    _simpleMetricLines[0].hidden = !(mask & DFHumidity);
-    _simpleMetricLines[1].hidden = !(mask & DFWind);
-    _simpleMetricLines[2].hidden = !(mask & DFWindGust);
-    _simpleMetricLines[3].hidden = !(mask & DFDewPoint);
-    _simpleMetricLines[4].hidden = !(mask & DFPressure);
-    _simpleMetricLines[5].hidden = !(mask & DFUVIndex);
 }
 
 // showError:text: shows/hides the error label. text is the (localized) message
@@ -1635,6 +1702,16 @@ void setCardFontSizes(uintptr_t cardHandle, int cityTime, int temp, int cond) {
     });
 }
 
+void setCardMetricTile(uintptr_t cardHandle, int index, const char *emoji, const char *name, const char *value, int visible) {
+    NSString *nEmoji = nsFromC(emoji);
+    NSString *nName  = nsFromC(name);
+    NSString *nValue = nsFromC(value);
+    dispatch_async(dispatch_get_main_queue(), ^{
+        [(__bridge WWCityCardView *)(void *)cardHandle
+            setMetricTileAt:index emoji:nEmoji name:nName value:nValue visible:(BOOL)visible];
+    });
+}
+
 // relayoutContainerAsync re-runs the card layout and window resize on the main
 // thread ASYNCHRONOUSLY, so it executes AFTER any card-content updates that
 // were already queued via dispatch_async (updateCardData / updateCardAQI /
@@ -1656,5 +1733,12 @@ void relayoutContainerAsync(uintptr_t winHandle, uintptr_t containerHandle,
         c.frame = w.contentView.bounds;
 
         relayoutCards(c, (BOOL)mode, cardCount);
+    });
+}
+
+void setCardNoBackground(uintptr_t cardHandle, int noBg) {
+    if (!cardHandle) return;
+    dispatch_async(dispatch_get_main_queue(), ^{
+        [(__bridge WWCityCardView *)(void *)cardHandle setNoBackground:(BOOL)noBg];
     });
 }

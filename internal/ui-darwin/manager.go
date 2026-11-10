@@ -200,7 +200,11 @@ func (m *manager) start(openSettings bool) error {
 	// createTrayHook before [NSApp run]. start() runs on a goroutine after
 	// applicationDidFinishLaunching, so the Cocoa loop is servicing events;
 	nativeShowWidgetWindow(m.win)
-	nativeSetWidgetWindowOpacity(m.win, opacityToAlpha(m.opacity))
+	if m.noBackground {
+		nativeSetWidgetWindowOpacity(m.win, 1.0)
+	} else {
+		nativeSetWidgetWindowOpacity(m.win, opacityToAlpha(m.opacity))
+	}
 	if openSettings {
 		openSettingsWindow(m)
 	}
@@ -263,6 +267,7 @@ func (m *manager) buildCards(cities []config.CityConfig) {
 		}
 		nativeSetCardFontSizes(handle, m.fontSizeCityTime, m.fontSizeTempIcon, m.fontSizeConditions)
 		nativeSetCardFieldVisibility(handle, displayFieldMask(m.cfg.GetDisplayFields()))
+		nativeSetCardNoBackground(handle, m.noBackground)
 		m.applyCardMetricNames(handle)
 		newCards = append(newCards, handle)
 	}
@@ -417,21 +422,14 @@ func (m *manager) updateCard(card uintptr, d *weather.WeatherData) {
 	tempUnit := m.cfg.TemperatureUnit
 	windUnit := m.cfg.WindSpeedUnit
 	iconTheme := m.cfg.IconTheme
+	df := m.cfg.GetDisplayFields()
 
+	iconCode, tempStr, feelsStr, descStr := headlineValues(df, d, tempUnit, m.lm)
 	cityStr := fmt.Sprintf("%s, %s", d.CityName, d.Region)
-	tempStr := weather.FormatTemperature(d.Temperature, tempUnit)
-	descStr := weather.FormatDescription(d.Description, m.lm)
-
-	humidDisp := weather.HumidityDisplay(d.Humidity, m.lm)
-	windDisp  := weather.WindDisplay(d.WindSpeed, d.WindDirection, windUnit, m.lm)
-	gustDisp  := weather.WindGustDisplay(d.WindGust, windUnit, m.lm)
-	dewDisp   := weather.DewPointDisplay(d.DewPoint, m.lm)
-	pressDisp := weather.PressureDisplay(d.Pressure, m.lm)
-	uvDisp    := weather.UVIndexDisplay(d.UVIndex, m.lm)
 
 	isNight := weather.IsNight(d.LocalTime)
-	iconCode := weather.MapConditionToIconWithTheme(d.IconCode, d.LocalTime, iconTheme)
-	iconPath := resolveIconPath(iconCode)
+	iconCodeThemed := weather.MapConditionToIconWithTheme(iconCode, d.LocalTime, iconTheme)
+	iconPath := resolveIconPath(iconCodeThemed)
 
 	// Time and date are owned exclusively by the per-card, per-timezone clock
 	// goroutine (runClock), mirroring the GTK simple/enhanced views where the
@@ -440,24 +438,31 @@ func (m *manager) updateCard(card uintptr, d *weather.WeatherData) {
 	// (FormatTime with an empty timezone falls back to UTC), so we send "".
 	nativeUpdateCardData(card,
 		iconPath, cityStr, "", "", tempStr, descStr,
-		humidDisp.Value, windDisp.Value, gustDisp.Value,
-		dewDisp.Value, pressDisp.Value, uvDisp.Value,
+		"", "", "", "", "", "",
 		isNight, opacityToAlpha(m.opacity),
 	)
 	feelsLikeLabel := "Feels Like"
 	if m.lm != nil && m.lm.T("weather.feelsLike") != "" {
 		feelsLikeLabel = m.lm.T("weather.feelsLike")
 	}
+	if config.NormalizeGridMode(df.GridMode) != "live" {
+		feelsLikeLabel = "Low"
+		if m.lm != nil && m.lm.T("weather.forecast.tempMin") != "" {
+			feelsLikeLabel = m.lm.T("weather.forecast.tempMin")
+		}
+	}
 	nativeSetCardFeelsLike(card, resolveEmbeddedAsset("icons/thermometer.png", assets.Icons),
-		feelsLikeLabel, weather.FormatFeelsLike(d.FeelsLike, tempUnit))
+		feelsLikeLabel, feelsStr)
 
-	// Push the localized metric NAME words + AQI label so the tile labels follow
-	// the chosen UI language (values were sent above). "AQI" is a universal
-	// abbreviation left as-is (same value shown on the compact tile).
-	nativeSetCardMetricNames(card,
-		humidDisp.Name, windDisp.Name, gustDisp.Name,
-		dewDisp.Name, pressDisp.Name, uvDisp.Name, "AQI",
-	)
+	// Populate the 6 metric tiles using visibleMetrics
+	metrics := visibleMetrics(df, d, tempUnit, windUnit, m.lm)
+	for i := 0; i < maxMetricTiles; i++ {
+		if i < len(metrics) {
+			nativeSetCardMetricTile(card, i, metrics[i].Emoji, metrics[i].Name, metrics[i].Value, true)
+		} else {
+			nativeSetCardMetricTile(card, i, "", "", "", false)
+		}
+	}
 
 	nativeSetCardPollutantName(card, -1, weather.PollutionMetricName(weather.MetricAQI, m.lm))
 	slotMetrics := []weather.PollutionMetric{
@@ -547,18 +552,17 @@ func (m *manager) updateCard(card uintptr, d *weather.WeatherData) {
 // applyCardMetricNames pushes the localized metric NAME words + air quality /
 // pollutant names to a card so they follow the user's chosen locale.
 func (m *manager) applyCardMetricNames(card uintptr) {
+	tempUnit := m.cfg.TemperatureUnit
 	windUnit := m.cfg.WindSpeedUnit
-	humidDisp := weather.HumidityDisplay(0, m.lm)
-	windDisp := weather.WindDisplay(0, 0, windUnit, m.lm)
-	gustDisp := weather.WindGustDisplay(0, windUnit, m.lm)
-	dewDisp := weather.DewPointDisplay(0, m.lm)
-	pressDisp := weather.PressureDisplay(0, m.lm)
-	uvDisp := weather.UVIndexDisplay(0, m.lm)
-
-	nativeSetCardMetricNames(card,
-		humidDisp.Name, windDisp.Name, gustDisp.Name,
-		dewDisp.Name, pressDisp.Name, uvDisp.Name, "AQI",
-	)
+	df := m.cfg.GetDisplayFields()
+	metrics := visibleMetrics(df, nil, tempUnit, windUnit, m.lm)
+	for i := 0; i < maxMetricTiles; i++ {
+		if i < len(metrics) {
+			nativeSetCardMetricTile(card, i, metrics[i].Emoji, metrics[i].Name, metrics[i].Value, true)
+		} else {
+			nativeSetCardMetricTile(card, i, "", "", "", false)
+		}
+	}
 
 	nativeSetCardPollutantName(card, -1, weather.PollutionMetricName(weather.MetricAQI, m.lm))
 	slotMetrics := []weather.PollutionMetric{
@@ -573,6 +577,12 @@ func (m *manager) applyCardMetricNames(card uintptr) {
 	if m.lm != nil && m.lm.T("weather.feelsLike") != "" {
 		feelsLikeLabel = m.lm.T("weather.feelsLike")
 	}
+	if config.NormalizeGridMode(df.GridMode) != "live" {
+		feelsLikeLabel = "Low"
+		if m.lm != nil && m.lm.T("weather.forecast.tempMin") != "" {
+			feelsLikeLabel = m.lm.T("weather.forecast.tempMin")
+		}
+	}
 	nativeSetCardFeelsLike(card, resolveEmbeddedAsset("icons/thermometer.png", assets.Icons),
 		feelsLikeLabel, "")
 }
@@ -582,6 +592,7 @@ func (m *manager) applyCardMetricNames(card uintptr) {
 // applyPosition moves the window to the configured custom coordinates or
 // computes it from the corner setting.
 func (m *manager) applyPosition() {
+	notifyMovedByUs()
 	if m.cfg.CustomX != nil && m.cfg.CustomY != nil {
 		x, y := *m.cfg.CustomX, *m.cfg.CustomY
 		nativeMoveWidgetWindow(m.win, x, y)
@@ -786,6 +797,7 @@ func (m *manager) onSettingsSave(newCfg *config.Config) error {
 	viewModeChanged := config.NormalizeViewMode(oldCfg.ViewMode) !=
 		config.NormalizeViewMode(newCfg.ViewMode)
 	citiesChanged := !sameCities(oldCfg.Cities, newCfg.Cities)
+	noBgChanged := oldCfg.NoBackground != newCfg.NoBackground
 
 	opacity := newCfg.Opacity
 	if opacity == 0 {
@@ -807,9 +819,13 @@ func (m *manager) onSettingsSave(newCfg *config.Config) error {
 			updateTrayMenu(m)
 		}
 
-		nativeSetWidgetWindowOpacity(m.win, opacityToAlpha(m.opacity))
+		if m.noBackground {
+			nativeSetWidgetWindowOpacity(m.win, 1.0)
+		} else {
+			nativeSetWidgetWindowOpacity(m.win, opacityToAlpha(m.opacity))
+		}
 
-		if citiesChanged || viewModeChanged || localeChanged {
+		if citiesChanged || viewModeChanged || localeChanged || noBgChanged {
 			// Full rebuild: new card views for the new city list / layout.
 			m.buildCards(newCfg.Cities)
 		} else {
@@ -822,6 +838,7 @@ func (m *manager) onSettingsSave(newCfg *config.Config) error {
 			for _, card := range cards {
 				nativeSetCardFieldVisibility(card, displayFieldMask(newCfg.GetDisplayFields()))
 				nativeSetCardFontSizes(card, m.fontSizeCityTime, m.fontSizeTempIcon, m.fontSizeConditions)
+				nativeSetCardNoBackground(card, m.noBackground)
 				m.applyCardMetricNames(card)
 			}
 			// Re-render each card's data from the cached last results so unit
