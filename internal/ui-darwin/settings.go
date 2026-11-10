@@ -25,6 +25,7 @@ extern void bringSettingsToFront(void);
 import "C"
 
 import (
+	"bytes"
 	"encoding/json"
 	"log"
 	"strconv"
@@ -157,7 +158,7 @@ func (m *manager) settingsStrings() map[string]string {
 		// Window + tabs + actions
 		"settings.title",
 		"settings.tab.provider", "settings.tab.locations", "settings.tab.widget",
-		"settings.tab.language", "settings.tab.appearance", "settings.tab.about",
+		"settings.tab.ticker", "settings.tab.language", "settings.tab.appearance", "settings.tab.about",
 		"settings.save", "settings.cancel",
 		// Provider tab
 		"settings.provider.label", "settings.provider.apiKeyLabel",
@@ -187,15 +188,19 @@ func (m *manager) settingsStrings() map[string]string {
 		"settings.locations.demoBanner.subtitle",
 		"settings.locations.demoBanner.proBtn",
 		"settings.locations.demoBanner.freeBtn",
-		// Widget tab: panel display
-		"settings.display.title", "settings.display.subtitle",
+		// Widget tab: grid mode & panel display
+		"settings.gridMode.title", "settings.gridMode.subtitle",
+		"settings.gridMode.live", "settings.gridMode.today", "settings.gridMode.tomorrow",
+		"settings.display.title", "settings.display.subtitle", "settings.display.weatherMetrics",
 		"settings.display.city", "settings.display.icon", "settings.display.temp",
 		"settings.display.desc", "settings.display.humidity", "settings.display.wind",
 		"settings.display.time", "settings.display.date", "settings.display.windGust",
 		"settings.display.dewPoint", "settings.display.pressure", "settings.display.uvIndex",
+		"settings.display.sunrise", "settings.display.sunset", "settings.display.clouds",
+		"settings.display.visibility", "settings.display.precipRate",
 		// Widget tab: pollution
 		"settings.pollution.title", "settings.pollution.subtitle",
-		"settings.pollution.proNote",
+		"settings.pollution.proNote", "settings.pollution.proRequired",
 		"settings.pollution.aqi", "settings.pollution.co", "settings.pollution.no",
 		"settings.pollution.no2", "settings.pollution.o3", "settings.pollution.so2",
 		"settings.pollution.nh3", "settings.pollution.pm2_5", "settings.pollution.pm10",
@@ -203,6 +208,11 @@ func (m *manager) settingsStrings() map[string]string {
 		"settings.pollution.profile.everyday", "settings.pollution.profile.active",
 		"settings.pollution.profile.family", "settings.pollution.profile.sensitive",
 		"settings.pollution.profile.ventilation",
+		// Ticker tab
+		"settings.ticker.title", "settings.ticker.subtitle", "settings.ticker.enable",
+		"settings.ticker.profilesTitle", "settings.ticker.feedTitle", "settings.ticker.pollutantsTitle",
+		"settings.ticker.alert", "settings.ticker.newsToday", "settings.ticker.newsPrecip",
+		"settings.ticker.newsTomorrow", "settings.ticker.weatherTips",
 		// Widget tab: units
 		"settings.temperature.title", "settings.windspeed.title",
 		"settings.temperature.celsius", "settings.temperature.fahrenheit",
@@ -213,13 +223,18 @@ func (m *manager) settingsStrings() map[string]string {
 		"settings.viewMode.title", "settings.viewMode.enhanced", "settings.viewMode.simple",
 		"settings.transparency.title", "settings.startup.autostart",
 		"settings.icons.title", "settings.icons.new", "settings.icons.original",
-		"settings.position.title",
+		"settings.noBackground.checkbox", "settings.noBackground.note",
+		"settings.position.title", "settings.position.subtitle",
+		"settings.position.topLeft", "settings.position.topRight",
+		"settings.position.bottomLeft", "settings.position.bottomRight",
 		"settings.fontSize.title", "settings.fontSize.cityTime",
 		"settings.fontSize.tempIcon", "settings.fontSize.conditions",
 		// About tab
-		"settings.about.appName", "settings.about.description",
+		"settings.about.appName", "settings.about.version", "settings.about.description",
 		"settings.about.websiteLabel", "settings.about.manualLabel",
 		"settings.about.airIndexLabel",
+		"settings.windows.website", "settings.windows.manual",
+		"settings.windows.environmental", "settings.windows.support",
 		// Alerts
 		"error.settings.licenseRequired", "error.settings.cityNameRequired",
 		"error.settings.cityNameRequiredSearch", "error.settings.apiKeyRequired",
@@ -276,13 +291,14 @@ func mergeSettingsJSON(base *config.Config, data []byte) (*config.Config, error)
 		out.CornerPosition = s
 	}
 
-	// ── scalar int fields ──
+	// ── scalar int / bool fields ──
 	if n, ok := jsonInt(m["refreshInterval"]); ok && n > 0 {
 		out.RefreshInterval = n
 	}
 	if n, ok := jsonInt(m["opacity"]); ok && n > 0 {
 		out.Opacity = n
 	}
+	jsonSetBool(m, "noBackground", &out.NoBackground)
 	if n, ok := jsonInt(m["monitorIndex"]); ok {
 		out.MonitorIndex = n
 	}
@@ -295,12 +311,20 @@ func mergeSettingsJSON(base *config.Config, data []byte) (*config.Config, error)
 	if n, ok := jsonInt(m["fontSizeConditions"]); ok && n > 0 {
 		out.FontSizeConditions = n
 	}
-	if n, ok := jsonInt(m["customX"]); ok {
-		out.CustomX = &n
+	if raw, ok := m["customX"]; ok {
+		if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
+			out.CustomX = nil
+		} else if n, ok := jsonInt(raw); ok {
+			out.CustomX = &n
+		}
 	}
-	if n, ok := jsonInt(m["customY"]); ok {
-		nn := n
-		out.CustomY = &nn
+	if raw, ok := m["customY"]; ok {
+		if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
+			out.CustomY = nil
+		} else if n, ok := jsonInt(raw); ok {
+			nn := n
+			out.CustomY = &nn
+		}
 	}
 
 	// ── display fields ──
@@ -320,6 +344,14 @@ func mergeSettingsJSON(base *config.Config, data []byte) (*config.Config, error)
 			jsonSetBool(df, "showDewPoint", &d.ShowDewPoint)
 			jsonSetBool(df, "showPressure", &d.ShowPressure)
 			jsonSetBool(df, "showUVIndex", &d.ShowUVIndex)
+			jsonSetBool(df, "showSunrise", &d.ShowSunrise)
+			jsonSetBool(df, "showSunset", &d.ShowSunset)
+			jsonSetBool(df, "showClouds", &d.ShowClouds)
+			jsonSetBool(df, "showVisibility", &d.ShowVisibility)
+			jsonSetBool(df, "showPrecipRate", &d.ShowPrecipRate)
+			if s, ok := jsonString(df["gridMode"]); ok && s != "" {
+				d.GridMode = config.NormalizeGridMode(s)
+			}
 			out.DisplayFields = d
 		}
 	}
@@ -339,9 +371,37 @@ func mergeSettingsJSON(base *config.Config, data []byte) (*config.Config, error)
 			jsonSetBool(pf, "showPM25", &p.ShowPM25)
 			jsonSetBool(pf, "showPM10", &p.ShowPM10)
 			jsonSetBool(pf, "showTicker", &p.ShowTicker)
-			if s, ok := jsonString(pf["tickerProfile"]); ok {
-				p.TickerProfile = config.NormalizeTickerProfile(config.TickerProfile(s))
+			jsonSetBool(pf, "profileEveryday", &p.ProfileEveryday)
+			jsonSetBool(pf, "profileActive", &p.ProfileActive)
+			jsonSetBool(pf, "profileFamily", &p.ProfileFamily)
+			jsonSetBool(pf, "profileSensitive", &p.ProfileSensitive)
+			jsonSetBool(pf, "profileVentilation", &p.ProfileVentilation)
+			if p.ProfileEveryday || p.ProfileActive || p.ProfileFamily || p.ProfileSensitive || p.ProfileVentilation {
+				p.TickerProfile = "custom"
+			} else {
+				p.TickerProfile = "none"
 			}
+			if s, ok := jsonString(pf["tickerProfile"]); ok && s != "" {
+				if s == "none" || s == "custom" {
+					p.TickerProfile = config.TickerProfile(s)
+				} else {
+					p.TickerProfile = config.NormalizeTickerProfile(config.TickerProfile(s))
+				}
+			}
+			jsonSetBool(pf, "tickerAlert", &p.TickerAlert)
+			jsonSetBool(pf, "tickerNewsToday", &p.TickerNewsToday)
+			jsonSetBool(pf, "tickerNewsPrecip", &p.TickerNewsPrecip)
+			jsonSetBool(pf, "tickerNewsTomorrow", &p.TickerNewsTomorrow)
+			jsonSetBool(pf, "tickerWeatherTips", &p.TickerWeatherTips)
+			jsonSetBool(pf, "tickerAQI", &p.TickerAQI)
+			jsonSetBool(pf, "tickerPM25", &p.TickerPM25)
+			jsonSetBool(pf, "tickerPM10", &p.TickerPM10)
+			jsonSetBool(pf, "tickerO3", &p.TickerO3)
+			jsonSetBool(pf, "tickerNO2", &p.TickerNO2)
+			jsonSetBool(pf, "tickerSO2", &p.TickerSO2)
+			jsonSetBool(pf, "tickerCO", &p.TickerCO)
+			jsonSetBool(pf, "tickerNO", &p.TickerNO)
+			jsonSetBool(pf, "tickerNH3", &p.TickerNH3)
 			out.PollutionFields = p
 		}
 	}

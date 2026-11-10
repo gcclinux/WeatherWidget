@@ -121,6 +121,9 @@ extern void setCardMetricNames(uintptr_t card,
     const char *humid, const char *wind, const char *windGust,
     const char *dewPt, const char *pressure, const char *uvIndex, const char *aqi);
 
+// setCardMetricTile updates a specific dynamic metric tile (0..5) on a card.
+extern void setCardMetricTile(uintptr_t card, int index, const char *emoji, const char *name, const char *value, int visible);
+
 // updateCardPollutant updates one of the eight individual pollutant labels.
 // slot: 0=CO 1=NO 2=NO2 3=O3 4=SO2 5=NH3 6=PM2.5 7=PM10.  "" to hide.
 extern void updateCardPollutant(uintptr_t card, int slot, const char *iconPath, const char *value);
@@ -132,6 +135,9 @@ extern void updateCardTicker(uintptr_t card, const char *itemsJSON);
 // setCardFieldVisibility shows/hides individual card sub-elements.
 // Field bits — use the DisplayField* constants below.
 extern void setCardFieldVisibility(uintptr_t card, unsigned int fieldMask);
+
+// setCardNoBackground toggles card background visibility (1 = transparent / content only).
+extern void setCardNoBackground(uintptr_t card, int noBg);
 
 // setContainerLayout re-stacks cards vertically (enhanced) or side-by-side
 // (simple).  mode: 0=enhanced/vertical, 1=simple/horizontal.
@@ -345,6 +351,20 @@ func nativeSetCardMetricNames(card uintptr, humid, wind, windGust, dewPt, pressu
 	C.setCardMetricNames(C.uintptr_t(card), cH, cW, cG, cD, cP, cU, cA)
 }
 
+func nativeSetCardMetricTile(card uintptr, index int, emoji, name, value string, visible bool) {
+	cE := C.CString(emoji)
+	cN := C.CString(name)
+	cV := C.CString(value)
+	defer C.free(unsafe.Pointer(cE))
+	defer C.free(unsafe.Pointer(cN))
+	defer C.free(unsafe.Pointer(cV))
+	vis := C.int(0)
+	if visible {
+		vis = 1
+	}
+	C.setCardMetricTile(C.uintptr_t(card), C.int(index), cE, cN, cV, vis)
+}
+
 func nativeUpdateCardPollutant(card uintptr, slot int, iconPath, value string) {
 	ci := C.CString(iconPath)
 	cv := C.CString(value)
@@ -383,6 +403,14 @@ const (
 
 func nativeSetCardFieldVisibility(card uintptr, mask uint32) {
 	C.setCardFieldVisibility(C.uintptr_t(card), C.uint(mask))
+}
+
+func nativeSetCardNoBackground(card uintptr, noBg bool) {
+	var n C.int
+	if noBg {
+		n = 1
+	}
+	C.setCardNoBackground(C.uintptr_t(card), n)
 }
 
 func nativeSetContainerLayout(container uintptr, simpleMode bool, cardCount int) {

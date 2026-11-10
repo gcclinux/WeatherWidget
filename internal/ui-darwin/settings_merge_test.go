@@ -114,3 +114,135 @@ func TestMergeSettingsJSON_DoesNotMutateBase(t *testing.T) {
 		t.Errorf("base config was mutated by mergeSettingsJSON")
 	}
 }
+
+// TestMergeSettingsJSON_ProfilesAndTickerFields verifies the 3 weather profiles,
+// extended display fields, health profile flags, news feed flags, and per-pollutant
+// ticker flags are merged properly.
+func TestMergeSettingsJSON_ProfilesAndTickerFields(t *testing.T) {
+	base := config.DefaultConfig()
+
+	payload := `{
+		"displayFields": {
+			"gridMode": "today",
+			"showSunrise": 1,
+			"showSunset": 1,
+			"showClouds": 0,
+			"showVisibility": 1,
+			"showPrecipRate": 1
+		},
+		"pollutionFields": {
+			"showTicker": 1,
+			"profileEveryday": 1,
+			"profileActive": 1,
+			"profileFamily": 0,
+			"profileSensitive": 1,
+			"profileVentilation": 0,
+			"tickerProfile": "custom",
+			"tickerAlert": 1,
+			"tickerNewsToday": 1,
+			"tickerNewsPrecip": 0,
+			"tickerNewsTomorrow": 1,
+			"tickerWeatherTips": 1,
+			"tickerAQI": 1,
+			"tickerPM25": 1,
+			"tickerPM10": 0,
+			"tickerO3": 1,
+			"tickerNO2": 1,
+			"tickerSO2": 0,
+			"tickerCO": 0,
+			"tickerNO": 1,
+			"tickerNH3": 1
+		}
+	}`
+
+	out, err := mergeSettingsJSON(base, []byte(payload))
+	if err != nil {
+		t.Fatalf("mergeSettingsJSON returned error: %v", err)
+	}
+
+	df := out.GetDisplayFields()
+	if df.GridMode != "today" {
+		t.Errorf("gridMode = %q, want today", df.GridMode)
+	}
+	if !df.ShowSunrise || !df.ShowSunset || df.ShowClouds || !df.ShowVisibility || !df.ShowPrecipRate {
+		t.Errorf("displayFields extended flags mismatch: sunrise=%v sunset=%v clouds=%v visibility=%v precipRate=%v",
+			df.ShowSunrise, df.ShowSunset, df.ShowClouds, df.ShowVisibility, df.ShowPrecipRate)
+	}
+
+	pf := out.GetPollutionFields()
+	if !pf.ShowTicker {
+		t.Errorf("showTicker = false, want true")
+	}
+	if !pf.ProfileEveryday || !pf.ProfileActive || pf.ProfileFamily || !pf.ProfileSensitive || pf.ProfileVentilation {
+		t.Errorf("health profiles mismatch: everyday=%v active=%v family=%v sensitive=%v ventilation=%v",
+			pf.ProfileEveryday, pf.ProfileActive, pf.ProfileFamily, pf.ProfileSensitive, pf.ProfileVentilation)
+	}
+	if pf.TickerProfile != "custom" {
+		t.Errorf("tickerProfile = %q, want custom", pf.TickerProfile)
+	}
+	profs := pf.SelectedProfiles()
+	if len(profs) != 3 {
+		t.Fatalf("SelectedProfiles length = %d, want 3", len(profs))
+	}
+	if !pf.TickerAlert || !pf.TickerNewsToday || pf.TickerNewsPrecip || !pf.TickerNewsTomorrow || !pf.TickerWeatherTips {
+		t.Errorf("feed flags mismatch: alert=%v today=%v precip=%v tomorrow=%v tips=%v",
+			pf.TickerAlert, pf.TickerNewsToday, pf.TickerNewsPrecip, pf.TickerNewsTomorrow, pf.TickerWeatherTips)
+	}
+	if !pf.TickerAQI || !pf.TickerPM25 || pf.TickerPM10 || !pf.TickerO3 || !pf.TickerNO2 || pf.TickerSO2 || pf.TickerCO || !pf.TickerNO || !pf.TickerNH3 {
+		t.Errorf("ticker pollutants mismatch: aqi=%v pm25=%v pm10=%v o3=%v no2=%v so2=%v co=%v no=%v nh3=%v",
+			pf.TickerAQI, pf.TickerPM25, pf.TickerPM10, pf.TickerO3, pf.TickerNO2, pf.TickerSO2, pf.TickerCO, pf.TickerNO, pf.TickerNH3)
+	}
+}
+
+// TestMergeSettingsJSON_NoBackgroundAndCornerPosition verifies noBackground
+// toggle, cornerPosition selection, and custom coordinates clearing.
+func TestMergeSettingsJSON_NoBackgroundAndCornerPosition(t *testing.T) {
+	base := config.DefaultConfig()
+	x, y := 120, 340
+	base.CustomX = &x
+	base.CustomY = &y
+	base.NoBackground = false
+	base.CornerPosition = "top-right"
+
+	// 1. Setting cornerPosition and clearing custom coordinates with nulls
+	payload1 := `{
+		"noBackground": 1,
+		"cornerPosition": "bottom-left",
+		"customX": null,
+		"customY": null
+	}`
+	out1, err := mergeSettingsJSON(base, []byte(payload1))
+	if err != nil {
+		t.Fatalf("mergeSettingsJSON returned error: %v", err)
+	}
+	if !out1.NoBackground {
+		t.Errorf("noBackground = false, want true")
+	}
+	if out1.CornerPosition != "bottom-left" {
+		t.Errorf("cornerPosition = %q, want bottom-left", out1.CornerPosition)
+	}
+	if out1.CustomX != nil || out1.CustomY != nil {
+		t.Errorf("customX/Y = (%v, %v), want nil after corner selection", out1.CustomX, out1.CustomY)
+	}
+
+	// 2. Setting custom coordinates overrides corner placement
+	payload2 := `{
+		"noBackground": 0,
+		"cornerPosition": "top-left",
+		"customX": 450,
+		"customY": 250
+	}`
+	out2, err := mergeSettingsJSON(base, []byte(payload2))
+	if err != nil {
+		t.Fatalf("mergeSettingsJSON returned error: %v", err)
+	}
+	if out2.NoBackground {
+		t.Errorf("noBackground = true, want false")
+	}
+	if out2.CornerPosition != "top-left" {
+		t.Errorf("cornerPosition = %q, want top-left", out2.CornerPosition)
+	}
+	if out2.CustomX == nil || *out2.CustomX != 450 || out2.CustomY == nil || *out2.CustomY != 250 {
+		t.Errorf("custom coordinates mismatch: got (%v, %v), want (450, 250)", out2.CustomX, out2.CustomY)
+	}
+}

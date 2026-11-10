@@ -20,6 +20,7 @@ import (
 	"sync"
 	"time"
 
+	"weatherwidget/internal/tzlookup"
 	"weatherwidget/internal/weather/remoteapi"
 )
 
@@ -135,12 +136,16 @@ func settingsSearchCityCB(provider *C.char, apiKey *C.char, name *C.char, region
 		}
 		out.Error = err.Error()
 	} else {
+		tz := city.Timezone
+		if tz == "" && (city.Latitude != 0 || city.Longitude != 0) {
+			tz = tzlookup.Lookup(city.Latitude, city.Longitude)
+		}
 		out = searchResult{
 			Name:      city.Name,
 			Region:    city.Region,
 			Latitude:  city.Latitude,
 			Longitude: city.Longitude,
-			Timezone:  city.Timezone,
+			Timezone:  tz,
 		}
 	}
 	b, _ := json.Marshal(out)
