@@ -24,12 +24,13 @@ func main() {
 	flag.Parse()
 
 	appDataDir := appDataDirectory()
-	if err := os.MkdirAll(appDataDir, 0o755); err != nil {
+	widgetDir := filepath.Join(appDataDir, "WeatherWidget")
+	if err := os.MkdirAll(widgetDir, 0o755); err != nil {
 		log.Printf("failed to create app data directory: %v", err)
 	}
 
 	if *debugFlag {
-		logPath := filepath.Join(appDataDir, "debug-darwin.log")
+		logPath := filepath.Join(widgetDir, "debug-darwin.log")
 		f, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o666)
 		if err == nil {
 			log.SetOutput(f)

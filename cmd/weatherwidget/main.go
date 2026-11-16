@@ -44,16 +44,3 @@ func main() {
 		log.Fatalf("failed to start WeatherWidget: %v", err)
 	}
 }
-
-// appDataDirectory returns the base directory for application data.
-// On Windows os.UserConfigDir resolves to %AppData%, falling back to the
-// user home directory (then the current directory) if unavailable.
-func appDataDirectory() string {
-	if dir, err := os.UserConfigDir(); err == nil {
-		return dir
-	}
-	if home, err := os.UserHomeDir(); err == nil {
-		return home
-	}
-	return "."
-}

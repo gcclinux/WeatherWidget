@@ -4,22 +4,17 @@ package main
 
 import (
 	"os"
-	"path/filepath"
-	"runtime"
 )
 
-// appDataDirectory returns the application data directory path.
-// On Windows: %APPDATA%\WeatherWidget
-// On all other platforms: ~/.config/WeatherWidget
+// appDataDirectory returns the base directory for application data.
+// On Windows os.UserConfigDir resolves to %AppData%, on macOS to ~/Library/Application Support,
+// and on Linux to $XDG_CONFIG_HOME or ~/.config.
 func appDataDirectory() string {
-	if runtime.GOOS == "windows" {
-		if dir := os.Getenv("APPDATA"); dir != "" {
-			return filepath.Join(dir, "WeatherWidget")
-		}
+	if dir, err := os.UserConfigDir(); err == nil {
+		return dir
 	}
-	home, err := os.UserHomeDir()
-	if err != nil {
-		home = "."
+	if home, err := os.UserHomeDir(); err == nil {
+		return home
 	}
-	return filepath.Join(home, ".config", "WeatherWidget")
+	return "."
 }
