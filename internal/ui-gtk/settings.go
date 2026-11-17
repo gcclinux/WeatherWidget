@@ -334,10 +334,15 @@ func buildProviderTab(m *manager, parent *gtk.Dialog, getCities func() []config.
 	apiKeyRow, _ := gtk.BoxNew(gtk.ORIENTATION_HORIZONTAL, 6)
 	apiKeyEntry, _ := gtk.EntryNew()
 	apiKeyEntry.SetPlaceholderText(m.t("settings.provider.apiKeyPlaceholder"))
+	apiKeyEntry.SetVisibility(false)
 	if m.cfg.APIConfig != nil {
 		apiKeyEntry.SetText(m.cfg.APIConfig.APIKey)
 	}
 	apiKeyRow.PackStart(apiKeyEntry, true, true, 0)
+
+	toggleKeyBtn, _ := gtk.ButtonNewFromIconName("view-reveal-symbolic", gtk.ICON_SIZE_BUTTON)
+	toggleKeyBtn.SetTooltipText("Show API Key")
+	apiKeyRow.PackStart(toggleKeyBtn, false, false, 0)
 
 	checkConnBtn, _ := gtk.ButtonNewWithLabel(m.t("settings.provider.checkConnection"))
 	apiKeyRow.PackStart(checkConnBtn, false, false, 0)
@@ -398,9 +403,44 @@ func buildProviderTab(m *manager, parent *gtk.Dialog, getCities func() []config.
 	activationBox.PackStart(activationMsgLabel, false, false, 0)
 	activationFrame.Add(activationBox)
 
+	activationKey := ""
+	activationShown := false
+	updateActivationKey := func() {
+		key := activationKey
+		if !apiKeyEntry.GetVisibility() {
+			key = strings.Map(func(char rune) rune {
+				if char == '-' {
+					return char
+				}
+				return '•'
+			}, key)
+		}
+		activationKeyLabel.SetMarkup(fmt.Sprintf("<tt>%s</tt>", glib.MarkupEscapeText(key)))
+	}
+	toggleKeyBtn.Connect("clicked", func() {
+		visible := !apiKeyEntry.GetVisibility()
+		apiKeyEntry.SetVisibility(visible)
+		icon, tooltip := "view-reveal-symbolic", "Show API Key"
+		if visible {
+			icon, tooltip = "view-conceal-symbolic", "Hide API Key"
+		}
+		image, _ := gtk.ImageNewFromIconName(icon, gtk.ICON_SIZE_BUTTON)
+		toggleKeyBtn.SetImage(image)
+		toggleKeyBtn.SetTooltipText(tooltip)
+		updateActivationKey()
+	})
+	apiKeyEntry.Connect("changed", func() {
+		if activationShown {
+			activationKey, _ = apiKeyEntry.GetText()
+			updateActivationKey()
+		}
+	})
+
 	showActivationCard := func(key string) {
 		activationFrame.SetLabel(m.t("settings.provider.apiKeyActivation.title"))
-		activationKeyLabel.SetMarkup(fmt.Sprintf("<tt>%s</tt>", glib.MarkupEscapeText(key)))
+		activationKey = key
+		activationShown = true
+		updateActivationKey()
 		activationMsgLabel.SetText(m.t("settings.provider.apiKeyActivation.message"))
 		activationFrame.ShowAll()
 	}

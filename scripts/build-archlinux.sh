@@ -67,8 +67,9 @@ run_makepkg() {
         echo "    ERROR: no .pkg.tar.zst produced by makepkg."
         exit 1
     fi
-    cp "$PKG_DIR/$built_pkg" "$BUILD_DIR/$built_pkg"
-    echo "    Created: $BUILD_DIR/$built_pkg"
+    local output_pkg="weatherwidget-archlinux-${built_pkg#weatherwidget-}"
+    cp "$PKG_DIR/$built_pkg" "$BUILD_DIR/$output_pkg"
+    echo "    Created: $BUILD_DIR/$output_pkg"
 }
 
 main() {
