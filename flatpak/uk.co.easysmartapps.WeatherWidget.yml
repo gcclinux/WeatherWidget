@@ -16,7 +16,7 @@
 #
 # Local test build (from the flatpak/ directory):
 #   flatpak install -y flathub org.gnome.Platform//51 org.gnome.Sdk//51 \
-#       org.freedesktop.Sdk.Extension.golang//25.08
+#       org.freedesktop.Sdk.Extension.golang//26.08
 #   flatpak-builder --user --install --force-clean build-dir \
 #       uk.co.easysmartapps.WeatherWidget.yml
 #   flatpak run uk.co.easysmartapps.WeatherWidget
