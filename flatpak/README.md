@@ -179,13 +179,13 @@ Full official guide: <https://docs.flathub.org/docs/for-app-authors/submission>
        sources:
          - type: git
            url: https://github.com/gcclinux/WeatherWidget.git
-           tag: v2.0.3
+           tag: v2.3.0
            commit: <full-40-char-commit-sha-of-that-tag>
          - go.mod.yml
    ```
 
    Flathub requires a stable, pinned source (tag + commit). Make sure a
-   matching `v2.0.3` tag exists on GitHub.
+   matching `v2.3.0` tag exists on GitHub.
 
 5. **Commit and push** to your branch, then open a **pull request against
    `flathub/flathub`**. The Flathub build bot will build your PR and post

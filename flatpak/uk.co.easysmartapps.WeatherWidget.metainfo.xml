@@ -41,9 +41,9 @@
       <li>Dew point, pressure, UV index, pollution and Air Quality Index, Feels Like</li>
       <li>Adjustable background transparency (25% / 50% / 75% / 100%)</li>
       <li>Snap to any screen corner or drag to a custom position</li>
-      <li>Multi-monitor support &amp; 12 languages supported</li>
       <li>Celsius or Fahrenheit, plus km/h, mph or knots for wind</li>
       <li>Air Quality News, Definition and Profiles ticker</li>
+      <li>Ticker for weather news, forecast and warnings!</li>
       <li>AQI: graded context: Good, Fair, Moderate, and beyond, PM2.5, PM10, NO₂, Ozone, CO</li>
     </ul>
   </description>
@@ -87,6 +87,17 @@
   <content_rating type="oars-1.1" />
 
   <releases>
+    <release version="2.3.0" date="2026-11-22">
+      <description>
+        <p>Improved: Centralized City Search in RemoteAPIAdapter.SearchCity for ui-windows, ui-darwin, ui-gtk.</p>
+        <p>Fix: Incorrect time zone: Implemented nearby-zone fallback: added internal/tzlookup. Lookup first tries the exact coordinates. If that returns nothing, it probes rings of 16 points at growing radii (0.02° up to 0.5°) and returns the most common zone from the first ring that finds one.</p>
+        <p>Improvement: Brand-New Native Windows UI: Rebuilt from the ground up to integrate cleanly with modern Windows aesthetics, typography, and window management. (Windows)</p>
+        <p>Feature: Created 3 Weather profiles to be selected in Data Settings - Real-Time Weather, Today's Forecast, Tomorrow's Forecast</p>
+        <p>Feature: Created Ticker Settings Health Profiles, Weather News &amp; Alert Feed, Air Quality &amp; Pollution definitions for Ticker messages</p>
+        <p>Feature: Added Free 3 selected cities (London, New York &amp; Amsterdam) with full feature access in new design</p>
+        <p>Feature: About TAB now contains useful links to user manual, environmental policy, support page as well as Github repo page.</p>
+      </description>
+    </release>
       <release version="2.2.0" date="2026-11-04">
       <description>
           <p>Linux Snap package autostart permanant fix</p>
