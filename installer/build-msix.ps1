@@ -188,7 +188,7 @@ try {
         Set-CompilerForHost
 
         $ldflags = "-H windowsgui -s -w -X main.version=$Version"
-        go build -ldflags="$ldflags" -o "$BuildDir\weatherwidget.exe" .\cmd\weatherwidget\
+        go build -tags timetzdata -ldflags="$ldflags" -o "$BuildDir\weatherwidget.exe" .\cmd\weatherwidget\
         if ($LASTEXITCODE -ne 0) { throw "Go build failed" }
         Write-Host "       Done. Output: $BuildDir\weatherwidget.exe ($HostArch)" -ForegroundColor Green
     }

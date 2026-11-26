@@ -5,6 +5,7 @@ import (
 	"math"
 	"strings"
 	"time"
+	_ "time/tzdata"
 
 	"weatherwidget/internal/config"
 	"weatherwidget/internal/i18n"

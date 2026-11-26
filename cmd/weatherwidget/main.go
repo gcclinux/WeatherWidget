@@ -10,6 +10,9 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	// Windows lacks an OS-level IANA timezone database, so embed Go's tzdata
+	// so time.LoadLocation resolves city timezones on PCs without Go installed.
+	_ "time/tzdata"
 
 	uiwindows "weatherwidget/internal/ui-windows"
 )

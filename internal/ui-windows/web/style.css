@@ -573,6 +573,10 @@ input, textarea { user-select: text; }
   font-family: Consolas, 'Cascadia Mono', monospace;
 }
 
+.api-key-input.masked {
+  -webkit-text-security: disc;
+}
+
 .btn-toggle-key {
   display: inline-flex;
   align-items: center;

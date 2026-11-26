@@ -1,6 +1,10 @@
 package weather
 
 import (
+	"go/parser"
+	"go/token"
+	"path/filepath"
+	"strconv"
 	"testing"
 	"time"
 
@@ -367,5 +371,45 @@ func TestFormatHumidityWind(t *testing.T) {
 		if got != tc.expected {
 			t.Errorf("FormatHumidityWind(%d, %f, %q) = %q, want %q", tc.humidity, tc.windSpeed, tc.unit, got, tc.expected)
 		}
+	}
+}
+
+func TestFormatTime_EuropeAmsterdam_CETAndCEST(t *testing.T) {
+	t.Setenv("GOROOT", "/nonexistent-goroot")
+	t.Setenv("ZONEINFO", "")
+
+	// Winter (CET, UTC+1)
+	winterUTC := time.Date(2026, 11, 26, 9, 41, 8, 0, time.UTC)
+	if got := FormatTime(winterUTC, "Europe/Amsterdam", nil); got != "10:41:08" {
+		t.Errorf("FormatTime(winterUTC, Europe/Amsterdam) = %q, want %q", got, "10:41:08")
+	}
+
+	// Summer (CEST, UTC+2)
+	summerUTC := time.Date(2026, 7, 15, 9, 41, 8, 0, time.UTC)
+	if got := FormatTime(summerUTC, "Europe/Amsterdam", nil); got != "11:41:08" {
+		t.Errorf("FormatTime(summerUTC, Europe/Amsterdam) = %q, want %q", got, "11:41:08")
+	}
+}
+
+func TestWindowsMainImportsTZData(t *testing.T) {
+	mainPath := filepath.Join("..", "..", "cmd", "weatherwidget", "main.go")
+	f, err := parser.ParseFile(token.NewFileSet(), mainPath, nil, parser.ImportsOnly)
+	if err != nil {
+		t.Fatalf("failed to parse %s: %v", mainPath, err)
+	}
+
+	found := false
+	for _, imp := range f.Imports {
+		path, err := strconv.Unquote(imp.Path.Value)
+		if err != nil {
+			continue
+		}
+		if path == "time/tzdata" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("%s must import \"time/tzdata\" so Windows builds include embedded IANA timezone data", mainPath)
 	}
 }

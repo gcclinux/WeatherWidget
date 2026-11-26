@@ -324,6 +324,7 @@ function populateUI(cfg) {
   el('sel-provider').value = cfg.apiConfig?.provider || 'easyweatherwidget';
   el('input-api-key').value = cfg.apiConfig?.apiKey || '';
   el('sel-refresh-interval').value = cfg.refreshInterval;
+  clearTestResult();
   updateActivationCard();
   updateDemoBanner();
   updatePollutionControls();
@@ -414,6 +415,12 @@ el('btn-search-city').addEventListener('click', async () => {
 function updateOpacityHint() { el('opacity-hint').textContent = `${t('settings.transparency.title')} (${el('slider-opacity').value}%)`; }
 el('slider-opacity').addEventListener('input', updateOpacityHint);
 
+let testConnectionGeneration = 0;
+function clearTestResult() {
+  testConnectionGeneration++;
+  el('test-result').textContent = '';
+}
+
 let apiKeyVisible = false;
 function maskApiKey(key) {
   if (!key) return '';
@@ -435,21 +442,30 @@ function updateActivationCard() {
 }
 el('btn-toggle-api-key').addEventListener('click', () => {
   apiKeyVisible = !apiKeyVisible;
-  el('input-api-key').type = apiKeyVisible ? 'text' : 'password';
+  el('input-api-key').classList.toggle('masked', !apiKeyVisible);
   el('btn-toggle-api-key').setAttribute('aria-pressed', String(apiKeyVisible));
   el('icon-key-show').hidden = apiKeyVisible;
   el('icon-key-hide').hidden = !apiKeyVisible;
   updateActivationCard();
 });
-el('input-api-key').addEventListener('input', updateActivationCard);
-el('sel-provider').addEventListener('change', updateActivationCard);
+el('input-api-key').addEventListener('input', () => {
+  clearTestResult();
+  updateActivationCard();
+});
+el('input-api-key').addEventListener('change', clearTestResult);
+el('sel-provider').addEventListener('change', () => {
+  clearTestResult();
+  updateActivationCard();
+});
 
 el('link-get-pro-api').addEventListener('click', async e => {
   e.preventDefault();
+  clearTestResult();
   try {
     const clientRef = await window.goGetProAPI(el('input-api-key').value.trim());
     el('sel-provider').value = 'easyweatherwidget';
     el('input-api-key').value = clientRef;
+    clearTestResult();
     if (currentConfig) {
       currentConfig.apiConfig = {...currentConfig.apiConfig, provider: 'easyweatherwidget', apiKey: clientRef};
       currentConfig.dataSource = 'remote_api';
@@ -636,13 +652,18 @@ el('btn-cancel').addEventListener('click', async () => {
   }
 });
 el('btn-test-connection').addEventListener('click', async () => {
+  const gen = ++testConnectionGeneration;
   const result = el('test-result');
   result.textContent = t('settings.provider.checkingConnection');
   try {
     await window.goTestConnection(JSON.stringify(collectConfigFromUI()));
-    result.textContent = t('settings.provider.connectionSuccessTitle');
+    if (gen === testConnectionGeneration) {
+      result.textContent = t('settings.provider.connectionSuccessTitle');
+    }
   } catch (err) {
-    result.textContent = format('error.settings.connectionFailed', err);
+    if (gen === testConnectionGeneration) {
+      result.textContent = format('error.settings.connectionFailed', err);
+    }
   }
 });
 el('chk-autostart').addEventListener('change', async e => {

@@ -37,6 +37,18 @@ func TestBuildBundledHTML(t *testing.T) {
 	if !strings.Contains(html, expectedVerSnippet) {
 		t.Errorf("expected bundled HTML to contain %q, but got:\n%s", expectedVerSnippet, html)
 	}
+	if strings.Contains(html, `type="password"`) {
+		t.Error("expected no type=\"password\" input in bundled HTML so Edge WebView2 does not autofill API keys")
+	}
+	if !strings.Contains(html, `autocomplete="off"`) {
+		t.Error("expected autocomplete=\"off\" on API key input in bundled HTML")
+	}
+	if !strings.Contains(html, "-webkit-text-security: disc") {
+		t.Error("expected CSS masking rule -webkit-text-security: disc in bundled HTML")
+	}
+	if !strings.Contains(html, "clearTestResult") {
+		t.Error("expected clearTestResult helper in bundled HTML")
+	}
 }
 
 func TestSettingsTranslationsAndFlagsExistForEveryLocale(t *testing.T) {

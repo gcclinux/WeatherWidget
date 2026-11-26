@@ -130,7 +130,7 @@ function Invoke-ArchBuild {
     Write-Host "Building $OutputName v$Version ($TargetArch)..." -ForegroundColor Cyan
     Set-CompilerForArch -TargetArch $TargetArch
 
-    go build -ldflags="$LdFlags" -o $outPath $CmdPath
+    go build -tags timetzdata -ldflags="$LdFlags" -o $outPath $CmdPath
     if ($LASTEXITCODE -eq 0) {
         Write-Host "Build successful: $outPath (v$Version, $TargetArch)" -ForegroundColor Green
     }
