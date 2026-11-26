@@ -106,7 +106,7 @@ func NewRemoteAPIAdapter(provider, apiKey string) *RemoteAPIAdapter {
 // SearchCity looks up city metadata (canonical name, region/country, coordinates,
 // and offline IANA timezone) using the configured remote provider.
 func (r *RemoteAPIAdapter) SearchCity(ctx context.Context, name, region string) (config.CityConfig, error) {
-	name, region = strings.TrimSpace(name), strings.TrimSpace(region)
+	name, region = normalizeSearchLocation(name, region)
 	key := strings.TrimSpace(r.apiKey)
 
 	var endpoint string
