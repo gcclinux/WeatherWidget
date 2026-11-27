@@ -1,6 +1,6 @@
-### Version 2.3.5 fixes and features
+### Version 2.3.5 fixes and features for end of 2026
 
-#### FIXES
+#### IMPROVEMENTS
 - Linux - Settings --> Locations --> Viewing all 5 cities has scrollbar should be always visable in space available
 - All - Data Settings --> Weather Metrics --> Sunset, Sunrise, Cloud Coverage, Visibility, Precipitation not used or visable in ClassicView
 - Windows - Settings --> Locations --> order cities up or down to display in different order
@@ -11,10 +11,14 @@
 - MacOS - Settings --> TABs borders are overlaping when selected
 
 #### FEATURES
-- All - Settings --> Locations --> Geo poistion identification (Not won't be accurate over Public VPN)
+- All - Settings --> Locations --> Geo poistion identification (won't be accurate over Public VPN)
 
 #### IDEAS
 - All - Settings --> About --> Adding Share button with screenshot & link for social media sites
-- All - Use my data
+- All - Use my own sensors via WeatherGateway
   - weather-gateway data ingest via API
   - WeatherWidget check if uploaded data is availbel & valid and use the uploaded data and fill the gap with shared data
+
+Any additifixes, improvements, features or ideas please use the contact form bellow, Thank you for helping making WeatherWidget better!
+
+[Propose IproImprovements or New Features](https://easysmartapps.co.uk/contact)
