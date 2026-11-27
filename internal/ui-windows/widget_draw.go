@@ -4,7 +4,6 @@ package uiwindows
 
 import (
 	"bytes"
-	"fmt"
 	"image"
 	"image/color"
 	"image/draw"
@@ -33,12 +32,18 @@ type WidgetDrawer struct {
 	mu sync.Mutex
 
 	// Cached font families
-	regularFont   *opentype.Font
-	boldFont      *opentype.Font
-	fallbackFonts []*opentype.Font
+	regularFont *opentype.Font
+	boldFont    *opentype.Font
+	// fallbackFonts are loaded lazily, in lookup order: Droid Sans Fallback
+	// (CJK), Noto Sans Tamil, Segoe UI Symbol.
+	fallbackFonts []*lazyFont
 
-	// Cached font faces key: "bold/regular:size"
-	faceCache map[string]font.Face
+	// Cached font faces by weight and size
+	faceCache map[faceKey]font.Face
+
+	// frame is the reused Render output buffer, shared by both views. The image
+	// returned by Render is only valid until the next Render call.
+	frame *image.RGBA
 
 	// Cached decoded icons key: path
 	iconCache       map[string]image.Image
@@ -60,7 +65,7 @@ func (wd *WidgetDrawer) Animating() bool {
 // NewWidgetDrawer creates and initializes the card drawer.
 func NewWidgetDrawer() *WidgetDrawer {
 	wd := &WidgetDrawer{
-		faceCache:       make(map[string]font.Face),
+		faceCache:       make(map[faceKey]font.Face),
 		iconCache:       make(map[string]image.Image),
 		animations:      make(map[string]*nativeAnimation),
 		backgroundCache: make(map[string]*image.RGBA),
@@ -82,28 +87,28 @@ func NewWidgetDrawer() *WidgetDrawer {
 		}
 	}
 	for _, path := range []string{"fonts/droidsansfallback.ttf", "fonts/notosanstamil.ttf"} {
-		data, err := assets.Fonts.ReadFile(path)
-		if err == nil {
-			var f *opentype.Font
-			f, err = opentype.Parse(data)
-			if err == nil {
-				wd.fallbackFonts = append(wd.fallbackFonts, f)
-			}
-		}
-		if err != nil {
-			log.Printf("uiwindows: failed to load font %s: %v", path, err)
-		}
+		path := path
+		wd.fallbackFonts = append(wd.fallbackFonts, &lazyFont{name: path, load: embeddedFont(path)})
 	}
 	// Segoe UI Symbol supplies glyphs such as ✓ and ⚠ used by ticker messages.
 	if dir := os.Getenv("WINDIR"); dir != "" {
-		if data, err := os.ReadFile(filepath.Join(dir, "Fonts", "seguisym.ttf")); err == nil {
-			if f, err := opentype.Parse(data); err == nil {
-				wd.fallbackFonts = append(wd.fallbackFonts, f)
+		path := filepath.Join(dir, "Fonts", "seguisym.ttf")
+		wd.fallbackFonts = append(wd.fallbackFonts, &lazyFont{name: path, quiet: true, load: func() (*opentype.Font, error) {
+			data, err := os.ReadFile(path)
+			if err != nil {
+				return nil, err
 			}
-		}
+			return opentype.Parse(data)
+		}})
 	}
 
 	return wd
+}
+
+// faceKey identifies a cached font face; size10 is the size in tenths of a point.
+type faceKey struct {
+	bold   bool
+	size10 int
 }
 
 // getFace returns a cached font face for the requested weight and point size.
@@ -111,7 +116,7 @@ func (wd *WidgetDrawer) getFace(bold bool, size float64) font.Face {
 	wd.mu.Lock()
 	defer wd.mu.Unlock()
 
-	key := fmt.Sprintf("%v:%.1f", bold, size)
+	key := faceKey{bold: bold, size10: int(math.Round(size * 10))}
 	if f, ok := wd.faceCache[key]; ok {
 		return f
 	}
@@ -137,18 +142,7 @@ func (wd *WidgetDrawer) getFace(bold bool, size float64) font.Face {
 		return nil
 	}
 
-	composite := &fallbackFace{fonts: []*opentype.Font{f}, faces: []font.Face{face}}
-	for _, fallback := range wd.fallbackFonts {
-		fallbackFace, err := opentype.NewFace(fallback, &opentype.FaceOptions{
-			Size: size, DPI: 72, Hinting: font.HintingFull,
-		})
-		if err != nil {
-			log.Printf("uiwindows: failed to create fallback font face size %.1f: %v", size, err)
-			continue
-		}
-		composite.fonts = append(composite.fonts, fallback)
-		composite.faces = append(composite.faces, fallbackFace)
-	}
+	composite := &fallbackFace{fonts: []*opentype.Font{f}, faces: []font.Face{face}, lazy: wd.fallbackFonts, size: size}
 	wd.faceCache[key] = composite
 	return composite
 }
@@ -187,6 +181,19 @@ func (wd *WidgetDrawer) loadIcon(path string) image.Image {
 	return rgba
 }
 
+// frameBuffer returns the reused render buffer sized w x h and zeroed. It is
+// reallocated only when the dimensions change, so the previous frame is
+// overwritten: callers must not keep the image across Render calls. Render
+// calls are serialized by the caller (Manager.redrawMu).
+func (wd *WidgetDrawer) frameBuffer(w, h int) *image.RGBA {
+	if wd.frame == nil || wd.frame.Rect.Dx() != w || wd.frame.Rect.Dy() != h {
+		wd.frame = image.NewRGBA(image.Rect(0, 0, w, h))
+		return wd.frame
+	}
+	clear(wd.frame.Pix)
+	return wd.frame
+}
+
 // Render draws all city cards and returns a 32-bit ARGB image ready for UpdateLayeredWindow.
 func (wd *WidgetDrawer) Render(
 	cities []config.CityConfig,
@@ -217,12 +224,35 @@ func drawText(dst *image.RGBA, text string, x, y int, face font.Face, c color.RG
 	}
 	d := font.Drawer{
 		Dst:  dst,
-		Src:  image.NewUniform(color.NRGBA{R: c.R, G: c.G, B: c.B, A: c.A}),
+		Src:  uniformColor(c),
 		Face: face,
 		Dot:  fixed.P(x, y),
 	}
 	d.DrawString(text)
 }
+
+// uniformColor returns a shared read-only uniform source for c. The cache is
+// cleared if it grows past maxUniforms (few distinct colors in practice).
+func uniformColor(c color.RGBA) *image.Uniform {
+	uniformMu.Lock()
+	defer uniformMu.Unlock()
+	if u, ok := uniformCache[c]; ok {
+		return u
+	}
+	if len(uniformCache) >= maxUniforms {
+		clear(uniformCache)
+	}
+	u := image.NewUniform(color.NRGBA{R: c.R, G: c.G, B: c.B, A: c.A})
+	uniformCache[c] = u
+	return u
+}
+
+const maxUniforms = 256
+
+var (
+	uniformMu    sync.Mutex
+	uniformCache = make(map[color.RGBA]*image.Uniform)
+)
 
 // measureText measures the pixel width of a string with the given font face.
 func measureText(text string, face font.Face) int {
@@ -340,7 +370,7 @@ func roundedCornerBand(py, minY, maxY, radius int) bool {
 // blended directly.
 func fillRoundedRect(dst *image.RGBA, x, y, w, h, radius int, c color.RGBA) {
 	if radius <= 0 {
-		draw.Draw(dst, image.Rect(x, y, x+w, y+h), image.NewUniform(color.NRGBA{R: c.R, G: c.G, B: c.B, A: c.A}), image.Point{}, draw.Over)
+		draw.Draw(dst, image.Rect(x, y, x+w, y+h), uniformColor(c), image.Point{}, draw.Over)
 		return
 	}
 	rF := float64(radius)

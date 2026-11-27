@@ -87,8 +87,8 @@ func TestNextClockDelay(t *testing.T) {
 	if got := nextClockDelay(false, now); got != 755*time.Millisecond {
 		t.Fatalf("idle delay = %v, want 755ms", got)
 	}
-	if animationFrameInterval != 100*time.Millisecond {
-		t.Fatalf("animation interval = %v, want 100ms (10 fps)", animationFrameInterval)
+	if animationFrameInterval != 33*time.Millisecond {
+		t.Fatalf("animation interval = %v, want 33ms (30 fps)", animationFrameInterval)
 	}
 }
 

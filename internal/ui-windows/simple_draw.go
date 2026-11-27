@@ -330,7 +330,7 @@ func (wd *WidgetDrawer) renderSimpleView(cities []config.CityConfig, results []w
 			width = max(width, measureText(m.Name+": "+m.Value, wd.getFace(false, float64(cfg.GetFontSizeConditions()+2)))+16)
 		}
 	}
-	dst := image.NewRGBA(image.Rect(0, 0, len(cities)*width+(len(cities)-1)*gap, height))
+	dst := wd.frameBuffer(len(cities)*width+(len(cities)-1)*gap, height)
 	for i, city := range cities {
 		var result *weather.WeatherResult
 		if i < len(results) {

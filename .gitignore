@@ -22,6 +22,7 @@ stage/
 overlay/
 *.snap
 .local
+.agents
 weatherwidget-gtk
 
 .craft/

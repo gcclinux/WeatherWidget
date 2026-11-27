@@ -85,6 +85,11 @@ type Manager struct {
 	animWake      chan struct{}
 	lastAnimating bool // guarded by redrawMu
 
+	// Reused per-frame snapshots of cities and results, guarded by redrawMu.
+	// Render does not retain them.
+	redrawCities  []config.CityConfig
+	redrawResults []weather.WeatherResult
+
 	mu sync.Mutex
 }
 
@@ -272,8 +277,8 @@ func (m *Manager) redraw() {
 		m.mu.Unlock()
 		return
 	}
-	cities := make([]config.CityConfig, len(cfg.Cities))
-	copy(cities, cfg.Cities)
+	m.redrawCities = append(m.redrawCities[:0], cfg.Cities...)
+	cities := m.redrawCities
 	cfgCopy := *cfg
 	if m.preview != nil {
 		cfgCopy = *m.preview
@@ -284,8 +289,8 @@ func (m *Manager) redraw() {
 	m.mu.Unlock()
 
 	m.resultsMu.Lock()
-	res := make([]weather.WeatherResult, len(m.results))
-	copy(res, m.results)
+	m.redrawResults = append(m.redrawResults[:0], m.results...)
+	res := m.redrawResults
 	m.resultsMu.Unlock()
 
 	img := m.drawer.Render(cities, res, &cfgCopy, m.lm, time.Now())
@@ -315,10 +320,11 @@ func (m *Manager) redraw() {
 
 // animationFrameInterval is the redraw period while something on the widget is
 // really moving (scrolling pollution ticker or an animated GIF icon).
-// 100 ms = 10 fps. For 5 fps use 200 * time.Millisecond. The ticker scrolls
-// 1 px per 25 ms of wall-clock time, so at 5 fps it jumps about 8 px per frame
-// (about 4 px at 10 fps). GIF frames last 100 ms or more.
-const animationFrameInterval = 100 * time.Millisecond
+// 33 ms = about 30 fps, the original redraw rate, so the ticker scroll looks as
+// it did before. The ticker scrolls 1 px per 25 ms of wall-clock time in whole
+// pixels (about 1 px per frame at 30 fps). When nothing animates the loop
+// redraws once per second instead.
+const animationFrameInterval = 33 * time.Millisecond
 
 // nextClockDelay returns how long the clock loop sleeps before its next redraw.
 // While animating it is animationFrameInterval. Otherwise it is the time to the

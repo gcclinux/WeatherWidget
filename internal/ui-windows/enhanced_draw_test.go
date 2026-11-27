@@ -6,13 +6,19 @@ import (
 	"bytes"
 	"image"
 	"image/color"
+	"os"
+	"strings"
 	"testing"
 	"time"
 	"unsafe"
 
+	"weatherwidget/assets"
 	"weatherwidget/internal/config"
 	"weatherwidget/internal/i18n"
 	"weatherwidget/internal/weather"
+
+	"golang.org/x/image/font"
+	"golang.org/x/image/font/opentype"
 )
 
 func TestEnhancedBackgroundAndTransparency(t *testing.T) {
@@ -28,7 +34,7 @@ func TestEnhancedBackgroundAndTransparency(t *testing.T) {
 	}
 	cfg.NoBackground = false
 	cfg.Opacity = 100
-	day := drawer.Render(cities, nil, cfg, nil, now)
+	day := cloneRGBA(drawer.Render(cities, nil, cfg, nil, now))
 	night := drawer.Render(cities, nil, cfg, nil, now.Add(12*time.Hour))
 	if got := day.RGBAAt(10, 160).A; got != 255 {
 		t.Fatalf("background alpha = %d, want 255", got)
@@ -54,7 +60,7 @@ func TestEnhancedSelectedFieldsAndPollution(t *testing.T) {
 	data := &weather.WeatherData{AQI: &aqi, CO: &value, NO: &value, NO2: &value, O3: &value, SO2: &value, NH3: &value, PM25: &value, PM10: &value}
 	results := []weather.WeatherResult{{Data: data}}
 	now := time.Date(2026, 6, 1, 12, 0, 0, 0, time.UTC)
-	empty := drawer.Render(cities, results, cfg, nil, now)
+	empty := cloneRGBA(drawer.Render(cities, results, cfg, nil, now))
 	if empty.Bounds().Dx() != 550 || empty.Bounds().Dy() != 172 {
 		t.Fatalf("empty card size = %v", empty.Bounds())
 	}
@@ -275,19 +281,140 @@ func TestFallbackFontContainsCJKAndTamil(t *testing.T) {
 	if !ok {
 		t.Fatal("expected a fallback font face")
 	}
+	for _, l := range drawer.fallbackFonts {
+		if l.font != nil {
+			t.Fatalf("fallback font %s loaded before any glyph was missing", l.name)
+		}
+	}
+	if face.faceFor('A') != face.faces[0] {
+		t.Error("ASCII must use the primary face")
+	}
+	for _, l := range drawer.fallbackFonts {
+		if l.font != nil {
+			t.Fatalf("fallback font %s loaded for a primary-font glyph", l.name)
+		}
+	}
 	for _, r := range []rune{'漢', 'あ', 'அ'} {
 		if face.faceFor(r) == face.faces[0] {
 			t.Errorf("no fallback selected for %q", r)
 		}
 		found := false
-		for _, source := range face.fonts[1:] {
-			if glyph, err := source.GlyphIndex(&face.buf, r); err == nil && glyph != 0 {
-				found = true
-				break
+		for _, l := range drawer.fallbackFonts {
+			if source := l.get(); source != nil {
+				if glyph, err := source.GlyphIndex(&face.buf, r); err == nil && glyph != 0 {
+					found = true
+					break
+				}
 			}
 		}
 		if !found {
 			t.Errorf("no embedded font contains %q", r)
+		}
+	}
+}
+
+// TestLazyFallbackMatchesEagerFonts renders text needing every fallback font
+// with the lazy faces and with faces built the old way (all fonts read and
+// parsed up front) and requires identical pixels.
+func TestLazyFallbackMatchesEagerFonts(t *testing.T) {
+	drawer := NewWidgetDrawer()
+	const size = 14.0
+	opts := &opentype.FaceOptions{Size: size, DPI: 72, Hinting: font.HintingFull}
+	primary, err := opentype.NewFace(drawer.regularFont, opts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	eager := &fallbackFace{fonts: []*opentype.Font{drawer.regularFont}, faces: []font.Face{primary}}
+	eagerCount := 0
+	for _, l := range drawer.fallbackFonts {
+		var data []byte
+		if strings.HasPrefix(l.name, "fonts/") {
+			data, err = assets.Fonts.ReadFile(l.name)
+		} else {
+			data, err = os.ReadFile(l.name)
+		}
+		if err != nil {
+			continue
+		}
+		f, err := opentype.Parse(data)
+		if err != nil {
+			t.Fatal(err)
+		}
+		face, err := opentype.NewFace(f, opts)
+		if err != nil {
+			t.Fatal(err)
+		}
+		eager.fonts = append(eager.fonts, f)
+		eager.faces = append(eager.faces, face)
+		eagerCount++
+	}
+	// Eager reference: expose every font through the lazy mechanism's lookup
+	// order by pre-loading them.
+	for _, f := range eager.fonts[1:] {
+		f := f
+		eager.lazy = append(eager.lazy, &lazyFont{name: "eager", load: func() (*opentype.Font, error) { return f, nil }})
+	}
+	eager.size = size
+
+	text := "Tokyo 東京 ✓ ℹ ⚠ சென்னை 25°C"
+	render := func(face font.Face) *image.RGBA {
+		img := image.NewRGBA(image.Rect(0, 0, 400, 40))
+		drawText(img, text, 4, 25, face, color.RGBA{255, 255, 255, 255})
+		return img
+	}
+	lazy := drawer.getFace(false, size)
+	if got, want := render(lazy), render(eager); !bytes.Equal(got.Pix, want.Pix) {
+		t.Fatal("lazy fallback rendering differs from eagerly loaded fonts")
+	}
+	if measureText(text, lazy) != measureText(text, eager) {
+		t.Fatal("lazy fallback text width differs from eagerly loaded fonts")
+	}
+	if eagerCount < 2 {
+		t.Fatalf("only %d fallback fonts available to compare", eagerCount)
+	}
+}
+
+func cloneRGBA(img *image.RGBA) *image.RGBA {
+	c := image.NewRGBA(img.Rect)
+	copy(c.Pix, img.Pix)
+	return c
+}
+
+// TestRenderBufferReuseIsPixelIdentical checks that reusing the render buffer
+// across frames, size changes and view switches gives the same pixels as a
+// fresh drawer (fresh, zeroed buffer) for every frame.
+func TestRenderBufferReuseIsPixelIdentical(t *testing.T) {
+	cities, results := fiveCityInputs()
+	cities[1].Name = "東京"
+	cities[2].Name = "சென்னை"
+	now := time.Date(2026, 6, 1, 12, 0, 0, 0, time.UTC)
+	type step struct {
+		view   config.ViewMode
+		n      int
+		offset time.Duration
+	}
+	steps := []step{
+		{config.ViewModeEnhanced, 5, 0}, {config.ViewModeEnhanced, 5, 33 * time.Millisecond}, {config.ViewModeEnhanced, 5, 2 * time.Second},
+		{config.ViewModeEnhanced, 2, 0}, {config.ViewModeSimple, 5, 0}, {config.ViewModeSimple, 5, time.Second},
+		{config.ViewModeSimple, 3, 0}, {config.ViewModeEnhanced, 5, 0}, {config.ViewModeEnhanced, 5, 33 * time.Millisecond},
+	}
+	reused := NewWidgetDrawer()
+	var first *image.RGBA
+	for i, s := range steps {
+		cfg := config.DefaultConfig()
+		cfg.ViewMode = s.view
+		cfg.PollutionFields = &config.PollutionFields{ShowAQI: true, ShowTicker: true}
+		at := now.Add(s.offset)
+		got := reused.Render(cities[:s.n], results[:s.n], cfg, nil, at)
+		if i > 0 && i < 3 && got != first {
+			t.Errorf("step %d: same-size frame did not reuse the buffer", i)
+		}
+		if i == 0 {
+			first = got
+		}
+		want := NewWidgetDrawer().Render(cities[:s.n], results[:s.n], cfg, nil, at)
+		if got.Rect != want.Rect || !bytes.Equal(got.Pix, want.Pix) {
+			t.Fatalf("step %d (%v, %d cities, +%v): reused buffer differs from fresh render", i, s.view, s.n, s.offset)
 		}
 	}
 }
@@ -405,4 +532,3 @@ func TestEnhancedMiddleGridAutoResizeForecastVsLive(t *testing.T) {
 		t.Fatal("Render returned nil in live mode")
 	}
 }
-

@@ -80,7 +80,7 @@ func (wd *WidgetDrawer) renderEnhancedView(cities []config.CityConfig, results [
 	height += (len(cities) - 1) * spacing
 	metricsDx := (width - 5) - gridLeft
 	edges := computeEnhancedMetricEdges(maxCol1Needed, metricsDx)
-	dst := image.NewRGBA(image.Rect(0, 0, width, height))
+	dst := wd.frameBuffer(width, height)
 	y := 0
 	for i, city := range cities {
 		var result *weather.WeatherResult
