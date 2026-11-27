@@ -216,6 +216,8 @@
   "settings.locations.latPlaceholder": "Latitude (optional)",
   "settings.locations.lonLabel": "Longitude",
   "settings.locations.lonPlaceholder": "Longitude (optional)",
+  "settings.locations.moveDown": "Move down",
+  "settings.locations.moveUp": "Move up",
   "settings.locations.nameLabel": "Name",
   "settings.locations.namePlaceholder": "City name",
   "settings.locations.proNote": "⭐ Free tier allows up to 3 cities. Subscribe to Pro in the Data Provider tab for up to 5 cities, 10-minute refresh intervals, and extended weather data!",

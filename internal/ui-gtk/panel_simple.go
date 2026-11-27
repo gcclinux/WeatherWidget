@@ -431,7 +431,7 @@ func (p *simpleCityPanel) update(d *weather.WeatherData, tempUnit config.Tempera
 	p.errorLbl.Hide()
 
 	p.cityLbl.SetText(d.CityName + ", " + d.Region)
-	// Header values: real-time, or the day's forecast in a forecast grid mode.
+	// Header values are always the current conditions; a forecast grid mode only swaps the description for the forecast title.
 	headIcon, temp, _, desc := headlineValues(p.displayFields, d, tempUnit, p.lm)
 	p.tempLbl.SetText(temp)
 	p.setDesc(desc)
@@ -594,7 +594,7 @@ func (p *simpleCityPanel) applyDisplayFields(df *config.DisplayFields) {
 
 	p.displayFields = df
 	p.refreshMetrics()
-	// Header values depend on the grid mode (forecast vs live).
+	// Header description depends on the grid mode (forecast title vs live).
 	if p.lastData != nil {
 		_, temp, _, desc := headlineValues(df, p.lastData, p.lastUnit, p.lm)
 		p.tempLbl.SetText(temp)

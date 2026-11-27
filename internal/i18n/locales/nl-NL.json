@@ -216,6 +216,8 @@
   "settings.locations.latPlaceholder": "Breedtegraad (optioneel)",
   "settings.locations.lonLabel": "Lengtegraad",
   "settings.locations.lonPlaceholder": "Lengtegraad (optioneel)",
+  "settings.locations.moveDown": "Omlaag verplaatsen",
+  "settings.locations.moveUp": "Omhoog verplaatsen",
   "settings.locations.nameLabel": "Naam",
   "settings.locations.namePlaceholder": "Stadsnaam",
   "settings.locations.proNote": "⭐ De gratis versie staat maximaal 3 steden toe. Abonneer u op Pro in het tabblad Data Provider voor maximaal 5 steden, updates elke 10 minuten en extra weergegevens!",

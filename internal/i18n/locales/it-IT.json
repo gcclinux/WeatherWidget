@@ -216,6 +216,8 @@
   "settings.locations.latPlaceholder": "Latitudine (opzionale)",
   "settings.locations.lonLabel": "Longitudine",
   "settings.locations.lonPlaceholder": "Longitudine (opzionale)",
+  "settings.locations.moveDown": "Sposta in basso",
+  "settings.locations.moveUp": "Sposta in alto",
   "settings.locations.nameLabel": "Nome",
   "settings.locations.namePlaceholder": "Nome della città",
   "settings.locations.proNote": "⭐ Il piano gratuito consente fino a 3 città. Abbonati a Pro nella scheda Provider per avere fino a 5 città, aggiornamenti ogni 10 minuti e dati meteo estesi!",

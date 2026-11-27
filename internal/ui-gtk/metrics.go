@@ -3,8 +3,6 @@
 package uitk
 
 import (
-	"math"
-
 	"weatherwidget/internal/config"
 	"weatherwidget/internal/i18n"
 	"weatherwidget/internal/weather"
@@ -123,11 +121,11 @@ func forecastMetrics(tomorrow bool, d *weather.WeatherData, tempUnit config.Temp
 }
 
 // headlineValues returns the icon code, temperature, "feels like" and
-// description strings for a card header. For the live grid mode they are the
-// real-time values. For a forecast mode (and when forecast data is present) they
-// are overridden with the day's forecast: the high as temperature, the low in
-// place of "feels like", the forecast summary and the WMO-derived icon. This
-// mirrors the Windows simple view.
+// description strings for a card header. The icon, temperature and feels-like
+// are always the current conditions, in every grid mode, so Today's and
+// Tomorrow's Forecast only change the detail rows below the header. In a
+// forecast mode the description is replaced by the short localized two-line
+// forecast title, which keeps the card narrow.
 func headlineValues(df *config.DisplayFields, d *weather.WeatherData, tempUnit config.TemperatureUnit, lm *i18n.LocaleManager) (iconCode, temp, feels, desc string) {
 	iconCode = d.IconCode
 	temp = weather.FormatTemperature(d.Temperature, tempUnit)
@@ -136,36 +134,8 @@ func headlineValues(df *config.DisplayFields, d *weather.WeatherData, tempUnit c
 	if df == nil {
 		return
 	}
-	mode := config.NormalizeGridMode(df.GridMode)
-	// Forecast modes show a short localized two-line title instead of the
-	// (long) forecast summary, which would widen the card.
-	if title := i18n.ForecastTitle(lm, mode); title != "" {
+	if title := i18n.ForecastTitle(lm, config.NormalizeGridMode(df.GridMode)); title != "" {
 		desc = title
-	}
-	if d.Forecast == nil {
-		return
-	}
-	fc := d.Forecast
-	var (
-		code     int
-		max, min *float64
-	)
-	switch mode {
-	case "today":
-		code, max, min = fc.TodayWeatherCode, fc.TodayTempMax, fc.TodayTempMin
-	case "tomorrow":
-		code, max, min = fc.TomorrowWeatherCode, fc.TomorrowTempMax, fc.TomorrowTempMin
-	default:
-		return
-	}
-	if code != 0 {
-		iconCode, _ = weather.MapWMOCodeToWeather(code)
-	}
-	if max != nil {
-		temp = weather.FormatTemperature(int(math.Round(*max)), tempUnit)
-	}
-	if min != nil {
-		feels = weather.FormatTemperature(int(math.Round(*min)), tempUnit)
 	}
 	return
 }

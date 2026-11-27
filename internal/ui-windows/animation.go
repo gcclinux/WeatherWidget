@@ -30,6 +30,9 @@ func (wd *WidgetDrawer) weatherIcon(path string, now time.Time) image.Image {
 	if anim == nil {
 		return wd.loadIcon(path + ".png")
 	}
+	if len(anim.frames) > 1 {
+		wd.animSeen.Store(true)
+	}
 	elapsed := time.Duration(now.UnixNano() % int64(anim.total))
 	if elapsed < 0 {
 		elapsed += anim.total

@@ -216,6 +216,8 @@
   "settings.locations.latPlaceholder": "Latitude (opcional)",
   "settings.locations.lonLabel": "Longitude",
   "settings.locations.lonPlaceholder": "Longitude (opcional)",
+  "settings.locations.moveDown": "Mover para baixo",
+  "settings.locations.moveUp": "Mover para cima",
   "settings.locations.nameLabel": "Nome",
   "settings.locations.namePlaceholder": "Nome da cidade",
   "settings.locations.proNote": "⭐ A versão gratuita permite até 3 cidades. Assine o Pro na aba Provedor de Dados para ter até 5 cidades, atualizações a cada 10 minutos e dados adicionais!",

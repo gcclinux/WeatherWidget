@@ -466,6 +466,24 @@ input:checked + .slider:before {
   font-size: 12px;
 }
 
+.city-item-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.btn-move-city {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+}
+.btn-move-city:hover,
+.btn-move-city:focus-visible {
+  background-color: rgba(255, 255, 255, 0.1);
+}
 .btn-remove-city:hover {
   background-color: rgba(255, 107, 107, 0.15);
 }

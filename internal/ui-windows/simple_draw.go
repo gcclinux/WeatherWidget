@@ -6,7 +6,6 @@ import (
 	"image"
 	"image/color"
 	"image/draw"
-	"math"
 	"strings"
 	"time"
 
@@ -134,36 +133,9 @@ func simpleCardWeather(data *weather.WeatherData, fields *config.DisplayFields, 
 	feelsStr = weather.FormatFeelsLike(data.FeelsLike, cfg.TemperatureUnit)
 	descStr = weather.FormatDescription(data.Description, lm)
 
-	switch fields.GridMode {
-	case "today":
-		if fc := data.Forecast; fc != nil {
-			if fc.TodayWeatherCode != 0 {
-				code, _ := weather.MapWMOCodeToWeather(fc.TodayWeatherCode)
-				iconCode = code
-			}
-			if fc.TodayTempMax != nil {
-				tempStr = weather.FormatTemperature(int(math.Round(*fc.TodayTempMax)), cfg.TemperatureUnit)
-			}
-			if fc.TodayTempMin != nil {
-				feelsStr = weather.FormatTemperature(int(math.Round(*fc.TodayTempMin)), cfg.TemperatureUnit)
-			}
-		}
-	case "tomorrow":
-		if fc := data.Forecast; fc != nil {
-			if fc.TomorrowWeatherCode != 0 {
-				code, _ := weather.MapWMOCodeToWeather(fc.TomorrowWeatherCode)
-				iconCode = code
-			}
-			if fc.TomorrowTempMax != nil {
-				tempStr = weather.FormatTemperature(int(math.Round(*fc.TomorrowTempMax)), cfg.TemperatureUnit)
-			}
-			if fc.TomorrowTempMin != nil {
-				feelsStr = weather.FormatTemperature(int(math.Round(*fc.TomorrowTempMin)), cfg.TemperatureUnit)
-			}
-		}
-	}
-	// Forecast modes show a short localized two-line title instead of the
-	// (long) forecast summary, which would widen the card.
+	// The icon, temperature and feels-like stay the current conditions in every
+	// grid mode. Forecast modes show a short localized two-line title instead of
+	// the (long) forecast summary, which would widen the card.
 	if title := i18n.ForecastTitle(lm, fields.GridMode); title != "" {
 		descStr = title
 	}
@@ -375,7 +347,7 @@ func (wd *WidgetDrawer) drawSimpleCard(dst *image.RGBA, rect image.Rectangle, ci
 		drawSmoke(dst, rect, cfg.Opacity)
 	} else {
 		local := now.UTC()
-		if loc, err := time.LoadLocation(city.Timezone); err == nil {
+		if loc, err := weather.LoadLocationCached(city.Timezone); err == nil {
 			local = now.In(loc)
 		}
 		if bg := wd.cardBackground(rect.Dx(), rect.Dy(), weather.IsNight(local), cfg.Opacity); bg != nil {
@@ -405,7 +377,7 @@ func (wd *WidgetDrawer) drawSimpleCard(dst *image.RGBA, rect image.Rectangle, ci
 	if fields.ShowIcon || fields.ShowTemp {
 		if fields.ShowIcon {
 			local := now.UTC()
-			if loc, err := time.LoadLocation(city.Timezone); err == nil {
+			if loc, err := weather.LoadLocationCached(city.Timezone); err == nil {
 				local = now.In(loc)
 			}
 			iconX := center - 32
@@ -416,8 +388,8 @@ func (wd *WidgetDrawer) drawSimpleCard(dst *image.RGBA, rect image.Rectangle, ci
 			drawImage(dst, wd.weatherIcon(path, now), iconX, y-15, 64, 64)
 		}
 		if fields.ShowTemp {
-			drawImage(dst, wd.loadIcon("icons/thermometer.png"), center+14, y-12, 14, 35)
-			drawText(dst, feelsStr, center+8, y+43, wd.getFace(true, 14), enhancedCyan)
+			drawImage(dst, wd.loadIcon("icons/thermometer.png"), center+24, y-12, 14, 35)
+			drawText(dst, feelsStr, center+18, y+43, wd.getFace(true, 14), enhancedCyan)
 		}
 		if fields.ShowIcon && !fields.ShowTemp {
 			y += 60

@@ -451,6 +451,8 @@ func TestEnGBCompleteness(t *testing.T) {
 		"settings.locations.searchBtn",
 		"settings.locations.searching",
 		"settings.locations.removeBtn",
+		"settings.locations.moveUp",
+		"settings.locations.moveDown",
 		"settings.locations.nameLabel",
 		"settings.locations.regionLabel",
 		"settings.locations.latLabel",

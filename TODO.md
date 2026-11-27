@@ -6,12 +6,13 @@
 #### IMPROVEMENTS
 - (DONE) Linux - Settings --> Locations --> Viewing all 5 cities has scrollbar should be always visable in space available (UNTESTED STILL)
 - (DONE) All - Data Settings --> Weather Metrics --> Sunset, Sunrise, Cloud Coverage, Visibility not visable in ClassicView (UNTESTED STILL)
-- Windows - Settings --> Locations --> order cities up or down to display in different order
-- Windows - This new design has too high memory and CPU usage or load when running with 5 cities
+- (DONE) Windows - Settings --> Locations --> order cities up or down to display in different order (TESTED)
+- (DONE) All - Settings --> Display --> Simple (Classic) Today's and Tomorrow's Forecast modes now keep the current weather icon (UNTESTED STILL)
+- (DONE) Windows - Improve design and caching to reduce memory and CPU load when running multiple cities (UNTESTED STILL)
 
 #### CHANGE
 - (DONE) All - Display --> Simple (Classsic view) replace weather message with title of Today's Forecast or Tommorrow's Forecast  (UNTESTED STILL)
-- Windows - Classic View increase the gap slightly between weather icon and the feels like thermometor
+- (DONE) Windows - Classic View increase the gap slightly between weather icon and the feels like thermometor (TESTED)
 - MacOS - Settings --> TABs borders are overlaping when selected
 
 #### FEATURES

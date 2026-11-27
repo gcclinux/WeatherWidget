@@ -172,7 +172,7 @@ const translationTargets = {
 async function applyLanguage(locale) {
   const keys = [...Object.values(translationTargets), ...Object.values(placeholderTargets),
     'settings.locations.latLabel', 'settings.locations.lonLabel', 'settings.locations.tzLabel',
-    'settings.locations.removeBtn', 'settings.monitor.format', 'settings.transparency.title',
+    'settings.locations.removeBtn', 'settings.locations.moveUp', 'settings.locations.moveDown', 'settings.monitor.format', 'settings.transparency.title',
     'settings.dialog.savedMsg', 'settings.provider.checkingConnection', 'settings.provider.connectionSuccessTitle',
     'error.settings.cityNameRequiredSearch', 'error.settings.regionRequiredEww', 'error.settings.apiKeyRequired',
     'error.settings.searchFailed', 'error.settings.saveFailed', 'error.settings.connectionFailed',
@@ -331,6 +331,13 @@ function populateUI(cfg) {
   updateWeatherMetricsControls();
 }
 
+// moveCity swaps the city at index with its neighbour (delta -1 up, +1 down); out-of-range moves are no-ops.
+function moveCity(cities, index, delta) {
+  const target = index + delta;
+  if (index < 0 || index >= cities.length || target < 0 || target >= cities.length) return false;
+  [cities[index], cities[target]] = [cities[target], cities[index]];
+  return true;
+}
 function renderCityList() {
   const list = el('city-list');
   list.replaceChildren();
@@ -345,6 +352,23 @@ function renderCityList() {
     subtitle.className = 'city-item-sub';
     subtitle.textContent = `${city.timezone || 'UTC'} • ${city.latitude || 0}, ${city.longitude || 0}`;
     text.append(name, subtitle);
+    const actions = document.createElement('div');
+    actions.className = 'city-item-actions';
+    const lastIndex = currentConfig.cities.length - 1;
+    [['settings.locations.moveUp', '\u25B2', -1, index > 0], ['settings.locations.moveDown', '\u25BC', 1, index < lastIndex]].forEach(([key, glyph, delta, enabled]) => {
+      if (!enabled) return;
+      const move = document.createElement('button');
+      move.type = 'button';
+      move.className = 'btn-move-city';
+      move.textContent = glyph;
+      move.title = t(key);
+      move.setAttribute('aria-label', t(key) + ': ' + city.name);
+      move.addEventListener('click', () => {
+        moveCity(currentConfig.cities, index, delta);
+        renderCityList();
+      });
+      actions.appendChild(move);
+    });
     const button = document.createElement('button');
     button.className = 'btn-remove-city';
     button.textContent = t('settings.locations.removeBtn');
@@ -352,7 +376,8 @@ function renderCityList() {
       currentConfig.cities.splice(index, 1);
       renderCityList();
     });
-    item.append(text, button);
+    actions.appendChild(button);
+    item.append(text, actions);
     list.appendChild(item);
   });
 }

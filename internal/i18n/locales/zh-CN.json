@@ -217,6 +217,8 @@
   "settings.locations.latPlaceholder": "纬度 (可选)",
   "settings.locations.lonLabel": "经度",
   "settings.locations.lonPlaceholder": "经度 (可选)",
+  "settings.locations.moveDown": "下移",
+  "settings.locations.moveUp": "上移",
   "settings.locations.nameLabel": "城市名称",
   "settings.locations.namePlaceholder": "城市名称 (英文/拼音)",
   "settings.locations.proNote": "⭐ 免费版最多支持 3 个城市。请在“数据源”标签页订阅 Pro 专业版以解锁最多 5 个城市、10 分钟快速刷新及更多天气详情！",

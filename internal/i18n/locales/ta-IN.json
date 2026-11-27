@@ -217,6 +217,8 @@
   "settings.locations.latPlaceholder": "அட்சரேகை (விருப்பத்தேர்வு)",
   "settings.locations.lonLabel": "தீர்க்கரேகை",
   "settings.locations.lonPlaceholder": "தீர்க்கரேகை (விருப்பத்தேர்வு)",
+  "settings.locations.moveDown": "கீழே நகர்த்து",
+  "settings.locations.moveUp": "மேலே நகர்த்து",
   "settings.locations.nameLabel": "பெயர்",
   "settings.locations.namePlaceholder": "நகரத்தின் பெயர்",
   "settings.locations.proNote": "⭐ இலவச பதிப்பு 3 நகரங்கள் வரை அனுமதிக்கிறது. 5 நகரங்கள், 10 நிமிட புதுப்பிப்பு மற்றும் கூடுதல் வானிலை தரவுகளுக்கு தரவு வழங்குநர் தாவலில் Pro க்கு குழுசேரவும்!",

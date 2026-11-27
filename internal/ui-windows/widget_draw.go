@@ -14,6 +14,7 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"weatherwidget/assets"
@@ -43,6 +44,17 @@ type WidgetDrawer struct {
 	iconCache       map[string]image.Image
 	animations      map[string]*nativeAnimation
 	backgroundCache map[string]*image.RGBA
+
+	// animSeen collects, during one Render, whether a moving element (ticker
+	// text or a multi-frame GIF icon) was drawn; Render publishes it to animating.
+	animSeen, animating atomic.Bool
+}
+
+// Animating reports whether the last Render drew anything that moves with time
+// (scrolling ticker or animated GIF icon). When false, only the clock needs a
+// once-per-second redraw.
+func (wd *WidgetDrawer) Animating() bool {
+	return wd != nil && wd.animating.Load()
 }
 
 // NewWidgetDrawer creates and initializes the card drawer.
@@ -167,8 +179,12 @@ func (wd *WidgetDrawer) loadIcon(path string) image.Image {
 		return nil
 	}
 
-	wd.iconCache[path] = img
-	return img
+	// Store as *image.RGBA so scaling takes the fast RGBA path and the
+	// pre-scaled icon cache can key on the pointer.
+	rgba := image.NewRGBA(img.Bounds())
+	draw.Draw(rgba, rgba.Bounds(), img, img.Bounds().Min, draw.Src)
+	wd.iconCache[path] = rgba
+	return rgba
 }
 
 // Render draws all city cards and returns a 32-bit ARGB image ready for UpdateLayeredWindow.
@@ -179,6 +195,8 @@ func (wd *WidgetDrawer) Render(
 	lm *i18n.LocaleManager,
 	now time.Time,
 ) *image.RGBA {
+	wd.animSeen.Store(false)
+	defer func() { wd.animating.Store(wd.animSeen.Load()) }()
 	if len(cities) == 0 {
 		return image.NewRGBA(image.Rect(0, 0, 1, 1))
 	}
@@ -221,7 +239,49 @@ func drawImage(dst *image.RGBA, src image.Image, x, y, w, h int) {
 		return
 	}
 	rect := image.Rect(x, y, x+w, y+h)
+	if rgba, ok := src.(*image.RGBA); ok && w > 0 && h > 0 {
+		draw.Draw(dst, rect, scaledIcon(rgba, w, h), image.Point{}, draw.Over)
+		return
+	}
 	xdraw.BiLinear.Scale(dst, rect, src, src.Bounds(), draw.Over, nil)
+}
+
+// scaledIconKey identifies a pre-scaled icon by source image and final pixel size.
+type scaledIconKey struct {
+	src  *image.RGBA
+	w, h int
+}
+
+// maxScaledIcons bounds the pre-scaled icon cache. A normal session needs a
+// few dozen entries (icons x sizes, plus GIF frames); the cache is cleared if
+// it ever exceeds this, for example after many scale changes.
+const maxScaledIcons = 512
+
+var (
+	scaledIconMu    sync.Mutex
+	scaledIconCache = make(map[scaledIconKey]*image.RGBA)
+)
+
+// scaledIcon returns src bilinear-scaled once to w x h pixels (origin 0,0).
+// The cache key includes the final size, so DPI and widget-scale changes get
+// correctly sized entries.
+func scaledIcon(src *image.RGBA, w, h int) *image.RGBA {
+	key := scaledIconKey{src, w, h}
+	scaledIconMu.Lock()
+	cached := scaledIconCache[key]
+	scaledIconMu.Unlock()
+	if cached != nil {
+		return cached
+	}
+	scaled := image.NewRGBA(image.Rect(0, 0, w, h))
+	xdraw.BiLinear.Scale(scaled, scaled.Bounds(), src, src.Bounds(), draw.Src, nil)
+	scaledIconMu.Lock()
+	if len(scaledIconCache) >= maxScaledIcons {
+		clear(scaledIconCache)
+	}
+	scaledIconCache[key] = scaled
+	scaledIconMu.Unlock()
+	return scaled
 }
 
 // drawImageContained scales an image uniformly to fit within the given box.
@@ -246,99 +306,123 @@ func drawHorizontalLine(dst *image.RGBA, x1, x2, y int, c color.RGBA) {
 	}
 }
 
+// roundedCornerDist reports whether (px, py) falls in one of the four corner
+// quadrants of a rounded rectangle and, if so, its distance to the arc centre.
+func roundedCornerDist(px, py, minX, maxX, minY, maxY, radius int) (dist float64, inCorner bool) {
+	if px < minX+radius && py < minY+radius { // Top-left
+		dx := float64(minX+radius) - float64(px) - 0.5
+		dy := float64(minY+radius) - float64(py) - 0.5
+		return math.Sqrt(dx*dx + dy*dy), true
+	} else if px > maxX-radius && py < minY+radius { // Top-right
+		dx := float64(px) + 0.5 - float64(maxX-radius)
+		dy := float64(minY+radius) - float64(py) - 0.5
+		return math.Sqrt(dx*dx + dy*dy), true
+	} else if px < minX+radius && py > maxY-radius { // Bottom-left
+		dx := float64(minX+radius) - float64(px) - 0.5
+		dy := float64(py) + 0.5 - float64(maxY-radius)
+		return math.Sqrt(dx*dx + dy*dy), true
+	} else if px > maxX-radius && py > maxY-radius { // Bottom-right
+		dx := float64(px) + 0.5 - float64(maxX-radius)
+		dy := float64(py) + 0.5 - float64(maxY-radius)
+		return math.Sqrt(dx*dx + dy*dy), true
+	}
+	return 0, false
+}
+
+// roundedCornerBand reports whether row py intersects the top or bottom corner
+// squares of a rounded rectangle with the given radius.
+func roundedCornerBand(py, minY, maxY, radius int) bool {
+	return radius > 0 && (py < minY+radius || py > maxY-radius)
+}
+
 // fillRoundedRect fills a rounded rectangle with smooth anti-aliased corners.
+// Only the corner squares are classified per pixel; the span between them is
+// blended directly.
 func fillRoundedRect(dst *image.RGBA, x, y, w, h, radius int, c color.RGBA) {
 	if radius <= 0 {
 		draw.Draw(dst, image.Rect(x, y, x+w, y+h), image.NewUniform(color.NRGBA{R: c.R, G: c.G, B: c.B, A: c.A}), image.Point{}, draw.Over)
 		return
 	}
-
 	rF := float64(radius)
 	minX, maxX := x, x+w-1
 	minY, maxY := y, y+h-1
-
+	cornerPixel := func(px, py int) {
+		dist, inCorner := roundedCornerDist(px, py, minX, maxX, minY, maxY, radius)
+		if !inCorner {
+			blendPixel(dst, px, py, c)
+		} else if dist <= rF-0.5 {
+			blendPixel(dst, px, py, c)
+		} else if dist < rF+0.5 {
+			// Anti-aliased outer edge
+			alphaFrac := (rF + 0.5 - dist)
+			subAlpha := uint8(float64(c.A) * alphaFrac)
+			blendPixel(dst, px, py, color.RGBA{c.R, c.G, c.B, subAlpha})
+		}
+	}
 	for py := y; py < y+h; py++ {
-		for px := x; px < x+w; px++ {
-			// Check if pixel falls inside one of the four corner quadrants
-			var dist float64
-			inCorner := false
-
-			if px < minX+radius && py < minY+radius { // Top-left
-				dx := float64(minX+radius) - float64(px) - 0.5
-				dy := float64(minY+radius) - float64(py) - 0.5
-				dist = math.Sqrt(dx*dx + dy*dy)
-				inCorner = true
-			} else if px > maxX-radius && py < minY+radius { // Top-right
-				dx := float64(px) + 0.5 - float64(maxX-radius)
-				dy := float64(minY+radius) - float64(py) - 0.5
-				dist = math.Sqrt(dx*dx + dy*dy)
-				inCorner = true
-			} else if px < minX+radius && py > maxY-radius { // Bottom-left
-				dx := float64(minX+radius) - float64(px) - 0.5
-				dy := float64(py) + 0.5 - float64(maxY-radius)
-				dist = math.Sqrt(dx*dx + dy*dy)
-				inCorner = true
-			} else if px > maxX-radius && py > maxY-radius { // Bottom-right
-				dx := float64(px) + 0.5 - float64(maxX-radius)
-				dy := float64(py) + 0.5 - float64(maxY-radius)
-				dist = math.Sqrt(dx*dx + dy*dy)
-				inCorner = true
-			}
-
-			if !inCorner {
+		if !roundedCornerBand(py, minY, maxY, radius) {
+			for px := x; px < x+w; px++ {
 				blendPixel(dst, px, py, c)
-			} else if dist <= rF-0.5 {
-				blendPixel(dst, px, py, c)
-			} else if dist < rF+0.5 {
-				// Anti-aliased outer edge
-				alphaFrac := (rF + 0.5 - dist)
-				subAlpha := uint8(float64(c.A) * alphaFrac)
-				blendPixel(dst, px, py, color.RGBA{c.R, c.G, c.B, subAlpha})
 			}
+			continue
+		}
+		leftEnd := min(x+radius, x+w)
+		rightStart := max(maxX-radius+1, x)
+		if leftEnd > rightStart { // corner squares overlap: classify the whole row
+			for px := x; px < x+w; px++ {
+				cornerPixel(px, py)
+			}
+			continue
+		}
+		for px := x; px < leftEnd; px++ {
+			cornerPixel(px, py)
+		}
+		for px := leftEnd; px < rightStart; px++ {
+			blendPixel(dst, px, py, c)
+		}
+		for px := rightStart; px < x+w; px++ {
+			cornerPixel(px, py)
 		}
 	}
 }
 
-// strokeRoundedRect draws a 1px rounded rectangle outline.
+// strokeRoundedRect draws a 1px rounded rectangle outline. It visits only the
+// border pixels and the four corner squares instead of the whole rectangle.
 func strokeRoundedRect(dst *image.RGBA, x, y, w, h, radius int, c color.RGBA, lineWidth int) {
 	rF := float64(radius)
 	minX, maxX := x, x+w-1
 	minY, maxY := y, y+h-1
-
-	for py := y; py < y+h; py++ {
-		for px := x; px < x+w; px++ {
-			var dist float64
-			inCorner := false
-
-			if px < minX+radius && py < minY+radius {
-				dx := float64(minX+radius) - float64(px) - 0.5
-				dy := float64(minY+radius) - float64(py) - 0.5
-				dist = math.Sqrt(dx*dx + dy*dy)
-				inCorner = true
-			} else if px > maxX-radius && py < minY+radius {
-				dx := float64(px) + 0.5 - float64(maxX-radius)
-				dy := float64(minY+radius) - float64(py) - 0.5
-				dist = math.Sqrt(dx*dx + dy*dy)
-				inCorner = true
-			} else if px < minX+radius && py > maxY-radius {
-				dx := float64(minX+radius) - float64(px) - 0.5
-				dy := float64(py) + 0.5 - float64(maxY-radius)
-				dist = math.Sqrt(dx*dx + dy*dy)
-				inCorner = true
-			} else if px > maxX-radius && py > maxY-radius {
-				dx := float64(px) + 0.5 - float64(maxX-radius)
-				dy := float64(py) + 0.5 - float64(maxY-radius)
-				dist = math.Sqrt(dx*dx + dy*dy)
-				inCorner = true
-			}
-
-			if inCorner {
-				if math.Abs(dist-rF) <= 0.8 {
-					blendPixel(dst, px, py, c)
-				}
-			} else if px == minX || px == maxX || py == minY || py == maxY {
+	pixel := func(px, py int) {
+		dist, inCorner := roundedCornerDist(px, py, minX, maxX, minY, maxY, radius)
+		if inCorner {
+			if math.Abs(dist-rF) <= 0.8 {
 				blendPixel(dst, px, py, c)
 			}
+		} else if px == minX || px == maxX || py == minY || py == maxY {
+			blendPixel(dst, px, py, c)
+		}
+	}
+	for py := y; py < y+h; py++ {
+		// Columns [x, leftEnd) and [rightStart, x+w) can hold corner or border
+		// pixels on this row; the span between them is empty unless the row is
+		// the top or bottom edge.
+		leftEnd, rightStart := x+1, maxX
+		if roundedCornerBand(py, minY, maxY, radius) {
+			leftEnd, rightStart = x+radius, maxX-radius+1
+		}
+		leftEnd = min(leftEnd, x+w)
+		rightStart = max(rightStart, x)
+		if leftEnd > rightStart || py == minY || py == maxY { // one contiguous span
+			for px := x; px < x+w; px++ {
+				pixel(px, py)
+			}
+			continue
+		}
+		for px := x; px < leftEnd; px++ {
+			pixel(px, py)
+		}
+		for px := rightStart; px < x+w; px++ {
+			pixel(px, py)
 		}
 	}
 }

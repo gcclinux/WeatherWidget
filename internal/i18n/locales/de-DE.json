@@ -216,6 +216,8 @@
   "settings.locations.latPlaceholder": "Breitengrad (optional)",
   "settings.locations.lonLabel": "Längengrad",
   "settings.locations.lonPlaceholder": "Längengrad (optional)",
+  "settings.locations.moveDown": "Nach unten verschieben",
+  "settings.locations.moveUp": "Nach oben verschieben",
   "settings.locations.nameLabel": "Name",
   "settings.locations.namePlaceholder": "Stadtname",
   "settings.locations.proNote": "⭐ Die kostenlose Version erlaubt bis zu 3 Städte. Upgraden Sie im Datenanbieter-Tab auf Pro für bis zu 5 Städte, 10-Minuten-Aktualisierungen und erweiterte Wetterdaten!",

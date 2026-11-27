@@ -81,6 +81,9 @@ type Manager struct {
 
 	dragTimer *time.Timer
 	stopClock chan struct{}
+	// animWake nudges the clock loop when the drawer starts or stops animating.
+	animWake      chan struct{}
+	lastAnimating bool // guarded by redrawMu
 
 	mu sync.Mutex
 }
@@ -97,6 +100,7 @@ func Run(appDataDir string, openSettings bool) error {
 		appDataDir:      appDataDir,
 		isWidgetVisible: true,
 		stopClock:       make(chan struct{}),
+		animWake:        make(chan struct{}, 1),
 		drawer:          NewWidgetDrawer(),
 	}
 
@@ -285,6 +289,13 @@ func (m *Manager) redraw() {
 	m.resultsMu.Unlock()
 
 	img := m.drawer.Render(cities, res, &cfgCopy, m.lm, time.Now())
+	if animating := m.drawer.Animating(); animating != m.lastAnimating {
+		m.lastAnimating = animating
+		select {
+		case m.animWake <- struct{}{}:
+		default:
+		}
+	}
 	scale := m.getEffectiveScale()
 	if scale <= 0 {
 		scale = 1.0
@@ -302,27 +313,50 @@ func (m *Manager) redraw() {
 	}
 }
 
-// startClockLoop updates clocks and animates the ticker and original icon set.
-func (m *Manager) startClockLoop() {
-	ticker := time.NewTicker(33 * time.Millisecond)
-	defer ticker.Stop()
+// animationFrameInterval is the redraw period while something on the widget is
+// really moving (scrolling pollution ticker or an animated GIF icon).
+// 100 ms = 10 fps. For 5 fps use 200 * time.Millisecond. The ticker scrolls
+// 1 px per 25 ms of wall-clock time, so at 5 fps it jumps about 8 px per frame
+// (about 4 px at 10 fps). GIF frames last 100 ms or more.
+const animationFrameInterval = 100 * time.Millisecond
 
-	var lastSecond int64
+// nextClockDelay returns how long the clock loop sleeps before its next redraw.
+// While animating it is animationFrameInterval. Otherwise it is the time to the
+// next whole second, so the seconds clock redraws once per second.
+func nextClockDelay(animating bool, now time.Time) time.Duration {
+	if animating {
+		return animationFrameInterval
+	}
+	return time.Second - time.Duration(now.Nanosecond()) + 5*time.Millisecond
+}
+
+// startClockLoop updates clocks, and redraws at animationFrameInterval only
+// while the last render contained something animated (see WidgetDrawer.Animating).
+// redraw wakes the loop through animWake when that state changes (new weather
+// data, settings or theme changes), so animation starts and stops promptly.
+func (m *Manager) startClockLoop() {
+	timer := time.NewTimer(nextClockDelay(false, time.Now()))
+	defer timer.Stop()
 	for {
 		select {
 		case <-m.stopClock:
 			return
-		case <-ticker.C:
+		case <-timer.C:
 			m.mu.Lock()
 			visible := m.isWidgetVisible
-			animated := m.cfg != nil && (m.cfg.GetPollutionFields().ShowTicker || config.NormalizeIconTheme(m.cfg.IconTheme) == config.IconThemeOriginal)
 			m.mu.Unlock()
-			second := time.Now().Unix()
-			if visible && (animated || second != lastSecond) {
+			if visible {
 				m.redraw()
-				lastSecond = second
+			}
+		case <-m.animWake:
+			if !timer.Stop() {
+				select {
+				case <-timer.C:
+				default:
+				}
 			}
 		}
+		timer.Reset(nextClockDelay(m.drawer.Animating(), time.Now()))
 	}
 }
 

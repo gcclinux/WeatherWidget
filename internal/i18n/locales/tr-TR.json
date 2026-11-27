@@ -216,6 +216,8 @@
   "settings.locations.latPlaceholder": "Enlem (isteğe bağlı)",
   "settings.locations.lonLabel": "Boylam",
   "settings.locations.lonPlaceholder": "Boylam (isteğe bağlı)",
+  "settings.locations.moveDown": "Aşağı taşı",
+  "settings.locations.moveUp": "Yukarı taşı",
   "settings.locations.nameLabel": "Ad",
   "settings.locations.namePlaceholder": "Şehir adı",
   "settings.locations.proNote": "⭐ Ücretsiz sürüm en fazla 3 şehre izin verir. 5 şehre kadar, 10 dakikada bir yenileme ve genişletilmiş veriler için Veri Sağlayıcı sekmesinden Pro'ya abone olun!",

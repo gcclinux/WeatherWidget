@@ -218,7 +218,7 @@ func drawSmoke(dst *image.RGBA, rect image.Rectangle, opacity int) {
 func (wd *WidgetDrawer) drawEnhancedCard(dst *image.RGBA, rect image.Rectangle, city config.CityConfig, result *weather.WeatherResult, cfg *config.Config, lm *i18n.LocaleManager, now time.Time, index, infoWidth int, edges [4]int) {
 	x, y, w, h := rect.Min.X, rect.Min.Y, rect.Dx(), rect.Dy()
 	local := now.UTC()
-	if loc, err := time.LoadLocation(city.Timezone); err == nil {
+	if loc, err := weather.LoadLocationCached(city.Timezone); err == nil {
 		local = now.In(loc)
 	}
 	if cfg.NoBackground {
@@ -620,6 +620,7 @@ func (wd *WidgetDrawer) drawEnhancedTicker(dst *image.RGBA, rect image.Rectangle
 	if len(items) == 0 || rect.Dx() < 20 || rect.Dy() == 0 {
 		return
 	}
+	wd.animSeen.Store(true)
 	bold, regular := wd.getFace(true, 12), wd.getFace(false, 12)
 	type segment struct {
 		head, status, tail string

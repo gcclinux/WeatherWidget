@@ -68,10 +68,7 @@ func FormatCityRegion(name, region string) string {
 // for the given timezone. If the timezone is invalid, it falls back to UTC.
 // If lm is non-nil, locale-specific date and time formats are used.
 func FormatDateTime(t time.Time, timezone string, lm *i18n.LocaleManager) string {
-	loc, err := time.LoadLocation(timezone)
-	if err != nil {
-		loc = time.UTC
-	}
+	loc := locationOrUTC(timezone)
 	dateFormat := "02/01/2006"
 	timeFormat := "15:04:05"
 	if lm != nil {
@@ -85,10 +82,7 @@ func FormatDateTime(t time.Time, timezone string, lm *i18n.LocaleManager) string
 // FormatTime returns a time string using the locale's time format.
 // If lm is nil, falls back to the default "15:04:05" format.
 func FormatTime(t time.Time, timezone string, lm *i18n.LocaleManager) string {
-	loc, err := time.LoadLocation(timezone)
-	if err != nil {
-		loc = time.UTC
-	}
+	loc := locationOrUTC(timezone)
 	timeFormat := "15:04:05"
 	if lm != nil {
 		timeFormat = lm.T("weather.timeFormat")
@@ -99,10 +93,7 @@ func FormatTime(t time.Time, timezone string, lm *i18n.LocaleManager) string {
 // FormatDate returns a date string using the locale's date format.
 // If lm is nil, falls back to the default "02/01/2006" format.
 func FormatDate(t time.Time, timezone string, lm *i18n.LocaleManager) string {
-	loc, err := time.LoadLocation(timezone)
-	if err != nil {
-		loc = time.UTC
-	}
+	loc := locationOrUTC(timezone)
 	dateFormat := "02/01/2006"
 	if lm != nil {
 		dateFormat = lm.T("weather.dateFormat")

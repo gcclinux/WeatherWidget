@@ -424,7 +424,7 @@ func (m *manager) updateCard(card uintptr, d *weather.WeatherData) {
 	iconTheme := m.cfg.IconTheme
 	df := m.cfg.GetDisplayFields()
 
-	iconCode, tempStr, feelsStr, descStr := headlineValues(df, d, tempUnit, m.lm)
+	iconCode, tempStr, feelsStr, descStr := headlineValues(m.viewMode == config.ViewModeSimple, df, d, tempUnit, m.lm)
 	// Simple (Classic) view: forecast modes show a short localized two-line
 	// title instead of the long forecast summary.
 	isTitle := false
@@ -455,7 +455,8 @@ func (m *manager) updateCard(card uintptr, d *weather.WeatherData) {
 	if m.lm != nil && m.lm.T("weather.feelsLike") != "" {
 		feelsLikeLabel = m.lm.T("weather.feelsLike")
 	}
-	if config.NormalizeGridMode(df.GridMode) != "live" {
+	// Classic view keeps the live feels-like in every grid mode.
+	if m.viewMode != config.ViewModeSimple && config.NormalizeGridMode(df.GridMode) != "live" {
 		feelsLikeLabel = "Low"
 		if m.lm != nil && m.lm.T("weather.forecast.tempMin") != "" {
 			feelsLikeLabel = m.lm.T("weather.forecast.tempMin")
@@ -587,7 +588,8 @@ func (m *manager) applyCardMetricNames(card uintptr) {
 	if m.lm != nil && m.lm.T("weather.feelsLike") != "" {
 		feelsLikeLabel = m.lm.T("weather.feelsLike")
 	}
-	if config.NormalizeGridMode(df.GridMode) != "live" {
+	// Classic view keeps the live feels-like in every grid mode.
+	if m.viewMode != config.ViewModeSimple && config.NormalizeGridMode(df.GridMode) != "live" {
 		feelsLikeLabel = "Low"
 		if m.lm != nil && m.lm.T("weather.forecast.tempMin") != "" {
 			feelsLikeLabel = m.lm.T("weather.forecast.tempMin")

@@ -146,16 +146,16 @@ func forecastMetrics(tomorrow bool, d *weather.WeatherData, tempUnit config.Temp
 
 // headlineValues returns the icon code, temperature, "feels like" and
 // description strings for a card header. For the live grid mode they are the
-// real-time values. For a forecast mode (and when forecast data is present) they
-// are overridden with the day's forecast: the high as temperature, the low in
-// place of "feels like", the forecast summary and the WMO-derived icon. This
-// mirrors the Windows and GTK simple/enhanced views.
-func headlineValues(df *config.DisplayFields, d *weather.WeatherData, tempUnit config.TemperatureUnit, lm *i18n.LocaleManager) (iconCode, temp, feels, desc string) {
+// real-time values. When simple is true (Classic view) the icon, temperature and
+// feels-like are the current conditions in every grid mode, and only the
+// description may change. When simple is false (Enhanced view) a forecast mode
+// still overrides the header with the day's forecast, as before.
+func headlineValues(simple bool, df *config.DisplayFields, d *weather.WeatherData, tempUnit config.TemperatureUnit, lm *i18n.LocaleManager) (iconCode, temp, feels, desc string) {
 	iconCode = d.IconCode
 	temp = weather.FormatTemperature(d.Temperature, tempUnit)
 	feels = weather.FormatFeelsLike(d.FeelsLike, tempUnit)
 	desc = weather.FormatDescription(d.Description, lm)
-	if df == nil || d.Forecast == nil {
+	if simple || df == nil || d.Forecast == nil {
 		return
 	}
 	fc := d.Forecast
@@ -186,4 +186,3 @@ func headlineValues(df *config.DisplayFields, d *weather.WeatherData, tempUnit c
 	}
 	return
 }
-

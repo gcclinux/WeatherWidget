@@ -216,6 +216,8 @@
   "settings.locations.latPlaceholder": "Szerokość geograficzna (opcjonalnie)",
   "settings.locations.lonLabel": "Długość",
   "settings.locations.lonPlaceholder": "Długość geograficzna (opcjonalnie)",
+  "settings.locations.moveDown": "Przesuń w dół",
+  "settings.locations.moveUp": "Przesuń w górę",
   "settings.locations.nameLabel": "Nazwa",
   "settings.locations.namePlaceholder": "Nazwa miasta",
   "settings.locations.proNote": "⭐ Wersja bezpłatna pozwala na maksymalnie 3 miasta. Subskrybuj Pro w zakładce Dostawca danych, aby uzyskać do 5 miast, 10-minutowe odświeżanie i rozszerzone dane!",
