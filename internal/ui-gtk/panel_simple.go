@@ -58,6 +58,11 @@ type simpleCityPanel struct {
 	pressureLbl  *gtk.Label
 	uvIndexLbl   *gtk.Label
 	windDirLbl   *gtk.Label
+	sunriseLbl   *gtk.Label
+	sunsetLbl    *gtk.Label
+	cloudsLbl    *gtk.Label
+	visLbl       *gtk.Label
+	precipLbl    *gtk.Label
 	errorLbl     *gtk.Label
 
 	pollutionBox  *gtk.Box
@@ -78,8 +83,8 @@ type simpleCityPanel struct {
 	// displayFields is the current display-field selection (drives which metric
 	// lines show and whether they show live or forecast values).
 	displayFields *config.DisplayFields
-	lastIconCode string // most recently loaded icon code, for resize without re-fetch
-	iconSize     int    // current icon pixel size; 0 means default (96px)
+	lastIconCode  string // most recently loaded icon code, for resize without re-fetch
+	iconSize      int    // current icon pixel size; 0 means default (96px)
 
 	// tintAlpha is the card background alpha (0.0–1.0) used for compositing
 	// icons. When icons are loaded, their transparent pixels are filled with
@@ -241,6 +246,7 @@ func newSimpleCityPanel(city, region, timezone string, lm *i18n.LocaleManager) (
 	}
 	descLbl.SetHAlign(gtk.ALIGN_CENTER)
 	descLbl.SetLineWrap(true)
+	descLbl.SetJustify(gtk.JUSTIFY_CENTER) // two-line forecast title
 	sc, _ = descLbl.GetStyleContext()
 	sc.AddClass("simple-desc-label")
 	p.descLbl = descLbl
@@ -329,6 +335,19 @@ func newSimpleCityPanel(city, region, timezone string, lm *i18n.LocaleManager) (
 	sc.AddClass("simple-info-label")
 	p.uvIndexLbl = uvIndexLbl
 	root.PackStart(uvIndexLbl, false, false, 0)
+
+	// ── Sunrise, sunset, clouds, visibility, precipitation rate ──────────────
+	for _, dst := range []**gtk.Label{&p.sunriseLbl, &p.sunsetLbl, &p.cloudsLbl, &p.visLbl, &p.precipLbl} {
+		l, err := gtk.LabelNew("")
+		if err != nil {
+			return nil, err
+		}
+		l.SetHAlign(gtk.ALIGN_CENTER)
+		sc, _ = l.GetStyleContext()
+		sc.AddClass("simple-info-label")
+		*dst = l
+		root.PackStart(l, false, false, 0)
+	}
 
 	// ── Pollution rows ───────────────────────────────────────────────────────
 	// A vertical container for the per-metric icon+value rows. The reusable
@@ -620,6 +639,9 @@ func (p *simpleCityPanel) refreshMetrics() {
 		}
 		setVisible(p.windRowBox, true)
 		setVisible(p.windDirLbl, false)
+		for _, l := range p.extraLines() {
+			setVisible(l, false)
+		}
 		return
 	}
 
@@ -630,6 +652,19 @@ func (p *simpleCityPanel) refreshMetrics() {
 		set(p.dewPointLbl, weather.DewPointDisplay(d.DewPoint, p.lm))
 		set(p.pressureLbl, weather.PressureDisplay(d.Pressure, p.lm))
 		set(p.uvIndexLbl, weather.UVIndexDisplay(d.UVIndex, p.lm))
+		tz := ""
+		if !d.LocalTime.IsZero() {
+			tz = d.LocalTime.Location().String()
+		}
+		var precip float64
+		if d.PrecipRate != nil {
+			precip = *d.PrecipRate
+		}
+		set(p.sunriseLbl, weather.SunriseDisplay(d.Sunrise, tz, p.lm))
+		set(p.sunsetLbl, weather.SunsetDisplay(d.Sunset, tz, p.lm))
+		set(p.cloudsLbl, weather.CloudsDisplay(d.Clouds, p.lm))
+		set(p.visLbl, weather.VisibilityDisplay(d.Visibility, p.lm))
+		set(p.precipLbl, weather.PrecipRateDisplay(precip, p.lm))
 	}
 	setVisible(p.humidLbl, df.ShowHumidity)
 	setVisible(p.windLbl, df.ShowWind)
@@ -639,6 +674,17 @@ func (p *simpleCityPanel) refreshMetrics() {
 	setVisible(p.dewPointLbl, df.ShowDewPoint)
 	setVisible(p.pressureLbl, df.ShowPressure)
 	setVisible(p.uvIndexLbl, df.ShowUVIndex)
+	setVisible(p.sunriseLbl, df.ShowSunrise)
+	setVisible(p.sunsetLbl, df.ShowSunset)
+	setVisible(p.cloudsLbl, df.ShowClouds)
+	setVisible(p.visLbl, df.ShowVisibility)
+	setVisible(p.precipLbl, df.ShowPrecipRate)
+}
+
+// extraLines returns the live-only metric labels (sunrise, sunset, clouds,
+// visibility, precipitation rate) shown below the classic six lines.
+func (p *simpleCityPanel) extraLines() []*gtk.Label {
+	return []*gtk.Label{p.sunriseLbl, p.sunsetLbl, p.cloudsLbl, p.visLbl, p.precipLbl}
 }
 
 // loadIcon tries to load the weather icon from embedded assets at the given

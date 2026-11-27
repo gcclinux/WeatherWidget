@@ -649,9 +649,14 @@ static NSColor *wwStatusColorForLevel(int level) {
 
 @end
 
-// Emoji prefixes for the simple-mode metric lines (order matches _metricTiles).
-static NSString * const kSimpleMetricEmojis[6] = {
-    @"💧", @"💨", @"🌬", @"💧", @"🌡", @"☀"
+// Number of simple-mode metric lines: the six _metricTiles slots plus five
+// simple-only extras (6=Sunrise 7=Sunset 8=Clouds 9=Visibility 10=Precip rate).
+enum { kSimpleLineCount = 11 };
+
+// Emoji prefixes for the simple-mode metric lines (order matches _metricTiles,
+// then the simple-only extras).
+static NSString * const kSimpleMetricEmojis[kSimpleLineCount] = {
+    @"💧", @"💨", @"🌬", @"💧", @"🌡", @"☀", @"🌅", @"🌇", @"☁", @"👁", @"🌧"
 };
 
 // wwSetStr replaces an MRC-owned NSString ivar with a copy of s.
@@ -666,9 +671,9 @@ static void wwSetStr(NSString **slot, NSString *s) {
     // simple-mode lines, so each line renders "emoji name value" exactly like
     // the GTK / Fyne simple views regardless of which arrives first.
     // Owned under MRC (copied in wwSetStr, released in -dealloc).
-    NSString *_simpleNames[6];
-    NSString *_simpleValues[6];
-    NSString *_simpleEmojis[6];
+    NSString *_simpleNames[kSimpleLineCount];
+    NSString *_simpleValues[kSimpleLineCount];
+    NSString *_simpleEmojis[kSimpleLineCount];
     NSString *_lastFeelsLabel;
     NSString *_lastFeelsValue;
 }
@@ -842,14 +847,16 @@ static void wwSetStr(NSString **slot, NSString *s) {
     // crash when data updates touch them. The arrays are held by -copy (which
     // returns an owned +1 object); the standalone AQI label is retained here.
     NSMutableArray *sMetrics = [NSMutableArray array];
-    for (int i = 0; i < 6; i++) {
+    NSArray<NSString *> *extraNames = @[@"Sunrise",@"Sunset",@"Clouds",@"Visibility",@"Precip Rate"];
+    for (int i = 0; i < kSimpleLineCount; i++) {
         NSTextField *m = subLbl(@"", 10);
         m.alignment = NSTextAlignmentCenter;
+        if (i >= 6) m.hidden = YES; // extras have no tile; shown only when selected
         [sMetrics addObject:m];
         // English fallback names until the localized words are pushed from Go.
-        _simpleNames[i]  = [names[i] copy];
+        _simpleNames[i]  = [(i < 6 ? names[i] : extraNames[i - 6]) copy];
         _simpleValues[i] = nil;
-        _simpleEmojis[i] = [emojis[i] copy];
+        _simpleEmojis[i] = [kSimpleMetricEmojis[i] copy];
     }
     _simpleMetricLines = [sMetrics copy];   // -copy returns an owned +1 object
 
@@ -1019,7 +1026,7 @@ static void wwSetStr(NSString **slot, NSString *s) {
     [_lastFeelsValue release];
     [_aqiBottomConstraint release];
     [_pollBottomConstraints release];
-    for (int i = 0; i < 6; i++) {
+    for (int i = 0; i < kSimpleLineCount; i++) {
         [_simpleNames[i] release];
         [_simpleValues[i] release];
         [_simpleEmojis[i] release];
@@ -1078,7 +1085,7 @@ static void wwSetStr(NSString **slot, NSString *s) {
 // refreshSimpleMetricLine re-renders simple-mode metric line i as
 // "emoji name value" (matching GTK/Fyne). No-op until a value has arrived.
 - (void)refreshSimpleMetricLine:(int)i {
-    if (i < 0 || i >= 6) return;
+    if (i < 0 || i >= kSimpleLineCount) return;
     NSString *v = _simpleValues[i];
     if (v.length == 0) return;
     NSString *n = _simpleNames[i];
@@ -1089,8 +1096,9 @@ static void wwSetStr(NSString **slot, NSString *s) {
 }
 
 - (void)setMetricTileAt:(int)index emoji:(NSString *)emoji name:(NSString *)name value:(NSString *)value visible:(BOOL)visible {
-    if (index < 0 || index >= 6) return;
-    WWMetricTile *tile = _metricTiles[index];
+    if (index < 0 || index >= kSimpleLineCount) return;
+    // Indices 6..10 are simple-only extras: they drive just the text line.
+    WWMetricTile *tile = index < 6 ? _metricTiles[index] : nil;
     NSTextField *line = _simpleMetricLines[index];
     if (!visible) {
         tile.hidden = YES;
@@ -1114,7 +1122,7 @@ static void wwSetStr(NSString **slot, NSString *s) {
     if (_simpleMode) {
         line.hidden = NO;
     }
-    [self updateMetricTileWidths];
+    if (tile) [self updateMetricTileWidths];
 }
 
 // ── Background image loading ──────────────────────────────────────────────────
@@ -1214,6 +1222,10 @@ static void wwSetStr(NSString **slot, NSString *s) {
     set(_dateLbl,             dateStr);
     set(_tempLbl,             tempStr);
     set(_descLbl,             descStr);
+    // The simple-view forecast title is two lines ("Today's\nForecast").
+    if (descStr.length > 0) {
+        _descLbl.maximumNumberOfLines = [descStr containsString:@"\n"] ? 2 : 1;
+    }
 
     // Enhanced boxed tiles.
     set(_metricTiles[0].valueLbl, humidStr);

@@ -133,20 +133,28 @@ func headlineValues(df *config.DisplayFields, d *weather.WeatherData, tempUnit c
 	temp = weather.FormatTemperature(d.Temperature, tempUnit)
 	feels = weather.FormatFeelsLike(d.FeelsLike, tempUnit)
 	desc = weather.FormatDescription(d.Description, lm)
-	if df == nil || d.Forecast == nil {
+	if df == nil {
+		return
+	}
+	mode := config.NormalizeGridMode(df.GridMode)
+	// Forecast modes show a short localized two-line title instead of the
+	// (long) forecast summary, which would widen the card.
+	if title := i18n.ForecastTitle(lm, mode); title != "" {
+		desc = title
+	}
+	if d.Forecast == nil {
 		return
 	}
 	fc := d.Forecast
 	var (
 		code     int
 		max, min *float64
-		summary  string
 	)
-	switch config.NormalizeGridMode(df.GridMode) {
+	switch mode {
 	case "today":
-		code, max, min, summary = fc.TodayWeatherCode, fc.TodayTempMax, fc.TodayTempMin, fc.TodaySummary
+		code, max, min = fc.TodayWeatherCode, fc.TodayTempMax, fc.TodayTempMin
 	case "tomorrow":
-		code, max, min, summary = fc.TomorrowWeatherCode, fc.TomorrowTempMax, fc.TomorrowTempMin, fc.TomorrowSummary
+		code, max, min = fc.TomorrowWeatherCode, fc.TomorrowTempMax, fc.TomorrowTempMin
 	default:
 		return
 	}
@@ -158,9 +166,6 @@ func headlineValues(df *config.DisplayFields, d *weather.WeatherData, tempUnit c
 	}
 	if min != nil {
 		feels = weather.FormatTemperature(int(math.Round(*min)), tempUnit)
-	}
-	if summary != "" {
-		desc = weather.FormatDescription(summary, lm)
 	}
 	return
 }

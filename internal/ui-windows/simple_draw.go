@@ -20,6 +20,14 @@ func wrapDescription(text string, maxChars int) []string {
 	if text == "" {
 		return nil
 	}
+	// An explicit line break (forecast title) is kept as is.
+	if strings.Contains(text, "\n") {
+		parts := strings.Split(text, "\n")
+		for i := range parts {
+			parts[i] = strings.TrimSpace(parts[i])
+		}
+		return parts
+	}
 	if maxChars <= 0 {
 		maxChars = 18
 	}
@@ -58,7 +66,7 @@ func simpleCardMetricCount(fields *config.DisplayFields) int {
 		return 6
 	default:
 		count := 0
-		for _, show := range []bool{fields.ShowHumidity, fields.ShowWind, fields.ShowWindGust, fields.ShowDewPoint, fields.ShowPressure, fields.ShowUVIndex} {
+		for _, show := range []bool{fields.ShowHumidity, fields.ShowWind, fields.ShowWindGust, fields.ShowDewPoint, fields.ShowPressure, fields.ShowUVIndex, fields.ShowSunrise, fields.ShowSunset, fields.ShowClouds, fields.ShowVisibility, fields.ShowPrecipRate} {
 			if show {
 				count++
 			}
@@ -139,9 +147,6 @@ func simpleCardWeather(data *weather.WeatherData, fields *config.DisplayFields, 
 			if fc.TodayTempMin != nil {
 				feelsStr = weather.FormatTemperature(int(math.Round(*fc.TodayTempMin)), cfg.TemperatureUnit)
 			}
-			if fc.TodaySummary != "" {
-				descStr = weather.FormatDescription(fc.TodaySummary, lm)
-			}
 		}
 	case "tomorrow":
 		if fc := data.Forecast; fc != nil {
@@ -155,10 +160,12 @@ func simpleCardWeather(data *weather.WeatherData, fields *config.DisplayFields, 
 			if fc.TomorrowTempMin != nil {
 				feelsStr = weather.FormatTemperature(int(math.Round(*fc.TomorrowTempMin)), cfg.TemperatureUnit)
 			}
-			if fc.TomorrowSummary != "" {
-				descStr = weather.FormatDescription(fc.TomorrowSummary, lm)
-			}
 		}
+	}
+	// Forecast modes show a short localized two-line title instead of the
+	// (long) forecast summary, which would widen the card.
+	if title := i18n.ForecastTitle(lm, fields.GridMode); title != "" {
+		descStr = title
 	}
 
 	return iconCode, tempStr, feelsStr, descStr
@@ -255,6 +262,37 @@ func simpleMetrics(fields *config.DisplayFields, data *weather.WeatherData, cfg 
 				item.Value = "--"
 			}
 			list = append(list, item)
+		}
+		var clouds int
+		var vis, precip float64
+		var sunrise, sunset int64
+		var timezone string
+		if data != nil {
+			clouds, vis, sunrise, sunset = data.Clouds, data.Visibility, data.Sunrise, data.Sunset
+			if data.PrecipRate != nil {
+				precip = *data.PrecipRate
+			}
+			if !data.LocalTime.IsZero() {
+				timezone = data.LocalTime.Location().String()
+			}
+		}
+		for _, c := range []struct {
+			show bool
+			item weather.MetricDisplay
+		}{
+			{fields.ShowSunrise, weather.SunriseDisplay(sunrise, timezone, lm)},
+			{fields.ShowSunset, weather.SunsetDisplay(sunset, timezone, lm)},
+			{fields.ShowClouds, weather.CloudsDisplay(clouds, lm)},
+			{fields.ShowVisibility, weather.VisibilityDisplay(vis, lm)},
+			{fields.ShowPrecipRate, weather.PrecipRateDisplay(precip, lm)},
+		} {
+			if !c.show {
+				continue
+			}
+			if data == nil {
+				c.item.Value = "--"
+			}
+			list = append(list, c.item)
 		}
 		return list
 	}

@@ -28,7 +28,29 @@ func visibleMetrics(df *config.DisplayFields, d *weather.WeatherData, tempUnit c
 	case "tomorrow":
 		return forecastMetrics(true, d, tempUnit, windUnit, lm)
 	}
-	return liveMetrics(df, d, windUnit, lm)
+	return liveMetrics(df, d, windUnit, lm, maxMetricTiles)
+}
+
+// maxSimpleMetricLines is the number of metric lines in the simple (classic)
+// view: the six tile slots plus sunrise, sunset, clouds, visibility and
+// precipitation rate.
+const maxSimpleMetricLines = 11
+
+// cardMetrics returns the metrics to push to a card and the number of slots
+// they fill. The enhanced view keeps the six-tile cap; the simple view in live
+// grid mode shows every selected metric (up to maxSimpleMetricLines).
+func cardMetrics(simple bool, df *config.DisplayFields, d *weather.WeatherData, tempUnit config.TemperatureUnit, windUnit config.WindSpeedUnit, lm *i18n.LocaleManager) ([]weather.MetricDisplay, int) {
+	if df == nil {
+		df = config.DefaultDisplayFields()
+	}
+	if simple {
+		if config.NormalizeGridMode(df.GridMode) == "live" {
+			return liveMetrics(df, d, windUnit, lm, maxSimpleMetricLines), maxSimpleMetricLines
+		}
+		// Forecast modes: still cover every line so leftover extras get hidden.
+		return visibleMetrics(df, d, tempUnit, windUnit, lm), maxSimpleMetricLines
+	}
+	return visibleMetrics(df, d, tempUnit, windUnit, lm), maxMetricTiles
 }
 
 type metricCandidate struct {
@@ -36,7 +58,7 @@ type metricCandidate struct {
 	item weather.MetricDisplay
 }
 
-func liveMetrics(df *config.DisplayFields, d *weather.WeatherData, windUnit config.WindSpeedUnit, lm *i18n.LocaleManager) []weather.MetricDisplay {
+func liveMetrics(df *config.DisplayFields, d *weather.WeatherData, windUnit config.WindSpeedUnit, lm *i18n.LocaleManager, limit int) []weather.MetricDisplay {
 	var (
 		humidity, clouds, direction int
 		wind, gust, dew, pressure   float64
@@ -77,7 +99,7 @@ func liveMetrics(df *config.DisplayFields, d *weather.WeatherData, windUnit conf
 			c.item.Value = "--"
 		}
 		out = append(out, c.item)
-		if len(out) == maxMetricTiles {
+		if len(out) == limit {
 			break
 		}
 	}

@@ -50,9 +50,9 @@ type manager struct {
 	cards   []uintptr
 
 	// viewMode and display settings.
-	viewMode   config.ViewMode
-	opacity    int
-	noBackground bool
+	viewMode           config.ViewMode
+	opacity            int
+	noBackground       bool
 	fontSizeCityTime   int
 	fontSizeTempIcon   int
 	fontSizeConditions int
@@ -425,6 +425,13 @@ func (m *manager) updateCard(card uintptr, d *weather.WeatherData) {
 	df := m.cfg.GetDisplayFields()
 
 	iconCode, tempStr, feelsStr, descStr := headlineValues(df, d, tempUnit, m.lm)
+	// Simple (Classic) view: forecast modes show a short localized two-line
+	// title instead of the long forecast summary.
+	if m.viewMode == config.ViewModeSimple {
+		if title := i18n.ForecastTitle(m.lm, config.NormalizeGridMode(df.GridMode)); title != "" {
+			descStr = title
+		}
+	}
 	cityStr := fmt.Sprintf("%s, %s", d.CityName, d.Region)
 
 	isNight := weather.IsNight(d.LocalTime)
@@ -455,8 +462,8 @@ func (m *manager) updateCard(card uintptr, d *weather.WeatherData) {
 		feelsLikeLabel, feelsStr)
 
 	// Populate the 6 metric tiles using visibleMetrics
-	metrics := visibleMetrics(df, d, tempUnit, windUnit, m.lm)
-	for i := 0; i < maxMetricTiles; i++ {
+	metrics, slots := cardMetrics(m.viewMode == config.ViewModeSimple, df, d, tempUnit, windUnit, m.lm)
+	for i := 0; i < slots; i++ {
 		if i < len(metrics) {
 			nativeSetCardMetricTile(card, i, metrics[i].Emoji, metrics[i].Name, metrics[i].Value, true)
 		} else {
@@ -555,8 +562,8 @@ func (m *manager) applyCardMetricNames(card uintptr) {
 	tempUnit := m.cfg.TemperatureUnit
 	windUnit := m.cfg.WindSpeedUnit
 	df := m.cfg.GetDisplayFields()
-	metrics := visibleMetrics(df, nil, tempUnit, windUnit, m.lm)
-	for i := 0; i < maxMetricTiles; i++ {
+	metrics, slots := cardMetrics(m.viewMode == config.ViewModeSimple, df, nil, tempUnit, windUnit, m.lm)
+	for i := 0; i < slots; i++ {
 		if i < len(metrics) {
 			nativeSetCardMetricTile(card, i, metrics[i].Emoji, metrics[i].Name, metrics[i].Value, true)
 		} else {
@@ -617,8 +624,8 @@ func (m *manager) cornerToXY(corner string, monitorIndex int) (int, int) {
 		count = 1
 	}
 	const (
-		cardW = 585  // enhanced card (kEnhancedCardW 560 + padding)
-		cardH = 226  // typical enhanced card height
+		cardW = 585 // enhanced card (kEnhancedCardW 560 + padding)
+		cardH = 226 // typical enhanced card height
 		gap   = 6
 	)
 	var winW, winH int
@@ -918,18 +925,42 @@ func displayFieldMask(df *config.DisplayFields) uint32 {
 		return 0xFFFFFFFF // all visible
 	}
 	var mask uint32
-	if df.ShowCity     { mask |= DFCity }
-	if df.ShowIcon     { mask |= DFIcon }
-	if df.ShowTemp     { mask |= DFTemp }
-	if df.ShowDesc     { mask |= DFDesc }
-	if df.ShowHumidity { mask |= DFHumidity }
-	if df.ShowWind     { mask |= DFWind }
-	if df.ShowTime     { mask |= DFTime }
-	if df.ShowDate     { mask |= DFDate }
-	if df.ShowWindGust { mask |= DFWindGust }
-	if df.ShowDewPoint { mask |= DFDewPoint }
-	if df.ShowPressure { mask |= DFPressure }
-	if df.ShowUVIndex  { mask |= DFUVIndex }
+	if df.ShowCity {
+		mask |= DFCity
+	}
+	if df.ShowIcon {
+		mask |= DFIcon
+	}
+	if df.ShowTemp {
+		mask |= DFTemp
+	}
+	if df.ShowDesc {
+		mask |= DFDesc
+	}
+	if df.ShowHumidity {
+		mask |= DFHumidity
+	}
+	if df.ShowWind {
+		mask |= DFWind
+	}
+	if df.ShowTime {
+		mask |= DFTime
+	}
+	if df.ShowDate {
+		mask |= DFDate
+	}
+	if df.ShowWindGust {
+		mask |= DFWindGust
+	}
+	if df.ShowDewPoint {
+		mask |= DFDewPoint
+	}
+	if df.ShowPressure {
+		mask |= DFPressure
+	}
+	if df.ShowUVIndex {
+		mask |= DFUVIndex
+	}
 	return mask
 }
 

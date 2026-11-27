@@ -1596,17 +1596,17 @@ func buildLocationsTab(m *manager, dlg *gtk.Dialog, initialCities []config.CityC
 	subTitle.SetHAlign(gtk.ALIGN_START)
 	outer.PackStart(subTitle, false, false, 0)
 
-	// Scrollable city list. A modest 180px minimum keeps the Locations tab (and
-	// therefore the whole dialog) short enough for small screens; the outer
-	// per-tab scroller added in showSettingsDialog handles any remaining
-	// overflow, and this inner list scrolls on its own once it exceeds 180px.
+	// Scrollable city list. It expands to take the free vertical space of the
+	// tab, and the 220px minimum fits five rows (up/down/delete buttons make
+	// each ~40px) so the scrollbar is only a fallback on very small windows.
 	scroll, _ := gtk.ScrolledWindowNew(nil, nil)
 	scroll.SetPolicy(gtk.POLICY_NEVER, gtk.POLICY_AUTOMATIC)
-	scroll.SetSizeRequest(-1, 180)
+	scroll.SetSizeRequest(-1, 220)
 
 	listBox, _ := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 4)
 	scroll.Add(listBox)
-	outer.PackStart(scroll, false, false, 0)
+	scroll.SetVExpand(true)
+	outer.PackStart(scroll, true, true, 0)
 
 	// refreshList rebuilds the city rows from the current cities slice.
 	var refreshList func()
@@ -1683,12 +1683,6 @@ func buildLocationsTab(m *manager, dlg *gtk.Dialog, initialCities []config.CityC
 	refreshList()
 
 	// ── Add New City section ──────────────────────────────────────────────
-	// Expanding spacer: pushes the "Add New City" frame to the bottom of the
-	// tab so all the space freed up sits above it, giving the Saved Cities
-	// list room to show every selected city clearly.
-	spacer, _ := gtk.BoxNew(gtk.ORIENTATION_VERTICAL, 0)
-	outer.PackStart(spacer, true, true, 0)
-
 	// Frame wrapping the Add New City controls for a nicer, bordered look.
 	// The frame's label acts as the section title, so no separate bold title
 	// label is needed inside.

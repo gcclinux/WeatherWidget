@@ -102,7 +102,7 @@ func TestSimpleCardGridModeTodayAndTomorrow(t *testing.T) {
 	// Today mode
 	cfg.DisplayFields.GridMode = "today"
 	icon, temp, feels, desc := simpleCardWeather(data, cfg.DisplayFields, cfg, nil)
-	if temp != "22°C" || feels != "14°C" || desc != "Sunny Intervals" || icon != weather.IconPartlyCloudy {
+	if temp != "22°C" || feels != "14°C" || desc != "Today's\nForecast" || icon != weather.IconPartlyCloudy {
 		t.Fatalf("unexpected today card weather: temp=%s, feels=%s, desc=%s, icon=%s", temp, feels, desc, icon)
 	}
 	todayMetrics := simpleMetrics(cfg.DisplayFields, data, cfg, nil)
@@ -116,7 +116,7 @@ func TestSimpleCardGridModeTodayAndTomorrow(t *testing.T) {
 	// Tomorrow mode
 	cfg.DisplayFields.GridMode = "tomorrow"
 	icon, temp, feels, desc = simpleCardWeather(data, cfg.DisplayFields, cfg, nil)
-	if temp != "25°C" || feels != "17°C" || desc != "Rain Showers" || icon != weather.IconRain {
+	if temp != "25°C" || feels != "17°C" || desc != "Tomorrow's\nForecast" || icon != weather.IconRain {
 		t.Fatalf("unexpected tomorrow card weather: temp=%s, feels=%s, desc=%s, icon=%s", temp, feels, desc, icon)
 	}
 	tomorrowMetrics := simpleMetrics(cfg.DisplayFields, data, cfg, nil)
