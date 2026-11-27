@@ -61,6 +61,11 @@ static NSTextField *lbl(NSString *text, CGFloat size, BOOL bold) {
     return f;
 }
 
+// Feels-like blue (#00BFFF), shared by the feels-like label/pill and the
+// Simple-view forecast title.
+static NSColor *wwFeelsBlue(void) {
+    return [NSColor colorWithRed:0.0 green:191.0/255.0 blue:1.0 alpha:1.0];
+}
 static NSTextField *subLbl(NSString *text, CGFloat size) {
     NSTextField *f = lbl(text, size, NO);
     f.textColor = [NSColor colorWithWhite:0.80 alpha:1.0];
@@ -334,7 +339,7 @@ static NSAttributedString *simpleLineAttr(NSString *iconPath, NSString *text, CG
     [_iconView setContentHuggingPriority:NSLayoutPriorityRequired forOrientation:NSLayoutConstraintOrientationVertical];
 
     _label = [lbl(@"", 11, YES) retain];
-    _label.textColor = [NSColor colorWithRed:0.0 green:191.0/255.0 blue:1.0 alpha:1.0];
+    _label.textColor = wwFeelsBlue();
     _label.alignment = NSTextAlignmentCenter;
     [_label setContentHuggingPriority:NSLayoutPriorityRequired forOrientation:NSLayoutConstraintOrientationHorizontal];
 
@@ -1057,7 +1062,7 @@ static void wwSetStr(NSString **slot, NSString *s) {
     ]];
 
     _feelsLikeLabel = [[WWVerticalLabel alloc] initWithText:@"Feels Like"
-        color:[NSColor colorWithRed:0 green:0.75 blue:1 alpha:1] size:9];
+        color:wwFeelsBlue() size:9];
     _feelsLikeText = lbl(@"--", 16, YES);
     _feelsLikeText.alignment = NSTextAlignmentCenter;
 
@@ -1636,6 +1641,12 @@ void setCardPollutantName(uintptr_t cardHandle, int slot, const char *name) {
     });
 }
 
+void setCardDescTitle(uintptr_t cardHandle, int isTitle) {
+    dispatch_async(dispatch_get_main_queue(), ^{
+        WWCityCardView *card = (__bridge WWCityCardView *)(void *)cardHandle;
+        card.descLbl.textColor = isTitle ? wwFeelsBlue() : [NSColor colorWithWhite:0.80 alpha:1.0];
+    });
+}
 void updateCardAQI(uintptr_t cardHandle, const char *iconPath, const char *label) {
     NSString *nLabel = nsFromC(label);
     NSString *nIcon  = nsFromC(iconPath);

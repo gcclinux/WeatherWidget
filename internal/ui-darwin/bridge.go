@@ -112,6 +112,9 @@ extern void updateCardData(
 extern void setCardFeelsLike(uintptr_t card, const char *iconPath, const char *label,
     const char *value);
 
+// setCardDescTitle colours the description label in the feels-like blue (Simple
+// view forecast title) when isTitle is non-zero, else the default grey.
+extern void setCardDescTitle(uintptr_t card, int isTitle);
 // updateCardAQI sets the AQI label with an inline icon (pass "" label to hide).
 extern void updateCardAQI(uintptr_t card, const char *iconPath, const char *label);
 
@@ -323,6 +326,13 @@ func nativeUpdateCardData(card uintptr,
 		night, C.double(opacity))
 }
 
+func nativeSetCardDescTitle(card uintptr, isTitle bool) {
+	v := C.int(0)
+	if isTitle {
+		v = 1
+	}
+	C.setCardDescTitle(C.uintptr_t(card), v)
+}
 func nativeUpdateCardAQI(card uintptr, iconPath, label string) {
 	ci := C.CString(iconPath)
 	cs := C.CString(label)

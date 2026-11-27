@@ -434,7 +434,7 @@ func (p *simpleCityPanel) update(d *weather.WeatherData, tempUnit config.Tempera
 	// Header values: real-time, or the day's forecast in a forecast grid mode.
 	headIcon, temp, _, desc := headlineValues(p.displayFields, d, tempUnit, p.lm)
 	p.tempLbl.SetText(temp)
-	p.descLbl.SetText(desc)
+	p.setDesc(desc)
 
 	// Metric lines (live conditions or forecast, per Grid Content).
 	p.refreshMetrics()
@@ -598,7 +598,22 @@ func (p *simpleCityPanel) applyDisplayFields(df *config.DisplayFields) {
 	if p.lastData != nil {
 		_, temp, _, desc := headlineValues(df, p.lastData, p.lastUnit, p.lm)
 		p.tempLbl.SetText(temp)
-		p.descLbl.SetText(desc)
+		p.setDesc(desc)
+	}
+}
+
+// setDesc sets the description label. In a forecast grid mode the text is the
+// localized forecast title, which takes the feels-like blue via a CSS class.
+func (p *simpleCityPanel) setDesc(desc string) {
+	p.descLbl.SetText(desc)
+	sc, err := p.descLbl.GetStyleContext()
+	if err != nil {
+		return
+	}
+	if p.displayFields != nil && i18n.ForecastTitle(p.lm, config.NormalizeGridMode(p.displayFields.GridMode)) != "" {
+		sc.AddClass("simple-forecast-title")
+	} else {
+		sc.RemoveClass("simple-forecast-title")
 	}
 }
 

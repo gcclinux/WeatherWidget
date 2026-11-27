@@ -1,0 +1,8 @@
+# Classic forecast title colour - notes
+Change (uncommitted): in Simple (Classic) view, the two-line "Today's / Forecast" and "Tomorrow's / Forecast" title now uses the same blue as the feels-like text. Only applies when the title is shown (Today/Tomorrow grid modes, not stale). Live mode, stale warning and Enhanced view are unchanged.
+- Windows `simple_draw.go`: title lines drawn with `enhancedCyan`, the constant used for the feels-like value.
+- GTK: new CSS class `.simple-forecast-title { color: #00bfff; }` (same value as `.simple-feels-label`; CSS is a literal string, so the value is repeated) in `gtk_helpers.go`. `simpleCityPanel.setDesc` in `panel_simple.go` adds/removes the class and replaces the two `descLbl.SetText` calls.
+- Darwin: `panel.m` gets `wwFeelsBlue()` (#00BFFF), now used by the feels-like pill, the vertical feels-like label and the new `setCardDescTitle` cgo function, which sets `descLbl` blue or back to grey (0.80 white). `bridge.go` declares/wraps it; `manager.go` `updateCard` calls it with true only for the Simple-view title.
+Note: on GTK/Darwin the feels-like *value* text is white; the blue element there is the "Feels Like" label/pill. The title uses that blue (#00BFFF). On Windows the value itself is blue.
+Verified: `gofmt -l` clean on edited Go files; `go vet` and `go test` pass for ./internal/ui-windows and ./internal/i18n.
+Not verified: GTK and Darwin (cgo, no C toolchain here): compile, vet and visual result. No commit made.

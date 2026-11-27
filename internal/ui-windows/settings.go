@@ -17,12 +17,13 @@ import (
 	"sync"
 	"time"
 
-	"github.com/jchv/go-webview2"
 	"weatherwidget/assets"
 	"weatherwidget/internal/config"
 	"weatherwidget/internal/i18n"
 	"weatherwidget/internal/weather"
 	"weatherwidget/winres"
+
+	"github.com/jchv/go-webview2"
 )
 
 // ewwAPIKeyLen is the expected length of an EasyWeatherWidget API key (UUID v4).
@@ -349,7 +350,10 @@ func (m *Manager) OpenSettings() {
 		})
 
 		bind("goCloseSettings", func() {
-			wv.Dispatch(wv.Terminate)
+			// Post WM_CLOSE so the window is destroyed by its own message loop.
+			// Terminate only quits Run(); the window would then outlive the
+			// pump and stay unresponsive.
+			wv.Destroy()
 		})
 
 		bind("goTestConnection", func(jsonStr string) error {

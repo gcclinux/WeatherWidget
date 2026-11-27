@@ -308,6 +308,9 @@ window {
     font-style: italic;
     color: #dddddd;
 }
+.simple-forecast-title {
+    color: #00bfff;
+}
 .simple-info-label {
     font-size: %dpx;
     color: #eeeeee;

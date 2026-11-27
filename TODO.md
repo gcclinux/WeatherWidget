@@ -1,5 +1,8 @@
 ### Version 2.3.5 fixes and features for EOY 2026 new branch
 
+#### BUG
+- (DONE) Windows --> Settings --> Cancel changes makes settings panel freeze and won't close unless closing the whole App (TESTED)
+
 #### IMPROVEMENTS
 - (DONE) Linux - Settings --> Locations --> Viewing all 5 cities has scrollbar should be always visable in space available (UNTESTED STILL)
 - (DONE) All - Data Settings --> Weather Metrics --> Sunset, Sunrise, Cloud Coverage, Visibility not visable in ClassicView (UNTESTED STILL)

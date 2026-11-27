@@ -442,8 +442,12 @@ func (wd *WidgetDrawer) drawSimpleCard(dst *image.RGBA, rect image.Rectangle, ci
 			lines = []string{desc}
 		}
 		lineHeight := max(14, conditionsSize+4)
+		descColor := text
+		if (result == nil || !result.IsStale) && i18n.ForecastTitle(lm, fields.GridMode) != "" {
+			descColor = enhancedCyan // forecast title shares the feels-like colour
+		}
 		for _, line := range lines {
-			drawCentered(dst, line, center, y, wd.getFace(false, float64(conditionsSize)), text)
+			drawCentered(dst, line, center, y, wd.getFace(false, float64(conditionsSize)), descColor)
 			y += lineHeight
 		}
 		if maxDescLines > len(lines) {

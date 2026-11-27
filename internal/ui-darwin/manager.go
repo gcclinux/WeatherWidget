@@ -427,11 +427,14 @@ func (m *manager) updateCard(card uintptr, d *weather.WeatherData) {
 	iconCode, tempStr, feelsStr, descStr := headlineValues(df, d, tempUnit, m.lm)
 	// Simple (Classic) view: forecast modes show a short localized two-line
 	// title instead of the long forecast summary.
+	isTitle := false
 	if m.viewMode == config.ViewModeSimple {
 		if title := i18n.ForecastTitle(m.lm, config.NormalizeGridMode(df.GridMode)); title != "" {
 			descStr = title
+			isTitle = true
 		}
 	}
+	nativeSetCardDescTitle(card, isTitle)
 	cityStr := fmt.Sprintf("%s, %s", d.CityName, d.Region)
 
 	isNight := weather.IsNight(d.LocalTime)
